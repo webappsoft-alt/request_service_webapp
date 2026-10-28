@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata = buildMetadata({
   title: "Contact Request Service",
-  description: `Have a question or need support? Contact ${siteConfig.name} by form, email, or phone.`,
+  description: `Have a question or need support? Contact ${siteConfig.name} by form or email.`,
   path: "/contact",
 });
 

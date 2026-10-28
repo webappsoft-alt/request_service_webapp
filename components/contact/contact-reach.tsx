@@ -1,21 +1,28 @@
 "use client";
 
-import { useEffect } from "react";
-import { ArrowRight, AtSign, Clock, Mail, MapPin, Phone } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, AtSign, Clock, Mail, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
+  businessHoursForToday,
   fetchSiteBranding,
+  formatBusinessDay,
   selectSiteBranding,
 } from "@/store/siteBrandingSlice";
 
 export function ContactHeroActions() {
   const dispatch = useAppDispatch();
   const branding = useAppSelector(selectSiteBranding);
+  // The viewer's weekday, read after mount so the server and browser render the same HTML.
+  const [today, setToday] = useState<Date | null>(null);
 
   useEffect(() => {
     void dispatch(fetchSiteBranding());
+    setToday(new Date());
   }, [dispatch]);
+
+  const todayHours = today ? businessHoursForToday(branding.businessHours, today) : null;
 
   return (
     <>
@@ -36,14 +43,12 @@ export function ContactHeroActions() {
           <Mail className="size-3.5 text-muted-foreground" aria-hidden="true" />
           <dd className="font-medium">{branding.email}</dd>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Phone className="size-3.5 text-muted-foreground" aria-hidden="true" />
-          <dd className="font-medium">{branding.phone}</dd>
-        </div>
-        <div className="flex items-center gap-1.5 text-muted-foreground">
-          <Clock className="size-3.5" aria-hidden="true" />
-          <dd>{branding.hoursSummary}</dd>
-        </div>
+        {todayHours ? (
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Clock className="size-3.5" aria-hidden="true" />
+            <dd>Today ({formatBusinessDay(todayHours)})</dd>
+          </div>
+        ) : null}
       </dl>
     </>
   );
@@ -93,12 +98,6 @@ export function ContactConnectCards() {
 export function ContactReachAside() {
   const branding = useAppSelector(selectSiteBranding);
   const addressLines = [branding.address, branding.address2].filter(Boolean);
-  const phones = [
-    { label: branding.phone, href: branding.phoneHref },
-    branding.phone2
-      ? { label: branding.phone2, href: branding.phone2Href }
-      : null,
-  ].filter(Boolean) as Array<{ label: string; href: string }>;
   const emails = [branding.email, branding.email2].filter(Boolean);
 
   return (
@@ -160,24 +159,6 @@ export function ContactReachAside() {
                 </span>
               ))}
             </p>
-          </div>
-        </li>
-        <li className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-4">
-          <Phone className="mt-0.5 size-6 text-muted-foreground" aria-hidden="true" />
-          <div>
-            <h3 className="font-semibold">Phone</h3>
-            <div className="mt-1 space-y-1 text-sm leading-6">
-              {phones.map((item) => (
-                <p key={item.label}>
-                  <a
-                    href={item.href || undefined}
-                    className="font-medium text-brand hover:underline"
-                  >
-                    {item.label}
-                  </a>
-                </p>
-              ))}
-            </div>
           </div>
         </li>
       </ul>

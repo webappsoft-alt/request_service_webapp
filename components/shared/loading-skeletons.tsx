@@ -8,29 +8,29 @@ export function ProviderCardSkeleton({ className }: { className?: string }) {
   return (
     <Card
       className={cn(
-        "h-full gap-0 overflow-hidden border-input pt-0 pb-2",
+        "h-full gap-3 overflow-hidden rounded-2xl border-input p-2.5 sm:p-3",
         className,
       )}
       aria-hidden="true"
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-        <Skeleton className="absolute inset-0 rounded-none" />
-        <Skeleton className="absolute top-2 left-2 z-10 h-6 w-16 rounded-md" />
-        <Skeleton className="absolute top-2 right-2 z-10 size-7 rounded-full" />
-        <Skeleton className="absolute bottom-2.5 left-2.5 z-10 size-9 rounded-md" />
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pt-3 pb-3 sm:px-4">
-        <Skeleton className="h-4 w-[70%]" />
-        <Skeleton className="h-3.5 w-4/5" />
-        <Skeleton className="h-3.5 w-2/5" />
-        <div className="flex min-h-11 flex-wrap gap-1.5">
-          <Skeleton className="h-5 w-[7.5rem] rounded-full" />
-          <Skeleton className="h-5 w-24 rounded-full" />
-          <Skeleton className="h-5 w-16 rounded-full" />
+      <Skeleton className="aspect-[16/10] w-full rounded-xl" />
+      <div className="flex min-h-0 flex-1 flex-col gap-2 px-0.5">
+        <div className="flex items-start justify-between gap-3">
+          <Skeleton className="h-5 w-[60%]" />
+          <Skeleton className="h-6 w-16 rounded-full" />
         </div>
-        <div className="mt-auto flex w-full flex-col gap-2 sm:flex-row">
-          <Skeleton className="h-8 w-full rounded-md sm:flex-1" />
-          <Skeleton className="h-8 w-full rounded-md sm:flex-1" />
+        <Skeleton className="h-3.5 w-2/5" />
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-5 w-20 rounded-full" />
+        </div>
+        <div className="flex min-h-12 flex-col gap-2 pt-1">
+          <Skeleton className="h-3.5 w-full" />
+          <Skeleton className="h-3.5 w-3/4" />
+        </div>
+        <div className="mt-auto grid grid-cols-2 gap-2 pt-0.5">
+          <Skeleton className="h-9 rounded-md" />
+          <Skeleton className="h-9 rounded-md" />
         </div>
       </div>
     </Card>

@@ -25,7 +25,6 @@ export type SiteBrandingContact = {
   closedDates: string[];
   phoneHref: string;
   phone2Href: string;
-  hoursSummary: string;
   hoursDetailed: string[];
 };
 
@@ -117,48 +116,22 @@ function normalizeHours(raw: unknown): BusinessHourDay[] {
   });
 }
 
-export function formatBusinessHoursSummary(hours: BusinessHourDay[]) {
-  const openDays = hours.filter((item) => !item.closed && item.open && item.close);
-  if (!openDays.length) return "Closed";
-
-  const groups: Array<{ start: string; end: string; open: string; close: string }> = [];
-  for (const item of openDays) {
-    const last = groups[groups.length - 1];
-    if (
-      last &&
-      last.open === item.open &&
-      last.close === item.close &&
-      DAY_ORDER.indexOf(item.day as (typeof DAY_ORDER)[number]) ===
-        DAY_ORDER.indexOf(last.end as (typeof DAY_ORDER)[number]) + 1
-    ) {
-      last.end = item.day;
-      continue;
-    }
-    groups.push({
-      start: item.day,
-      end: item.day,
-      open: item.open || "",
-      close: item.close || "",
-    });
-  }
-
-  return groups
-    .map((group) => {
-      const label =
-        group.start === group.end
-          ? DAY_SHORT[group.start]
-          : `${DAY_SHORT[group.start]} – ${DAY_SHORT[group.end]}`;
-      return `${label}: ${formatClock(group.open)} – ${formatClock(group.close)}`;
-    })
-    .join("; ");
+/** One day exactly as the admin set it, e.g. "Mon: 8:00 AM – 6:00 PM" or "Sun: Closed". */
+export function formatBusinessDay(item: BusinessHourDay) {
+  const label = DAY_SHORT[item.day] || item.day;
+  if (item.closed || !item.open || !item.close) return `${label}: Closed`;
+  return `${label}: ${formatClock(item.open)} – ${formatClock(item.close)}`;
 }
 
+/** One line per day, Monday → Sunday — no grouping, so every day shows its own hours. */
 export function formatBusinessHoursDetailed(hours: BusinessHourDay[]) {
-  return hours.map((item) => {
-    const label = DAY_SHORT[item.day] || item.day;
-    if (item.closed || !item.open || !item.close) return `${label}: Closed`;
-    return `${label}: ${formatClock(item.open)} – ${formatClock(item.close)}`;
-  });
+  return hours.map(formatBusinessDay);
+}
+
+/** Today's entry (viewer's local day). */
+export function businessHoursForToday(hours: BusinessHourDay[], date = new Date()) {
+  const day = DAY_ORDER[(date.getDay() + 6) % 7];
+  return hours.find((item) => item.day === day) ?? null;
 }
 
 function fallbackAddress() {
@@ -180,7 +153,6 @@ export function fallbackSiteBranding(): SiteBrandingContact {
     closedDates: [],
     phoneHref: siteConfig.phoneHref,
     phone2Href: "",
-    hoursSummary: formatBusinessHoursSummary(hours),
     hoursDetailed: formatBusinessHoursDetailed(hours),
   };
 }
@@ -213,7 +185,6 @@ function parseBrandingResponse(response: unknown): SiteBrandingContact {
     closedDates,
     phoneHref: phoneToHref(phone) || fallback.phoneHref,
     phone2Href: phone2 ? phoneToHref(phone2) : "",
-    hoursSummary: formatBusinessHoursSummary(businessHours),
     hoursDetailed: formatBusinessHoursDetailed(businessHours),
   };
 }

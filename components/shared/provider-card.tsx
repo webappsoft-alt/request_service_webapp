@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, MapPin, Star } from "lucide-react";
+import { ArrowRight, MapPin, ShieldCheck, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -271,6 +271,117 @@ export function ProviderCard({
               <Link href={profileHref} onClick={handleProfileClick}>
                 View profile
                 <ArrowRight data-icon="inline-end" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (showCover) {
+    // Photo marketplace card: inset photo, name + category chip, location, rating + Verified,
+    // services as one line of text, then View Profile / Request Quote.
+    const verified = !hideCredentials && hasCredentials;
+    return (
+      <Card
+        onClick={onClick}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+        className={cn(
+          "h-full gap-3 rounded-2xl border-input p-2.5 transition-[transform,box-shadow] duration-300 ease-out sm:p-3",
+          "hover:-translate-y-1 hover:elevate",
+          onClick && "cursor-pointer",
+          active && "-translate-y-1 elevate-lg",
+          className,
+        )}
+      >
+        <div className="relative aspect-[16/10] overflow-hidden rounded-xl bg-muted">
+          <Image
+            src={coverImage}
+            alt={provider.companyName}
+            fill
+            sizes="(max-width: 768px) 82vw, 25vw"
+            className="object-cover!"
+            style={{ objectFit: "cover" }}
+            unoptimized={!canOptimizeImage(coverImage)}
+          />
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col gap-2 px-0.5">
+          <div className="flex items-start justify-between gap-3">
+            <h3
+              className="min-w-0 text-lg leading-snug font-semibold tracking-tight capitalize"
+              title={provider.companyName}
+            >
+              <span className="line-clamp-2 break-words">{provider.companyName}</span>
+            </h3>
+            <span className="max-w-[45%] shrink-0 truncate rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground/80">
+              {categoryBadge}
+            </span>
+          </div>
+
+          <ProviderCardLocation
+            city={provider.city}
+            state={provider.state}
+            servesLabel={servesLabel}
+            className="leading-5"
+          />
+
+          {hasRating || verified ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              {hasRating ? (
+                <span className="inline-flex items-center gap-1.5 text-sm">
+                  <Star className="size-4 text-warning" aria-hidden="true" />
+                  <span className="font-medium">{provider.rating.toFixed(1)}</span>
+                  <span className="text-muted-foreground">
+                    ({provider.reviewCount.toLocaleString("en-US")} reviews)
+                  </span>
+                </span>
+              ) : null}
+              {verified ? (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
+                  title={credentialLabel(provider.licensed, provider.insured)}
+                >
+                  <ShieldCheck className="size-3.5" aria-hidden="true" />
+                  Verified
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
+          <p
+            className="line-clamp-2 min-h-12 text-sm leading-6 text-foreground/80"
+            title={orderedServices.join(", ") || undefined}
+          >
+            {orderedServices.map((service, index) => (
+              <span key={service}>
+                {index > 0 ? ", " : null}
+                <span className={cn(service === highlighted && "font-semibold text-foreground")}>
+                  {service}
+                </span>
+              </span>
+            ))}
+          </p>
+
+          <div className="mt-auto grid grid-cols-2 gap-2 pt-0.5">
+            <Button variant="outline" asChild size="sm" className="h-9 min-w-0">
+              <Link
+                href={profileHref}
+                onClick={handleProfileClick}
+                className="justify-center whitespace-nowrap"
+              >
+                View Profile
+              </Link>
+            </Button>
+            <Button asChild size="sm" className="h-9 min-w-0">
+              <Link
+                href={servicesForProviderHref(provider)}
+                onClick={(event) => event.stopPropagation()}
+                className="justify-center whitespace-nowrap"
+              >
+                Request Quote
               </Link>
             </Button>
           </div>

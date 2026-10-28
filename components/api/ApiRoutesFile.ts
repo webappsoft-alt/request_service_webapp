@@ -428,6 +428,13 @@ export const supportInquiriesApi = {
   detail: (id: string) => `support-inquiries/${id}`,
 } as const;
 
+/** AI Kitchen & Bath Redesigner (public). */
+export const aiRedesignerApi = {
+  catalog: "ai-redesigner/catalog",
+  generations: "ai-redesigner/generations",
+  generation: (id: string) => `ai-redesigner/generations/${id}`,
+} as const;
+
 export const uploadApi = {
   /** POST multipart field `image` → `{ image: url }` */
   image: "upload-image",

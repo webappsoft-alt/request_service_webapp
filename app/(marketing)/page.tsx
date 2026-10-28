@@ -5,6 +5,7 @@ import { CustomerTrustSection } from "@/components/home/customer-trust-section";
 // import { CustomerJourneySection } from "@/components/home/customer-journey-section";
 import { CustomerAssuranceSection } from "@/components/home/customer-assurance-section";
 import { HeroSection } from "@/components/home/hero-section";
+import { RedesignerSection } from "@/components/ai-redesigner/redesigner-section";
 import { HomeSearchDock } from "@/components/home/home-search-dock";
 import { HomeMotion } from "@/components/home/home-motion";
 import { ServicesSection } from "@/components/home/services-section";
@@ -50,6 +51,10 @@ export default async function HomePage() {
             Customer journey section parked — restore by swapping it back in:
             <CustomerJourneySection />
           */}
+          {/* AI Kitchen & Bath Redesigner banner — renders only once the admin turns it on. */}
+          <DeferredHydration>
+            <RedesignerSection />
+          </DeferredHydration>
           <CustomerAssuranceSection />
 
           {/* Below the fold: server HTML stays crawlable, hydration waits until it scrolls near. */}

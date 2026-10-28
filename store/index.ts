@@ -54,6 +54,7 @@ import contractorPortalReducer from "./contractorPortalSlice";
 import contractorReviewsReducer from "./contractorReviewsSlice";
 import notificationFeedReducer from "./notificationFeedSlice";
 import trackingReducer from "./trackingSlice";
+import aiRedesignerReducer from "./aiRedesignerSlice";
 import {
   contractorNotesModule,
   customerNotesModule,
@@ -115,6 +116,7 @@ const rootReducer = combineReducers({
   contractorReviews: contractorReviewsReducer,
   notificationFeed: notificationFeedReducer,
   tracking: trackingReducer,
+  aiRedesigner: aiRedesignerReducer,
   customerNotes: customerNotesModule.reducer,
   estimateNotes: estimateNotesModule.reducer,
   requestNotes: requestNotesModule.reducer,
@@ -199,6 +201,7 @@ function needsReducerHotReplace(state: RootState) {
     state.contractorReviews === undefined ||
     state.notificationFeed === undefined ||
     state.tracking === undefined ||
+    state.aiRedesigner === undefined ||
     state.customerNotes === undefined ||
     state.estimateNotes === undefined ||
     state.requestNotes === undefined ||

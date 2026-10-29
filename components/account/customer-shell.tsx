@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Menu, Search, X } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Search, X, type LucideIcon } from "lucide-react";
 import { handleUserLogout } from "@/components/api/apiFuntions";
 import { UserAccountMenu } from "@/components/layout/user-account-menu";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
@@ -161,6 +161,8 @@ function NavLinks({
   unreadOrders?: number;
 }) {
   const pathname = usePathname();
+  /** Open state of dropdown items (default: open while inside that section). */
+  const [openParents, setOpenParents] = useState<Record<string, boolean>>({});
 
   function badgeFor(href: string) {
     if (href === customerPaths.messages) return unreadMessages;
@@ -170,6 +172,62 @@ function NavLinks({
     if (href === customerPaths.payments) return unreadPayments;
     if (href === customerPaths.orders) return unreadOrders;
     return 0;
+  }
+
+  const matches = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const wrap = (node: ReactNode) => (closeOnNavigate ? <SheetClose asChild>{node}</SheetClose> : node);
+  const badge = (count: number) =>
+    count > 0 ? (
+      <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-semibold leading-none text-[#003F7D]">
+        {count > 99 ? "99+" : count}
+      </span>
+    ) : null;
+  // Rounded pill highlight with a soft inner edge for the active item.
+  const rowClass = (active: boolean) =>
+    cn(
+      "relative flex items-center gap-2.5 rounded-lg py-1.5 text-[13px] font-medium transition-colors",
+      collapsed ? "justify-center px-0" : "px-3",
+      active
+        ? "bg-white/15 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]"
+        : "text-white/75 hover:bg-white/10 hover:text-white",
+    );
+
+  /** One icon link (expanded row, or icon + tooltip when collapsed). */
+  function renderLink(key: string, href: string, label: string, Icon: LucideIcon, active: boolean, count: number) {
+    const link = (
+      <Link
+        href={href}
+        aria-current={active ? "page" : undefined}
+        aria-label={collapsed ? (count ? `${label}, ${count}` : label) : undefined}
+        className={rowClass(active)}
+      >
+        <span className="relative shrink-0">
+          <Icon className="size-4" aria-hidden="true" />
+          {collapsed && count > 0 ? (
+            <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[9px] font-semibold leading-none text-[#003F7D]">
+              {count > 99 ? "99+" : count}
+            </span>
+          ) : null}
+        </span>
+        {collapsed ? <span className="sr-only">{label}</span> : label}
+        {!collapsed ? badge(count) : null}
+      </Link>
+    );
+    if (!collapsed) {
+      return (
+        <span key={key} className="contents">
+          {wrap(link)}
+        </span>
+      );
+    }
+    return (
+      <Tooltip key={key}>
+        <TooltipTrigger asChild>{link}</TooltipTrigger>
+        <TooltipContent side="right" sideOffset={10}>
+          {label}
+        </TooltipContent>
+      </Tooltip>
+    );
   }
 
   return (
@@ -183,73 +241,75 @@ function NavLinks({
               </p>
             ) : null}
             {group.items.map((item) => {
-              const Icon = item.icon;
               const isActive = item.external
                 ? false
                 : item.href === customerPaths.dashboard
                   ? isCustomerOverviewPath(pathname)
-                  : pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`);
-              const count = badgeFor(item.href);
-              const link = (
-                <Link
-                  href={item.href}
-                  aria-current={isActive ? "page" : undefined}
-                  aria-label={
-                    collapsed
-                      ? count
-                        ? `${item.label}, ${count}`
-                        : item.label
-                      : undefined
-                  }
-                  className={cn(
-                    "relative flex items-center gap-2.5 py-1.5 text-[13px] font-medium transition-colors",
-                    collapsed ? "justify-center px-0" : "px-3",
-                    isActive
-                      ? "bg-white/15 text-white"
-                      : "text-white/75 hover:bg-white/10 hover:text-white",
-                  )}
-                >
-                  <span className="relative shrink-0">
-                    <Icon className="size-4" aria-hidden="true" />
-                    {collapsed && count > 0 ? (
-                      <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[9px] font-semibold leading-none text-[#003F7D]">
-                        {count > 99 ? "99+" : count}
-                      </span>
-                    ) : null}
-                  </span>
-                  {collapsed ? (
-                    <span className="sr-only">{item.label}</span>
-                  ) : (
-                    item.label
-                  )}
-                  {!collapsed && count > 0 ? (
-                    <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-semibold leading-none text-[#003F7D]">
-                      {count > 99 ? "99+" : count}
-                    </span>
-                  ) : null}
-                </Link>
-              );
+                  : matches(item.href);
 
-              if (!collapsed) {
+              if (!item.children?.length) {
+                return renderLink(item.href, item.href, item.label, item.icon, isActive, badgeFor(item.href));
+              }
+
+              // Collapsed sidebar: show each nested link as its own icon so none are unreachable.
+              if (collapsed) {
                 return (
                   <span key={item.href} className="contents">
-                    {closeOnNavigate ? (
-                      <SheetClose asChild>{link}</SheetClose>
-                    ) : (
-                      link
+                    {item.children.map((child) =>
+                      renderLink(child.href, child.href, child.label, child.icon || item.icon, matches(child.href), badgeFor(child.href)),
                     )}
                   </span>
                 );
               }
 
+              // Expanded: the row is a dropdown toggle; only the nested links navigate.
+              const Icon = item.icon;
+              const inSection = item.children.some((child) => matches(child.href));
+              const open = openParents[item.href] ?? inSection;
+              const total = item.children.reduce((sum, child) => sum + badgeFor(child.href), 0);
               return (
-                <Tooltip key={item.href}>
-                  <TooltipTrigger asChild>{link}</TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={10}>
-                    {item.label}
-                  </TooltipContent>
-                </Tooltip>
+                <div key={item.href} className="flex flex-col">
+                  <button
+                    type="button"
+                    onClick={() => setOpenParents((prev) => ({ ...prev, [item.href]: !open }))}
+                    aria-expanded={open}
+                    className={cn(rowClass(inSection && !open), "w-full text-left", inSection && open && "text-white")}
+                  >
+                    <Icon className="size-4 shrink-0" aria-hidden="true" />
+                    <span className="flex-1">{item.label}</span>
+                    {!open ? badge(total) : null}
+                    <ChevronDown
+                      className={cn("size-3.5 shrink-0 text-white/60 transition-transform duration-200", open && "rotate-180")}
+                      aria-hidden="true"
+                    />
+                  </button>
+                  {open ? (
+                    <div className="mt-0.5 mb-1 ml-[1.45rem] flex flex-col gap-0.5 border-l border-white/20 pl-2.5">
+                      {item.children.map((child) => {
+                        const childActive = matches(child.href);
+                        return (
+                          <span key={child.href} className="contents">
+                            {wrap(
+                              <Link
+                                href={child.href}
+                                aria-current={childActive ? "page" : undefined}
+                                className={cn(
+                                  "flex items-center rounded-md px-3 py-1.5 text-[12.5px] transition-colors",
+                                  childActive
+                                    ? "bg-white/15 font-semibold text-white"
+                                    : "text-white/70 hover:bg-white/10 hover:text-white",
+                                )}
+                              >
+                                {child.label}
+                                {badge(badgeFor(child.href))}
+                              </Link>,
+                            )}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
               );
             })}
           </div>

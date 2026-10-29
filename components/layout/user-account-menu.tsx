@@ -51,10 +51,13 @@ export function UserAccountMenu({
   user,
   className,
   align = "end",
+  hideAvatarBadge = false,
 }: {
   user: AuthUser;
   className?: string;
   align?: "start" | "center" | "end";
+  /** Hide the unread-messages count on the avatar (the count stays on "Messages" in the menu). */
+  hideAvatarBadge?: boolean;
 }) {
   const isProvider = user.role === "provider";
   const settingsHref = isProvider
@@ -186,7 +189,7 @@ export function UserAccountMenu({
           aria-label="Open account menu"
         >
           {avatarButton}
-          {unreadMessages > 0 ? (
+          {unreadMessages > 0 && !hideAvatarBadge ? (
             <span className="absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
               {unreadMessages > 9 ? "9+" : unreadMessages}
             </span>

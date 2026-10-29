@@ -2,17 +2,23 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Plus } from "lucide-react";
+import { ArrowRight, ClipboardList, FileText, Inbox, MessageCircle, Plus, Receipt } from "lucide-react";
 import {
   BoardCard,
-  StatCell,
   dashboardGreeting,
 } from "@/components/portal/dashboard-widgets";
+import {
+  ENTER_CLASS,
+  MetricCard,
+  SpendingCard,
+  StatusBreakdownCard,
+  enterStyle,
+} from "@/components/account/customer-dashboard-widgets";
+import { useCustomerPendingBadge } from "@/components/account/use-customer-pending-badge";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill, moneyTone } from "@/components/portal/status-pill";
 import { estimateStatusToneClass } from "@/lib/data/estimate-v2-status";
 import { Button } from "@/components/ui/button";
-import { listPublicChatThreads } from "@/lib/api/chat-client";
 import { customerPaths } from "@/lib/customer-paths";
 import { formatMoney, formatShortDate } from "@/lib/format";
 import { formatOrderMoney, orderServiceTitle } from "@/lib/orders/order-display";
@@ -144,7 +150,8 @@ export function CustomerDashboardView() {
   const estimatesLoading = useAppSelector(selectCustomerApiEstimatesLoading);
   const invoices = useAppSelector(selectCustomerInvoices);
   const invoicesLoading = useAppSelector(selectCustomerInvoicesLoading);
-  const [unreadMessages, setUnreadMessages] = useState(0);
+  // Same source as the header and avatar badges, so every count matches.
+  const { unreadMessages } = useCustomerPendingBadge();
 
   const firstName =
     String(user?.firstName || "").trim() ||
@@ -174,30 +181,6 @@ export function CustomerDashboardView() {
     );
     void dispatch(fetchCustomerInvoices());
   }, [dispatch]);
-
-  useEffect(() => {
-    const email = String(user?.email || "").trim();
-    if (!email) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const threads = await listPublicChatThreads(email, { silent: true });
-        if (!cancelled) {
-          setUnreadMessages(
-            threads.items.reduce(
-              (sum, thread) => sum + (thread.unreadForCustomer || 0),
-              0,
-            ),
-          );
-        }
-      } catch {
-        if (!cancelled) setUnreadMessages(0);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.email]);
 
   const openRequests = useMemo(
     () =>
@@ -241,6 +224,33 @@ export function CustomerDashboardView() {
       ).length,
     [invoices],
   );
+
+  const invoiceMoney = useMemo(
+    () =>
+      invoices.reduce(
+        (acc, item) => ({
+          paid: acc.paid + (Number(item.amountPaid) || 0),
+          outstanding:
+            acc.outstanding +
+            (["sent", "partially_paid", "overdue"].includes(item.status) ? Number(item.balanceDue) || 0 : 0),
+        }),
+        { paid: 0, outstanding: 0 },
+      ),
+    [invoices],
+  );
+
+  const estimateSegments = useMemo(() => {
+    const count = (statuses: string[]) => estimates.filter((item) => statuses.includes(String(item.status))).length;
+    const review = count(["sent", "finalized", "changes_requested"]);
+    const approved = count(["accepted", "converted_to_job"]);
+    const declined = count(["declined", "rejected"]);
+    return [
+      { label: "To review", value: review, tone: "amber" as const },
+      { label: "Approved", value: approved, tone: "emerald" as const },
+      { label: "Declined", value: declined, tone: "violet" as const },
+      { label: "Other", value: Math.max(0, estimates.length - review - approved - declined), tone: "sky" as const },
+    ];
+  }, [estimates]);
 
   const [pendingChangeOrders, setPendingChangeOrders] = useState<
     CustomerChangeOrder[]
@@ -333,62 +343,77 @@ export function CustomerDashboardView() {
         </div>
       ) : null}
 
-      {/* Provider Portal StatCell Row */}
+      {/* Summary metrics */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <StatCell
+        <MetricCard
+          index={0}
           label="Requests"
-          value={String(batchesLoading ? "…" : batches.length)}
-          note={
-            openRequests
-              ? `${openRequests} active requests`
-              : "Quote requests sent"
-          }
+          icon={Inbox}
+          tone="primary"
+          value={batches.length}
+          loading={batchesLoading && !batches.length}
+          note={openRequests ? `${openRequests} active requests` : "Quote requests sent"}
+          progress={batches.length ? openRequests / batches.length : 0}
           href={customerPaths.requests}
         />
-        <StatCell
+        <MetricCard
+          index={1}
           label="Estimates"
-          value={String(estimatesLoading ? "…" : estimates.length)}
-          note={
-            pendingEstimates
-              ? `${pendingEstimates} awaiting your review`
-              : "Proposals from professionals"
-          }
+          icon={FileText}
+          tone="amber"
+          value={estimates.length}
+          loading={estimatesLoading && !estimates.length}
+          note={pendingEstimates ? `${pendingEstimates} awaiting your review` : "Proposals from professionals"}
+          progress={estimates.length ? pendingEstimates / estimates.length : 0}
           href={customerPaths.estimates}
         />
-        <StatCell
+        <MetricCard
+          index={2}
           label="Orders"
-          value={String(ordersLoading ? "…" : pagination.totalDocs || orders.length)}
-          note={
-            openOrders
-              ? `${openOrders} in progress`
-              : "Booked fixed services & jobs"
-          }
+          icon={ClipboardList}
+          tone="sky"
+          value={pagination.totalDocs || orders.length}
+          loading={ordersLoading && !orders.length}
+          note={openOrders ? `${openOrders} in progress` : "Booked fixed services & jobs"}
+          progress={orders.length ? openOrders / orders.length : 0}
           href={customerPaths.orders}
         />
-        <StatCell
+        <MetricCard
+          index={3}
           label="Invoices"
-          value={String(invoicesLoading ? "…" : invoices.length)}
-          note={
-            openInvoices
-              ? `${openInvoices} awaiting payment`
-              : "Bills from completed services"
-          }
+          icon={Receipt}
+          tone="emerald"
+          value={invoices.length}
+          loading={invoicesLoading && !invoices.length}
+          note={openInvoices ? `${openInvoices} awaiting payment` : "Bills from completed services"}
+          progress={invoices.length ? 1 - openInvoices / invoices.length : 0}
           href={customerPaths.invoices}
         />
-        <StatCell
+        <MetricCard
+          index={4}
           label="Messages"
-          value={String(unreadMessages)}
-          note={
-            unreadMessages
-              ? `${unreadMessages} unread conversations`
-              : "Chat with professionals"
-          }
+          icon={MessageCircle}
+          tone="violet"
+          value={unreadMessages}
+          note={unreadMessages ? `${unreadMessages} unread message${unreadMessages === 1 ? "" : "s"}` : "Chat with professionals"}
           href={customerPaths.messages}
         />
       </div>
 
-      {/* Provider Portal BoardCard Grid */}
-      <div className="grid gap-6 xl:grid-cols-2">
+      {/* Visual summaries */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SpendingCard index={5} paid={invoiceMoney.paid} outstanding={invoiceMoney.outstanding} href={customerPaths.invoices} />
+        <StatusBreakdownCard
+          index={6}
+          title="Estimates"
+          subtitle="Where your proposals stand"
+          href={customerPaths.estimates}
+          segments={estimateSegments}
+        />
+      </div>
+
+      {/* Recent activity */}
+      <div style={enterStyle(7)} className={`${ENTER_CLASS} grid gap-6 xl:grid-cols-2`}>
         {/* Quote Requests */}
         <BoardCard
           title="Quote requests"

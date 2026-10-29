@@ -182,7 +182,9 @@ function HeaderActions({
   closeOnNavigate?: boolean;
 }) {
   const isProvider = Boolean(user && user.role === "provider");
-  const { pendingCount } = useCustomerPendingBadge(
+  // Dashboard badge = unread notifications, the same number as the bell inside the dashboard.
+  // Unread messages are already counted on the avatar, so they are not added here too.
+  const { unreadNotifications: pendingCount } = useCustomerPendingBadge(
     Boolean(showAccount && user && !isProvider),
   );
 
@@ -266,7 +268,8 @@ function HeaderActions({
             </Link>
           </Button>
         ) : null}
-        <UserAccountMenu user={user} />
+        {/* One badge in the site header: the Dashboard button carries it. */}
+        <UserAccountMenu user={user} hideAvatarBadge />
       </div>
     );
   }

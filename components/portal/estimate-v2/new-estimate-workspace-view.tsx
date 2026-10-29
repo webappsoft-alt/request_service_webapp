@@ -25,6 +25,7 @@ import {
 import { QuoteAnswersAccordion } from "@/components/portal/quote-answers-card";
 import { PortalPage } from "@/components/portal/portal-page";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
+import { Skeleton } from "@/components/ui/skeleton";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import {
   createEmptyLine,
@@ -135,7 +136,7 @@ const PREP_OPTIONS = [
 ] as const;
 
 const RAIL_CARD =
-  "rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
+  "rounded-2xl border border-slate-200/60 dark:border-border bg-white dark:bg-card p-4 shadow-[0_1px_3px_rgba(15,23,42,0.06),0_6px_16px_-8px_rgba(15,23,42,0.10)]";
 const ACTIVITY_PREVIEW_COUNT = 4;
 const MAIN_CARD =
   "rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
@@ -1843,9 +1844,75 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
   if (loading) {
     return (
-      <PortalPage eyebrow="Work / Estimate" title="">
-        <div className="min-h-64" />
-        <LoadingOverlay label="Opening estimate…" />
+      <PortalPage
+        backHref="/pro/dashboard/new-estimate"
+        backLabel="Back to all estimates"
+        eyebrow="Work / Estimate"
+        title={<Skeleton className="h-6 w-64 max-w-full" />}
+        description={<Skeleton className="h-4 w-80 max-w-full" />}
+        actions={
+          <>
+            <Skeleton className="h-8 w-36" />
+            <Skeleton className="h-8 w-36" />
+            <Skeleton className="h-8 w-28" />
+          </>
+        }
+      >
+        <div
+          className="grid gap-5 lg:grid-cols-[minmax(240px,0.58fr)_minmax(0,2.42fr)]"
+          role="status"
+          aria-label="Opening estimate…"
+        >
+          <section className="space-y-3.5">
+            {[3, 3, 4].map((rows, card) => (
+              <div key={card} className={RAIL_CARD}>
+                <Skeleton className="h-3 w-28" />
+                <div className="mt-3 space-y-2">
+                  {Array.from({ length: rows }, (_, row) => (
+                    <Skeleton key={row} className={cn("h-4", row === 0 ? "w-3/4" : row % 2 ? "w-full" : "w-5/6")} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </section>
+          <div className={MAIN_CARD}>
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4 dark:border-border-soft">
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-44" />
+                <Skeleton className="h-4 w-20" />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-8 w-28" />
+              </div>
+            </div>
+            <div className="mt-5 space-y-2">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-[88px] w-full rounded-lg" />
+            </div>
+            <div className="mt-5 space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-3 w-64 max-w-full" />
+            </div>
+            <div className="mt-3 overflow-hidden rounded-xl border border-[#94a3b8] dark:border-border">
+              <div className="border-b border-slate-200 bg-[#f7f8fa] px-3 py-3 dark:border-border-soft dark:bg-muted/40">
+                <Skeleton className="h-4 w-24 bg-slate-200/70" />
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-border-soft">
+                {[0, 1, 2].map((row) => (
+                  <div key={row} className="flex items-center gap-3 px-3 py-2.5">
+                    <Skeleton className="h-8 flex-1" />
+                    <Skeleton className="hidden h-8 w-24 sm:block" />
+                    <Skeleton className="h-8 w-12" />
+                    <Skeleton className="hidden h-8 w-20 sm:block" />
+                    <Skeleton className="h-8 w-16" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </PortalPage>
     );
   }
@@ -1882,6 +1949,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
   return (
     <PortalPage
+      backHref="/pro/dashboard/new-estimate"
+      backLabel="Back to all estimates"
       eyebrow="Work / Estimate"
       title={`${opportunity.number} · ${opportunity.title}`}
       description={
@@ -1952,12 +2021,12 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            className="h-8 gap-1.5"
             disabled={!opportunity || Boolean(printJob)}
             title="Print or save as PDF"
             onClick={printEstimate}
           >
-            <Printer className="size-3.5" />
+            <Printer className="size-3.5 text-primary" />
             Print / PDF
           </Button>
           {printJob ? (
@@ -1965,9 +2034,6 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
               <EstimatePdfDocument snapshot={printJob.snapshot} approval={printJob.approval} />
             </PrintPortal>
           ) : null}
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/pro/dashboard/new-estimate">All estimates</Link>
-          </Button>
         </>
       }
     >
@@ -2042,7 +2108,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       "flex w-full items-start gap-2.5 rounded-xl border px-3 py-3 text-left transition",
                       selected
                         ? "border-primary bg-primary/[0.06] ring-1 ring-primary/30"
-                        : "border-[#94a3b8] bg-[#fafbfc] hover:border-primary/50 hover:bg-white",
+                        : "border-slate-200 bg-slate-50/60 hover:border-primary/40 hover:bg-white dark:border-border dark:bg-transparent",
                     )}
                   >
                     <span
@@ -2110,8 +2176,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
               <ol
                 className={
                   activityExpanded && activityTimeline.length > ACTIVITY_PREVIEW_COUNT
-                    ? "relative mt-3 max-h-64 space-y-0 overflow-y-auto border-l border-[#b4becc] pl-4 pr-1"
-                    : "relative mt-3 space-y-0 border-l border-[#b4becc] pl-4"
+                    ? "relative mt-3 max-h-64 space-y-0 overflow-y-auto border-l border-slate-200 pl-4 pr-1 dark:border-border-soft"
+                    : "relative mt-3 space-y-0 border-l border-slate-200 pl-4 dark:border-border-soft"
                 }
               >
                 {(activityExpanded
@@ -2317,7 +2383,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           <div ref={estimateSectionRef} className={MAIN_CARD}>
             {canBuildEstimate ? (
               <>
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#d8dee8] pb-4">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4 dark:border-border-soft">
                   <div>
                     <h2 className="text-lg font-semibold tracking-tight text-slate-900">
                       Estimate{estimate?.number ? ` · ${estimate.number}` : ""}
@@ -2474,7 +2540,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       disabled={estimateLocked}
                       onChange={(e) => setScopeOfWork(e.target.value)}
                       placeholder="Customer-facing description of the work…"
-                      className="min-h-[88px] resize-y bg-[#fafbfc]"
+                      className="min-h-[88px] resize-y border-slate-200 bg-slate-50/50 shadow-none focus-visible:bg-white dark:border-border dark:bg-transparent"
                     />
                   </div>
 
@@ -2498,6 +2564,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       lines={lines}
                       onChange={setLines}
                       locked={estimateLocked}
+                      soft
                       sectionActions={(section) =>
                         estimate?.id ? (
                           <SectionStageButton
@@ -2513,8 +2580,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     />
                   </div>
 
-                  <div className="overflow-hidden rounded-xl border border-[#b4becc] bg-[#f8fafc]">
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-[#b4becc] px-4 py-2.5">
+                  <div className="overflow-hidden rounded-xl border border-slate-200/70 bg-slate-50/60 shadow-[0_1px_3px_rgba(15,23,42,0.06),0_6px_16px_-8px_rgba(15,23,42,0.06)] dark:border-border dark:bg-card">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-slate-100 px-4 py-2.5 dark:border-border-soft">
                       <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
                         Estimate summary
                       </h3>
@@ -2550,7 +2617,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                         </div>
                       </div>
 
-                      <div className="space-y-2.5 text-sm sm:border-l sm:border-[#d8dee8] sm:pl-6">
+                      <div className="space-y-2.5 text-sm sm:border-l sm:border-slate-200/70 sm:pl-6 dark:sm:border-border-soft">
                         <div className="flex items-center justify-between gap-4">
                           <span className="text-slate-500">Subtotal</span>
                           <span className="tabular-nums text-slate-900">{formatMoney(subtotal)}</span>
@@ -2582,14 +2649,14 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                           <span>Tax ({taxRatePercent}%)</span>
                           <span className="tabular-nums">{formatMoney(taxAmount)}</span>
                         </div>
-                        <div className="flex items-center justify-between gap-4 border-t border-[#d8dee8] pt-2.5 text-base font-semibold text-slate-900">
+                        <div className="flex items-center justify-between gap-4 border-t border-slate-200/80 pt-2.5 text-base dark:border-border-soft font-semibold text-slate-900">
                           <span>Total</span>
                           <span className="tabular-nums">{formatMoney(grandTotal)}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="border-t border-[#b4becc] bg-white px-4 py-3">
+                    <div className="border-t border-slate-100 bg-white px-4 py-3 dark:border-border-soft dark:bg-card">
                       <Label htmlFor="terms" className="text-[11px] text-slate-500">
                         Terms
                       </Label>
@@ -2608,7 +2675,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     visitSupportSummary.noteCount > 0 ||
                     visitSupportSummary.measurementCount > 0 ||
                     visitSupportSummary.workItemCount > 0) ? (
-                    <div className="rounded-xl border border-dashed border-[#b4becc] bg-[#fafbfc] px-4 py-3.5">
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3.5 dark:border-border dark:bg-transparent">
                       <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
                         Supporting information
                       </h3>
@@ -2659,7 +2726,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
                   {estimate?.id ? (
                     <>
-                      <div className="rounded-xl border border-[#b4becc] bg-white px-4 py-3.5 dark:bg-card">
+                      <div className="rounded-xl border border-slate-200/70 bg-white px-4 py-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.06),0_6px_16px_-8px_rgba(15,23,42,0.06)] dark:border-border dark:bg-card">
                         <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
                           Notes &amp; updates
                         </h3>

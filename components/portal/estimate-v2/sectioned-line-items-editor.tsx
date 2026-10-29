@@ -28,8 +28,11 @@ export function SectionedLineItemsEditor({
   locked = false,
   showPricing = true,
   sectionActions,
+  soft = false,
 }: {
   lines: JobCostLine[];
+  /** Shadowed cards with light dividers instead of the dark section borders. */
+  soft?: boolean;
   onChange: (lines: JobCostLine[]) => void;
   locked?: boolean;
   /** Extra control in each section header (e.g. the stage time), shown even when locked. */
@@ -155,7 +158,12 @@ export function SectionedLineItemsEditor({
             key={key}
             className="overflow-hidden rounded-xl border border-[#94a3b8] bg-card"
           >
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#94a3b8] bg-[#f7f8fa] px-3 py-2">
+            <div
+              className={cn(
+                "flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2",
+                soft ? "border-slate-200 bg-[#f7f8fa] dark:border-border-soft dark:bg-muted/40" : "border-[#94a3b8] bg-[#f7f8fa]",
+              )}
+            >
               {isEditing ? (
                 <Input
                   ref={titleInputRef}
@@ -251,13 +259,18 @@ export function SectionedLineItemsEditor({
               onChange={(next) => replaceGroupLines(group.key, next)}
               locked={locked}
               showPricing={showPricing}
-              className="rounded-none border-0"
+              className={cn(
+                "rounded-none border-0",
+                soft &&
+                  "[&_th]:bg-white [&_tr]:border-slate-100 dark:[&_th]:bg-card dark:[&_tr]:border-border-soft",
+              )}
             />
 
             {showPricing ? (
             <div
               className={cn(
-                "flex items-center justify-between border-t border-[#94a3b8] bg-[#f8fafc] px-3 py-2 text-sm",
+                "flex items-center justify-between border-t px-3 py-2 text-sm",
+                soft ? "border-slate-100 bg-white dark:border-border-soft dark:bg-card" : "border-[#94a3b8] bg-[#f8fafc]",
               )}
             >
               <span className="font-medium text-slate-600">

@@ -33,7 +33,9 @@ import {
 } from "@/lib/api/ai-redesigner-client";
 import { siteConfig } from "@/lib/site";
 import { cn } from "@/lib/utils";
-import { selectAuthUser } from "@/store/authSlice";
+import { selectAuthUser, selectIsAuthenticated } from "@/store/authSlice";
+import { useRouter } from "next/navigation";
+import { showLoginRequired } from "./login-guard";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   fetchRedesignCatalog,
@@ -151,6 +153,14 @@ export function RedesignerWizard() {
   const catalog = useAppSelector(selectRedesignCatalog);
   const status = useAppSelector(selectRedesignCatalogStatus);
   const authUser = useAppSelector(selectAuthUser);
+  const isLoggedIn = useAppSelector(selectIsAuthenticated);
+  const router = useRouter();
+  /** Guests can look around, but uploading and designing need an account. */
+  const guardLogin = () => {
+    if (isLoggedIn) return true;
+    showLoginRequired((href) => router.push(href));
+    return false;
+  };
 
   const [step, setStep] = useState(0);
   const [photo, setPhoto] = useState<{ url: string | null; preview: string | null }>({ url: null, preview: null });
@@ -207,7 +217,9 @@ export function RedesignerWizard() {
   const roomWord = roomType === "kitchen" ? "kitchen" : "bathroom";
 
   /* ------------------------------------------------------------ photo */
-  const pickPhoto = () => fileRef.current?.click();
+  const pickPhoto = () => {
+    if (guardLogin()) fileRef.current?.click();
+  };
 
   const handleFile = useCallback(async (file: File) => {
     setPhotoError(null);
@@ -302,6 +314,7 @@ export function RedesignerWizard() {
 
   /* ------------------------------------------------------------ generation */
   const create = async () => {
+    if (!guardLogin()) return;
     if (!photo.url) return setStep(0);
     if (!styleId) return setStep(1);
     const errors = validateContact(contact, consent);
@@ -528,7 +541,7 @@ export function RedesignerWizard() {
                   event.preventDefault();
                   setDragOver(false);
                   const file = event.dataTransfer.files?.[0];
-                  if (file) void handleFile(file);
+                  if (file && guardLogin()) void handleFile(file);
                 }}
                 className={cn(
                   "absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 text-center transition-colors",

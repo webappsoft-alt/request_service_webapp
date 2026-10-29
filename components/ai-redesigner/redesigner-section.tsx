@@ -18,6 +18,8 @@ import {
   fetchRedesignCatalog,
   selectRedesignCatalog,
 } from "@/store/aiRedesignerSlice";
+import { selectIsAuthenticated } from "@/store/authSlice";
+import { showLoginRequired } from "./login-guard";
 import {
   AI_DESIGNER_LIVE,
   AI_DESIGNER_PATH,
@@ -48,8 +50,13 @@ export function RedesignerSection() {
   const dispatch = useAppDispatch();
   const catalog = useAppSelector(selectRedesignCatalog);
   const router = useRouter();
-  const openDesigner = () =>
-    AI_DESIGNER_LIVE ? router.push(AI_DESIGNER_PATH) : showComingSoon();
+  const isLoggedIn = useAppSelector(selectIsAuthenticated);
+  const openDesigner = () => {
+    if (!AI_DESIGNER_LIVE) return showComingSoon();
+    // Everyone sees the section; only logged-in users can open the designer.
+    if (!isLoggedIn) return showLoginRequired((href) => router.push(href));
+    router.push(AI_DESIGNER_PATH);
+  };
 
   useEffect(() => {
     void dispatch(fetchRedesignCatalog());

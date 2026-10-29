@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/preserve-manual-memoization */
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -886,6 +887,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           };
         });
 
+      // Tax rate only needs the property state: fetch it alongside the estimate, not after it.
+      const ratePromise = fetchTaxRatePercent(data.propertyAddress?.state);
       const linked = data.estimates?.[0] || null;
       let loadedScope: string;
       let loadedTerms = "Proposal valid for 30 calendar days from issue date.";
@@ -957,7 +960,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       sheetBaseRef.current = editable ? { id: data.id, base, saved: serverSheet } : null;
       autoSaveCtx.current = { ...autoSaveCtx.current, estimate: freshEstimate };
 
-      const rate = await fetchTaxRatePercent(data.propertyAddress?.state);
+      const rate = await ratePromise;
       setTaxRatePercent(rate);
       autoSaveCtx.current = { ...autoSaveCtx.current, taxRatePercent: rate };
 

@@ -1,6 +1,9 @@
 "use client";
 
-import { RouteMapProvider, useRouteOrigin } from "@/components/portal/route-map-provider";
+import {
+  RouteMapProvider,
+  useRouteOrigin,
+} from "@/components/portal/route-map-provider";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -24,9 +27,21 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { isDashboardPath, isPeoplePath, isWorkPath, portalNavGroups } from "@/lib/data/portal-nav";
+import { NavHoverCardContent, type NavHoverRow } from "@/components/layout/nav-hover-card";
+import {
+  Tooltip,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  isDashboardPath,
+  isPeoplePath,
+  isWorkPath,
+  portalNavGroups,
+  type PortalNavItem,
+} from "@/lib/data/portal-nav";
 import { cn } from "@/lib/utils";
+import { SidebarCollapseToggle } from "@/components/layout/sidebar-collapse-toggle";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuthUser } from "@/store/authSlice";
 import { selectPendingReviewTotal } from "@/store/contractorReviewsSlice";
@@ -55,7 +70,8 @@ function NavLinks({
   const pendingFieldRequests = useAppSelector(selectPendingReviewTotal);
   /** Expanded state of items with nested links (default: open while inside that section). */
   const [openParents, setOpenParents] = useState<Record<string, boolean>>({});
-  const matches = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const matches = (href: string) =>
+    pathname === href || pathname.startsWith(`${href}/`);
 
   /** Badges that pulse so incoming work is noticed immediately. */
   function pulsesBadge(href: string) {
@@ -71,22 +87,76 @@ function NavLinks({
   function badgeFor(href: string) {
     if (href === "/pro/dashboard/requests") return inbox.newLeads;
     // Customer chats + technician chats share the Messages page.
-    if (href === "/pro/dashboard/messages") return inbox.unreadChats + teamChatUnread;
+    if (href === "/pro/dashboard/messages")
+      return inbox.unreadChats + teamChatUnread;
     // Classic estimates nav is hidden; badge follows the new Estimate path.
     // Customer responses (signed / declined / changes requested) — the larger of the two
     // counts, since a change request shows in both.
-    if (href === "/pro/dashboard/new-estimate") return Math.max(inbox.pendingEstimates, inbox.estimateUpdates);
+    if (href === "/pro/dashboard/new-estimate")
+      return Math.max(inbox.pendingEstimates, inbox.estimateUpdates);
     // New booking requests + other order updates (status, dispute, payment released).
-    if (href === "/pro/dashboard/orders") return inbox.pendingOrders + inbox.orderUpdates;
+    if (href === "/pro/dashboard/orders")
+      return inbox.pendingOrders + inbox.orderUpdates;
     // Completion proofs / change order requests from the field + answered change orders.
-    if (href === "/pro/dashboard/jobs") return pendingFieldRequests + inbox.jobUpdates;
+    if (href === "/pro/dashboard/jobs")
+      return pendingFieldRequests + inbox.jobUpdates;
     // Visits booked (e.g. by the AI receptionist).
     if (href === "/pro/dashboard/schedule") return inbox.scheduleUpdates;
     return 0;
   }
 
+  /** Exact counts behind the badge, listed in the hover card. */
+  function hoverRowsFor(href: string): NavHoverRow[] {
+    if (href === "/pro/dashboard/requests")
+      return [{ label: "New leads", count: inbox.newLeads }];
+    if (href === "/pro/dashboard/messages")
+      return [
+        { label: "Unread customer chats", count: inbox.unreadChats },
+        { label: "Unread team chats", count: teamChatUnread },
+      ];
+    if (href === "/pro/dashboard/new-estimate")
+      return [
+        { label: "Customer responses", count: inbox.pendingEstimates },
+        { label: "Unread updates", count: inbox.estimateUpdates },
+      ];
+    if (href === "/pro/dashboard/jobs")
+      return [
+        { label: "Field requests to review", count: pendingFieldRequests },
+        { label: "Unread updates", count: inbox.jobUpdates },
+      ];
+    if (href === "/pro/dashboard/schedule")
+      return [{ label: "New bookings", count: inbox.scheduleUpdates }];
+    if (href === "/pro/dashboard/orders")
+      return [
+        { label: "New booking requests", count: inbox.pendingOrders },
+        { label: "Order updates", count: inbox.orderUpdates },
+      ];
+    return [];
+  }
+
+  /** Hover card on the desktop sidebar only (the mobile sheet is touch). */
+  function withHoverCard(item: PortalNavItem, trigger: ReactNode) {
+    if (closeOnNavigate) return trigger;
+    return (
+      <Tooltip key={item.href}>
+        <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+        <NavHoverCardContent
+          title={item.label}
+          icon={item.icon}
+          description={item.description}
+          rows={hoverRowsFor(item.href)}
+          subItems={item.children?.map((child) => child.label)}
+        />
+      </Tooltip>
+    );
+  }
+
   return (
-    <TooltipProvider delayDuration={0}>
+    <TooltipProvider
+      delayDuration={collapsed ? 0 : 120}
+      skipDelayDuration={400}
+      disableHoverableContent
+    >
       <nav className="flex flex-col gap-4" aria-label="Portal">
         {portalNavGroups.map((group) => (
           <div key={group.id} className="flex flex-col gap-0.5">
@@ -100,7 +170,8 @@ function NavLinks({
               const isActive =
                 item.href === "/pro/dashboard"
                   ? isDashboardPath(pathname)
-                  : pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  : pathname === item.href ||
+                    pathname.startsWith(`${item.href}/`);
               const count = badgeFor(item.href);
               const link = (
                 <Link
@@ -116,7 +187,9 @@ function NavLinks({
                   className={cn(
                     "relative flex items-center gap-2.5 rounded-md py-1.5 text-[13px] font-medium transition-colors",
                     collapsed ? "justify-center px-0" : "px-3",
-                    isActive ? "bg-white/15 text-white" : "text-white/75 hover:bg-white/10 hover:text-white",
+                    isActive
+                      ? "bg-white/15 text-white"
+                      : "text-white/75 hover:bg-white/10 hover:text-white",
                   )}
                 >
                   <span className="relative shrink-0">
@@ -125,14 +198,19 @@ function NavLinks({
                       <span
                         className={cn(
                           "absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[9px] font-semibold leading-none text-[#003F7D]",
-                          pulsesBadge(item.href) && "animate-pulse ring-2 ring-amber-300",
+                          pulsesBadge(item.href) &&
+                            "animate-pulse ring-2 ring-amber-300",
                         )}
                       >
                         {count > 99 ? "99+" : count}
                       </span>
                     ) : null}
                   </span>
-                  {collapsed ? <span className="sr-only">{item.label}</span> : item.label}
+                  {collapsed ? (
+                    <span className="sr-only">{item.label}</span>
+                  ) : (
+                    item.label
+                  )}
                   {!collapsed && count > 0 ? (
                     <span
                       className={cn(
@@ -148,45 +226,67 @@ function NavLinks({
               );
 
               if (!collapsed) {
-                const wrapped = closeOnNavigate ? <SheetClose asChild>{link}</SheetClose> : link;
+                const wrapped = closeOnNavigate ? (
+                  <SheetClose asChild>{link}</SheetClose>
+                ) : (
+                  link
+                );
                 if (!item.children?.length) {
                   return (
                     <span key={item.href} className="contents">
-                      {wrapped}
+                      {withHoverCard(item, wrapped)}
                     </span>
                   );
                 }
-                const inSection = item.children.some((child) => matches(child.href));
+                const inSection = item.children.some((child) =>
+                  matches(child.href),
+                );
                 const open = openParents[item.href] ?? inSection;
                 // Parent with nested links: the whole row is a dropdown toggle; only the children navigate.
                 return (
                   <div key={item.href} className="flex flex-col">
-                    <button
-                      type="button"
-                      onClick={() => setOpenParents((prev) => ({ ...prev, [item.href]: !open }))}
-                      aria-expanded={open}
-                      className={cn(
-                        "relative flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-left text-[13px] font-medium transition-colors",
-                        inSection && !open ? "bg-white/15 text-white" : inSection ? "text-white" : "text-white/75 hover:bg-white/10 hover:text-white",
-                      )}
-                    >
-                      <Icon className="size-4 shrink-0" aria-hidden="true" />
-                      <span className="flex-1">{item.label}</span>
-                      {count > 0 ? (
-                        <span
+                    {withHoverCard(
+                      item,
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenParents((prev) => ({
+                            ...prev,
+                            [item.href]: !open,
+                          }))
+                        }
+                        aria-expanded={open}
+                        className={cn(
+                          "relative flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-left text-[13px] font-medium transition-colors",
+                          inSection && !open
+                            ? "bg-white/15 text-white"
+                            : inSection
+                              ? "text-white"
+                              : "text-white/75 hover:bg-white/10 hover:text-white",
+                        )}
+                      >
+                        <Icon className="size-4 shrink-0" aria-hidden="true" />
+                        <span className="flex-1">{item.label}</span>
+                        {count > 0 ? (
+                          <span
+                            className={cn(
+                              "inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-semibold leading-none text-[#003F7D]",
+                              pulsesBadge(item.href) &&
+                                "animate-pulse ring-2 ring-amber-300 ring-offset-1 ring-offset-[#003F7D]",
+                            )}
+                          >
+                            {count > 99 ? "99+" : count}
+                          </span>
+                        ) : null}
+                        <ChevronDown
                           className={cn(
-                            "inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-semibold leading-none text-[#003F7D]",
-                            pulsesBadge(item.href) && "animate-pulse ring-2 ring-amber-300 ring-offset-1 ring-offset-[#003F7D]",
+                            "size-3.5 shrink-0 text-white/60 transition-transform duration-200",
+                            open && "rotate-180",
                           )}
-                        >
-                          {count > 99 ? "99+" : count}
-                        </span>
-                      ) : null}
-                      <ChevronDown
-                        className={cn("size-3.5 shrink-0 text-white/60 transition-transform duration-200", open && "rotate-180")}
-                        aria-hidden="true"
-                      />
-                    </button>
+                          aria-hidden="true"
+                        />
+                      </button>,
+                    )}
                     {open ? (
                       <div className="mt-0.5 mb-1 ml-[1.45rem] flex flex-col gap-0.5 border-l border-white/20 pl-2.5">
                         {item.children.map((child) => {
@@ -197,7 +297,9 @@ function NavLinks({
                               aria-current={childActive ? "page" : undefined}
                               className={cn(
                                 "rounded-md px-3 py-1.5 text-[12.5px] transition-colors",
-                                childActive ? "bg-white/15 font-semibold text-white" : "text-white/70 hover:bg-white/10 hover:text-white",
+                                childActive
+                                  ? "bg-white/15 font-semibold text-white"
+                                  : "text-white/70 hover:bg-white/10 hover:text-white",
                               )}
                             >
                               {child.label}
@@ -205,7 +307,11 @@ function NavLinks({
                           );
                           return (
                             <span key={child.href} className="contents">
-                              {closeOnNavigate ? <SheetClose asChild>{childLink}</SheetClose> : childLink}
+                              {closeOnNavigate ? (
+                                <SheetClose asChild>{childLink}</SheetClose>
+                              ) : (
+                                childLink
+                              )}
                             </span>
                           );
                         })}
@@ -215,14 +321,7 @@ function NavLinks({
                 );
               }
 
-              return (
-                <Tooltip key={item.href}>
-                  <TooltipTrigger asChild>{link}</TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={10}>
-                    {item.label}
-                  </TooltipContent>
-                </Tooltip>
-              );
+              return withHoverCard(item, link);
             })}
           </div>
         ))}
@@ -237,9 +336,17 @@ const NOTIFICATION_SECTIONS: Array<{
   section: ProviderNotificationSection;
   count: keyof PortalInboxCounts;
 }> = [
-  { href: "/pro/dashboard/new-estimate", section: "estimates", count: "estimateUpdates" },
+  {
+    href: "/pro/dashboard/new-estimate",
+    section: "estimates",
+    count: "estimateUpdates",
+  },
   { href: "/pro/dashboard/jobs", section: "jobs", count: "jobUpdates" },
-  { href: "/pro/dashboard/schedule", section: "schedule", count: "scheduleUpdates" },
+  {
+    href: "/pro/dashboard/schedule",
+    section: "schedule",
+    count: "scheduleUpdates",
+  },
   { href: "/pro/dashboard/orders", section: "orders", count: "orderUpdates" },
 ];
 
@@ -250,7 +357,10 @@ const NOTIFICATION_SECTIONS: Array<{
 function useReadSectionOnOpen(pathname: string) {
   // Read the shared counts store directly (usePortalInbox would add another socket listener).
   const [counts, setCounts] = useState(getPortalInboxCounts);
-  useEffect(() => subscribePortalInboxCounts(() => setCounts(getPortalInboxCounts())), []);
+  useEffect(
+    () => subscribePortalInboxCounts(() => setCounts(getPortalInboxCounts())),
+    [],
+  );
   const inFlight = useRef(false);
   const match = NOTIFICATION_SECTIONS.find(
     (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
@@ -275,7 +385,10 @@ export function PortalShell({ children }: { children: ReactNode }) {
   useReadSectionOnOpen(pathname);
   const router = useRouter();
   const { provider, session } = usePortalWorkspace();
-  const routeOrigin = useRouteOrigin({ provider, businessName: provider?.companyName });
+  const routeOrigin = useRouteOrigin({
+    provider,
+    businessName: provider?.companyName,
+  });
   const authUser = useAppSelector(selectAuthUser);
   const { records, closeRecord } = useOpenRecords();
   const [collapsed, setCollapsed] = useState(false);
@@ -300,44 +413,75 @@ export function PortalShell({ children }: { children: ReactNode }) {
           collapsed ? "w-16" : "w-56",
         )}
       >
-        <div className={cn("flex h-12 items-center border-b border-white/10", collapsed ? "justify-center px-2" : "px-4")}>
+        <div
+          className={cn(
+            "flex h-12 items-center border-b border-white/10",
+            collapsed ? "justify-center px-2" : "px-4",
+          )}
+        >
           {collapsed ? (
-            <Link href="/pro/dashboard" className="truncate text-sm font-semibold tracking-wide">
+            <Link
+              href="/pro/dashboard"
+              className="truncate text-sm font-semibold tracking-wide"
+            >
               RS
             </Link>
           ) : (
             <div className="flex min-w-0 flex-col leading-tight">
-              <Link href="/pro/dashboard" className="truncate text-sm font-semibold tracking-wide">
+              <Link
+                href="/pro/dashboard"
+                className="truncate text-sm font-semibold tracking-wide"
+              >
                 {provider.companyName}
               </Link>
-              <span className="mt-0.5 truncate text-[11px] text-white/65">Request Service</span>
+              <span className="mt-0.5 truncate text-[11px] text-white/65">
+                Request Service
+              </span>
             </div>
           )}
         </div>
-        <div className={cn("flex-1 overflow-y-auto py-3", collapsed ? "px-2" : "px-2")}>
+        <div
+          className={cn(
+            "flex-1 overflow-y-auto py-3",
+            collapsed ? "px-2" : "px-2",
+          )}
+        >
           <NavLinks collapsed={collapsed} />
         </div>
-        <button
-          type="button"
-          onClick={() => setCollapsed((current) => !current)}
-          className="border-t border-white/10 px-3 py-3 text-left text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white"
-        >
-          {collapsed ? "Show" : "Hide labels"}
-        </button>
+        <SidebarCollapseToggle
+          collapsed={collapsed}
+          onToggle={() => setCollapsed((current) => !current)}
+          className="top-3"
+        />
       </aside>
 
-      <div className={cn("transition-[padding] duration-200 print:pl-0!", collapsed ? "lg:pl-16" : "lg:pl-56")}>
+      <div
+        className={cn(
+          "transition-[padding] duration-200 print:pl-0!",
+          collapsed ? "lg:pl-16" : "lg:pl-56",
+        )}
+      >
         <header className="sticky top-0 z-20 border-b border-input bg-card print:hidden">
           <div className="flex h-12 items-center gap-3 px-3 sm:px-4">
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open portal menu">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="lg:hidden"
+                  aria-label="Open portal menu"
+                >
                   <Menu />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="flex w-72 flex-col border-0 bg-[#003F7D] dark:bg-slate-900 dark:border-r dark:border-border p-0 text-white">
+              <SheetContent
+                side="left"
+                className="flex w-72 flex-col border-0 bg-[#003F7D] dark:bg-slate-900 dark:border-r dark:border-border p-0 text-white"
+              >
                 <SheetHeader className="border-b border-white/10 px-4 py-3">
-                  <SheetTitle className="text-white">{provider.companyName}</SheetTitle>
+                  <SheetTitle className="text-white">
+                    {provider.companyName}
+                  </SheetTitle>
                   <p className="text-xs text-white/65">Request Service</p>
                 </SheetHeader>
                 <div className="min-h-0 flex-1 overflow-y-auto px-2 py-4">
@@ -347,16 +491,24 @@ export function PortalShell({ children }: { children: ReactNode }) {
             </Sheet>
 
             <div className="hidden min-w-0 flex-1 items-center gap-1.5 overflow-x-auto md:flex">
-              <RecordTab href="/pro/dashboard" label={provider.companyName} active={isDashboardPath(pathname)} />
+              <RecordTab
+                href="/pro/dashboard"
+                label={provider.companyName}
+                active={isDashboardPath(pathname)}
+              />
               {records.map((record) => (
                 <RecordTab
                   key={record.href}
                   href={record.href}
                   label={record.label}
-                  active={pathname === record.href || pathname.startsWith(`${record.href}?`)}
+                  active={
+                    pathname === record.href ||
+                    pathname.startsWith(`${record.href}?`)
+                  }
                   onClose={() => {
                     closeRecord(record.href);
-                    if (pathname === record.href) router.push("/pro/dashboard/customers");
+                    if (pathname === record.href)
+                      router.push("/pro/dashboard/customers");
                   }}
                 />
               ))}
@@ -366,13 +518,20 @@ export function PortalShell({ children }: { children: ReactNode }) {
             <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
               <ThemeToggle />
               <PortalNotifications />
-              <UserAccountMenu user={menuUser} className="size-8 border-input" />
+              <UserAccountMenu
+                user={menuUser}
+                className="size-8 border-input"
+              />
             </div>
           </div>
           {showPeople ? <PeopleSubnav /> : null}
           {showWork ? <WorkSubnav /> : null}
         </header>
-        <main key={pathname} id="main-content" className="page-enter px-3 py-3 sm:px-4">
+        <main
+          key={pathname}
+          id="main-content"
+          className="page-enter px-3 py-3 sm:px-4"
+        >
           <div className="mx-auto w-full">
             <RouteMapProvider origin={routeOrigin}>{children}</RouteMapProvider>
           </div>
@@ -403,7 +562,12 @@ function RecordTab({
       )}
     >
       <span
-        className={cn("size-1.5 shrink-0 rounded-full", active ? "bg-[#003F7D] dark:bg-primary" : "bg-black/25 dark:bg-white/30")}
+        className={cn(
+          "size-1.5 shrink-0 rounded-full",
+          active
+            ? "bg-[#003F7D] dark:bg-primary"
+            : "bg-black/25 dark:bg-white/30",
+        )}
         aria-hidden
       />
       <Link href={href} className="min-w-0 truncate">

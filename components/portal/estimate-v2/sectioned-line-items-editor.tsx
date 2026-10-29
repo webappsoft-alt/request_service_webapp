@@ -15,6 +15,7 @@ import {
 import { type JobCostKind, type JobCostLine } from "@/components/portal/use-job-costing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -91,9 +92,23 @@ export function SectionedLineItemsEditor({
     ]);
   }
 
+  /** Section names are unique per estimate, ignoring case and extra spaces. */
+  function sectionNameTaken(name: string, exceptKey?: string) {
+    const wanted = name.trim().replace(/s+/g, " ").toLowerCase();
+    if (!wanted) return false;
+    return groups.some(
+      (group) =>
+        group.key !== exceptKey &&
+        [group.key, group.label].some(
+          (existing) => String(existing || "").trim().replace(/s+/g, " ").toLowerCase() === wanted,
+        ),
+    );
+  }
+  const draftTaken = sectionNameTaken(draftSection);
+
   function handleAddSection() {
     const name = draftSection.trim();
-    if (!name || locked) return;
+    if (!name || locked || draftTaken) return;
     onChange(addEmptySectionPlaceholder(lines, name, () => createEmptyLine("labor")));
     setDraftSection("");
   }
@@ -117,6 +132,10 @@ export function SectionedLineItemsEditor({
     const normalizedCurrent = String(groupKey || "").trim();
     if (normalizedNext === normalizedCurrent) return;
     if (!normalizedCurrent && !normalizedNext) return;
+    if (sectionNameTaken(next, groupKey)) {
+      toast.error(`A section named "${next}" already exists.`);
+      return;
+    }
     onChange(renameSection(lines, groupKey, next));
   }
 
@@ -129,6 +148,8 @@ export function SectionedLineItemsEditor({
             onChange={(event) => setDraftSection(event.target.value)}
             placeholder="Section name (e.g. Plumbing)"
             className="h-9 max-w-xs"
+            aria-invalid={draftTaken || undefined}
+            aria-describedby={draftTaken ? "section-name-taken" : undefined}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
@@ -140,12 +161,17 @@ export function SectionedLineItemsEditor({
             type="button"
             size="sm"
             variant="outline"
-            disabled={!draftSection.trim()}
+            disabled={!draftSection.trim() || draftTaken}
             onClick={handleAddSection}
           >
             <FolderPlus className="size-3.5" />
             Add section
           </Button>
+          {draftTaken ? (
+            <p id="section-name-taken" className="w-full text-xs text-destructive">
+              A section with this name already exists. Use a different name.
+            </p>
+          ) : null}
         </div>
       ) : null}
 

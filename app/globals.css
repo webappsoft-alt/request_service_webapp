@@ -2125,3 +2125,15 @@ body.rs-cal-dragging [data-cal-card],
 body.rs-cal-dragging [data-cal-overlay] {
   pointer-events: none !important;
 }
+
+/* Sidebar hover card header: each portal's own palette (Pro / customer stay navy). */
+.technician-theme {
+  --nav-card-from: var(--tech-sidebar);
+  --nav-card-via: #262470;
+  --nav-card-to: var(--tech-accent);
+}
+.contractor-theme {
+  --nav-card-from: var(--ct-sidebar);
+  --nav-card-via: #1c4a4c;
+  --nav-card-to: var(--ct-accent);
+}

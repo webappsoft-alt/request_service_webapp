@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ComponentType, type ReactNode } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -16,6 +16,7 @@ import {
   UserRound,
   Wallet,
   Wrench,
+  type LucideIcon,
 } from "lucide-react";
 import { handleUserLogout } from "@/components/api/apiFuntions";
 import { LiveTimer } from "@/components/time-tracking/time-tracking-ui";
@@ -38,6 +39,9 @@ import { TechnicianLocationShare } from "@/components/technician/technician-loca
 import { technicianPaths } from "@/lib/technician-paths";
 import type { AppNotification } from "@/lib/api/notifications-client";
 import { cn } from "@/lib/utils";
+import { NavHoverCardContent } from "@/components/layout/nav-hover-card";
+import { Tooltip, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { SidebarCollapseToggle } from "@/components/layout/sidebar-collapse-toggle";
 import { selectAuthUser } from "@/store/authSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -50,20 +54,22 @@ type NavItem = {
   href: string;
   label: string;
   icon: ComponentType<{ className?: string }>;
+  /** One line shown in the sidebar hover card. */
+  description?: string;
   section?: TechSection;
   /** Live unread count from the office chat instead of a section badge. */
   chat?: boolean;
 };
 
 const NAV: NavItem[] = [
-  { href: technicianPaths.dashboard, label: "Dashboard", icon: LayoutDashboard },
-  { href: technicianPaths.jobs, label: "Jobs", icon: Briefcase, section: "jobs" },
-  { href: technicianPaths.estimates, label: "Estimates", icon: FileText, section: "estimates" },
-  { href: technicianPaths.schedule, label: "Schedule", icon: CalendarDays, section: "schedule" },
-  { href: technicianPaths.time, label: "Time Tracking", icon: Clock3 },
-  { href: technicianPaths.payments, label: "Payments", icon: Wallet, section: "payments" },
-  { href: technicianPaths.messages, label: "Messages", icon: MessageSquare, chat: true },
-  { href: technicianPaths.profile, label: "Profile", icon: UserRound },
+  { href: technicianPaths.dashboard, label: "Dashboard", icon: LayoutDashboard, description: "Your day at a glance: jobs, visits and hours" },
+  { href: technicianPaths.jobs, label: "Jobs", icon: Briefcase, section: "jobs", description: "Jobs assigned to you and their checklists" },
+  { href: technicianPaths.estimates, label: "Estimates", icon: FileText, section: "estimates", description: "Estimates and site visits you are working on" },
+  { href: technicianPaths.schedule, label: "Schedule", icon: CalendarDays, section: "schedule", description: "Your upcoming visits and job days" },
+  { href: technicianPaths.time, label: "Time Tracking", icon: Clock3, description: "Clock in and out and review your hours" },
+  { href: technicianPaths.payments, label: "Payments", icon: Wallet, section: "payments", description: "Pay for your hours and jobs" },
+  { href: technicianPaths.messages, label: "Messages", icon: MessageSquare, chat: true, description: "Chat with the office" },
+  { href: technicianPaths.profile, label: "Profile", icon: UserRound, description: "Your details, skills and password" },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -71,14 +77,27 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function NavBadge({ section, chat = false }: { section?: TechSection; chat?: boolean }) {
+function NavBadge({
+  section,
+  chat = false,
+  collapsed = false,
+}: {
+  section?: TechSection;
+  chat?: boolean;
+  collapsed?: boolean;
+}) {
   const sectionCount = useAppSelector((state) => (section ? selectTechSectionBadge(state, section) : 0));
   const chatCount = useTechChatUnread("technician");
   const count = chat ? chatCount : sectionCount;
   if (!count) return null;
   return (
     <span
-      className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--tech-sidebar-accent)] px-1.5 text-[10px] font-bold leading-none text-[var(--tech-sidebar-2)]"
+      className={cn(
+        "inline-flex items-center justify-center rounded-full bg-[var(--tech-sidebar-accent)] font-bold leading-none text-[var(--tech-sidebar-2)]",
+        collapsed
+          ? "absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[9px]"
+          : "ml-auto h-[18px] min-w-[18px] px-1.5 text-[10px]",
+      )}
       aria-label={`${count} new`}
     >
       {count > 99 ? "99+" : count}
@@ -86,57 +105,109 @@ function NavBadge({ section, chat = false }: { section?: TechSection; chat?: boo
   );
 }
 
-function NavLinks({ closeOnNavigate = false }: { closeOnNavigate?: boolean }) {
-  const pathname = usePathname();
+/** What each section badge counts, as the row in the hover card. */
+const HOVER_ROW_LABELS: Partial<Record<TechSection, string>> = {
+  jobs: "New job updates",
+  estimates: "New estimate updates",
+  schedule: "New schedule updates",
+  payments: "New payment updates",
+};
+
+/** Sidebar hover card: title, description and the exact count behind the badge. */
+function NavItemHoverCard({ item }: { item: NavItem }) {
+  const sectionCount = useAppSelector((state) => (item.section ? selectTechSectionBadge(state, item.section) : 0));
+  const chatCount = useTechChatUnread("technician");
+  const rows = item.chat
+    ? [{ label: "Unread messages", count: chatCount }]
+    : item.section
+      ? [{ label: HOVER_ROW_LABELS[item.section] || "New updates", count: sectionCount }]
+      : [];
   return (
-    <nav className="flex flex-col gap-0.5" aria-label="Technician portal">
-      {NAV.map((item) => {
-        const Icon = item.icon;
-        const active = isActive(pathname, item.href);
-        const link = (
-          <Link
-            href={item.href}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors",
-              active
-                ? "bg-[var(--tech-sidebar-active)] text-white"
-                : "text-[var(--tech-sidebar-text)] hover:bg-white/5 hover:text-white",
-            )}
-          >
-            {active ? (
-              <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-[var(--tech-sidebar-accent)]" aria-hidden />
-            ) : null}
-            <Icon
-              className={cn("size-4 shrink-0", active ? "text-[var(--tech-sidebar-accent)]" : "text-slate-400")}
-              aria-hidden
-            />
-            {item.label}
-            <NavBadge section={item.section} chat={item.chat} />
-          </Link>
-        );
-        return (
-          <span key={item.href} className="contents">
-            {closeOnNavigate ? <SheetClose asChild>{link}</SheetClose> : link}
-          </span>
-        );
-      })}
-    </nav>
+    <NavHoverCardContent
+      title={item.label}
+      description={item.description}
+      icon={item.icon as LucideIcon}
+      rows={rows}
+    />
   );
 }
 
-function SidebarBrand({ company }: { company: string }) {
+function NavLinks({
+  closeOnNavigate = false,
+  collapsed = false,
+}: {
+  closeOnNavigate?: boolean;
+  collapsed?: boolean;
+}) {
+  const pathname = usePathname();
   return (
-    <Link href={technicianPaths.dashboard} className="flex items-center gap-2.5">
+    <TooltipProvider delayDuration={collapsed ? 0 : 120} skipDelayDuration={400} disableHoverableContent>
+      <nav className="flex flex-col gap-0.5" aria-label="Technician portal">
+        {NAV.map((item) => {
+          const Icon = item.icon;
+          const active = isActive(pathname, item.href);
+          const link = (
+            <Link
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              aria-label={collapsed ? item.label : undefined}
+              className={cn(
+                "relative flex items-center gap-2.5 rounded-lg py-2 text-[13px] font-medium transition-colors",
+                collapsed ? "justify-center px-0" : "px-3",
+                active
+                  ? "bg-[var(--tech-sidebar-active)] text-white"
+                  : "text-[var(--tech-sidebar-text)] hover:bg-white/5 hover:text-white",
+              )}
+            >
+              {active ? (
+                <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-[var(--tech-sidebar-accent)]" aria-hidden />
+              ) : null}
+              <Icon
+                className={cn("size-4 shrink-0", active ? "text-[var(--tech-sidebar-accent)]" : "text-slate-400")}
+                aria-hidden
+              />
+              {collapsed ? <span className="sr-only">{item.label}</span> : item.label}
+              <NavBadge section={item.section} chat={item.chat} collapsed={collapsed} />
+            </Link>
+          );
+          if (closeOnNavigate) {
+            return (
+              <span key={item.href} className="contents">
+                <SheetClose asChild>{link}</SheetClose>
+              </span>
+            );
+          }
+          // Desktop: hover card beside the item (the mobile sheet is touch).
+          return (
+            <Tooltip key={item.href}>
+              <TooltipTrigger asChild>{link}</TooltipTrigger>
+              <NavItemHoverCard item={item} />
+            </Tooltip>
+          );
+        })}
+      </nav>
+    </TooltipProvider>
+  );
+}
+
+function SidebarBrand({ company, compact = false }: { company: string; compact?: boolean }) {
+  return (
+    <Link
+      href={technicianPaths.dashboard}
+      className="flex items-center gap-2.5"
+      aria-label={compact ? company || "Technician portal" : undefined}
+    >
       <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--tech-sidebar-accent)] to-[var(--tech-accent)] text-white shadow-sm">
         <Wrench className="size-[18px]" aria-hidden />
       </span>
-      <span className="min-w-0">
-        <span className="block truncate text-sm font-semibold text-white">{company || "Technician portal"}</span>
-        <span className="block text-[10px] font-semibold tracking-[0.16em] text-[var(--tech-sidebar-accent)] uppercase">
-          Technician portal
+      {compact ? null : (
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-semibold text-white">{company || "Technician portal"}</span>
+          <span className="block text-[10px] font-semibold tracking-[0.16em] text-[var(--tech-sidebar-accent)] uppercase">
+            Technician portal
+          </span>
         </span>
-      </span>
+      )}
     </Link>
   );
 }
@@ -259,26 +330,43 @@ export function TechnicianShell({ children }: { children: ReactNode }) {
     return () => document.body.classList.remove("technician-theme");
   }, []);
 
+  const [collapsed, setCollapsed] = useState(false);
+
   return (
     <div className="technician-theme portal-app min-h-svh bg-[var(--tech-bg)]">
       <TechnicianRealtimeBridge />
       <TechnicianGeofenceWatch />
       <TechnicianLocationShare />
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col bg-gradient-to-b from-[var(--tech-sidebar)] to-[var(--tech-sidebar-2)] lg:flex">
-        <div className="flex h-14 items-center border-b border-[var(--tech-sidebar-border)] px-4">
-          <SidebarBrand company={company} />
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-30 hidden flex-col bg-gradient-to-b from-[var(--tech-sidebar)] to-[var(--tech-sidebar-2)] transition-[width] duration-200 lg:flex",
+          collapsed ? "w-16" : "w-60",
+        )}
+      >
+        <div
+          className={cn(
+            "flex h-14 items-center border-b border-[var(--tech-sidebar-border)]",
+            collapsed ? "justify-center px-2" : "px-4",
+          )}
+        >
+          <SidebarBrand company={company} compact={collapsed} />
         </div>
-        <div className="flex-1 overflow-y-auto px-3 py-4">
-          <NavLinks />
+        <div className={cn("flex-1 overflow-y-auto py-4", collapsed ? "px-2" : "px-3")}>
+          <NavLinks collapsed={collapsed} />
         </div>
-        {company ? (
+        <SidebarCollapseToggle
+          collapsed={collapsed}
+          onToggle={() => setCollapsed((current) => !current)}
+          className="top-4 text-[var(--tech-sidebar)] hover:border-[var(--tech-sidebar)] hover:bg-[var(--tech-sidebar)]"
+        />
+        {company && !collapsed ? (
           <p className="border-t border-[var(--tech-sidebar-border)] px-4 py-3 text-[11px] leading-snug text-slate-400">
             Working with <span className="font-medium text-slate-200">{company}</span>
           </p>
         ) : null}
       </aside>
 
-      <div className="lg:pl-60">
+      <div className={cn("transition-[padding] duration-200", collapsed ? "lg:pl-16" : "lg:pl-60")}>
         <header className="sticky top-0 z-20 border-b border-input bg-white/95 dark:bg-card/95 backdrop-blur">
           <div className="flex h-14 items-center gap-2 px-3 sm:px-5">
             <Sheet>

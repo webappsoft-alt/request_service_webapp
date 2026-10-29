@@ -2580,9 +2580,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     />
                   </div>
 
-                  <div className="overflow-hidden rounded-xl border border-slate-200/70 bg-slate-50/60 shadow-[0_1px_3px_rgba(15,23,42,0.06),0_6px_16px_-8px_rgba(15,23,42,0.06)] dark:border-border dark:bg-card">
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-slate-100 px-4 py-2.5 dark:border-border-soft">
-                      <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
+                  <div className="overflow-hidden rounded-xl border border-[#94a3b8] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-border dark:bg-card">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-slate-200/80 bg-[#f7f8fa] px-4 py-3 dark:border-border-soft dark:bg-muted/40">
+                      <h3 className="text-xs font-semibold tracking-[0.08em] text-slate-700 uppercase dark:text-foreground">
                         Estimate summary
                       </h3>
                       <p className="text-xs text-slate-500">
@@ -2601,41 +2601,43 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       <ProjectStagesSummary stages={estimate.stages} onSchedule={() => setStagesOpen(true)} />
                     ) : null}
 
-                    <div className="grid gap-6 bg-white p-4 sm:grid-cols-2">
-                      <div className="space-y-2.5 text-sm">
+                    <div className="grid gap-6 bg-white px-4 py-4 sm:grid-cols-2 dark:bg-card">
+                      <div className="space-y-3 text-sm">
+                        <p className="text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase">Cost breakdown</p>
                         <div className="flex items-center justify-between gap-4">
-                          <span className="text-slate-500">Labour</span>
-                          <span className="font-medium tabular-nums text-slate-900">{formatMoney(mix.labor)}</span>
+                          <span className="text-slate-600 dark:text-muted-foreground">Labour</span>
+                          <span className="font-medium tabular-nums text-slate-900 dark:text-foreground">{formatMoney(mix.labor)}</span>
                         </div>
                         <div className="flex items-center justify-between gap-4">
-                          <span className="text-slate-500">Material</span>
-                          <span className="font-medium tabular-nums text-slate-900">{formatMoney(mix.materials)}</span>
+                          <span className="text-slate-600 dark:text-muted-foreground">Material</span>
+                          <span className="font-medium tabular-nums text-slate-900 dark:text-foreground">{formatMoney(mix.materials)}</span>
                         </div>
                         <div className="flex items-center justify-between gap-4">
-                          <span className="text-slate-500">Equipment</span>
-                          <span className="font-medium tabular-nums text-slate-900">{formatMoney(mix.equipment)}</span>
+                          <span className="text-slate-600 dark:text-muted-foreground">Equipment</span>
+                          <span className="font-medium tabular-nums text-slate-900 dark:text-foreground">{formatMoney(mix.equipment)}</span>
                         </div>
                       </div>
 
-                      <div className="space-y-2.5 text-sm sm:border-l sm:border-slate-200/70 sm:pl-6 dark:sm:border-border-soft">
+                      <div className="space-y-3 text-sm sm:border-l sm:border-slate-200/80 sm:pl-6 dark:sm:border-border-soft">
+                        <p className="text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase">Totals</p>
                         <div className="flex items-center justify-between gap-4">
-                          <span className="text-slate-500">Subtotal</span>
-                          <span className="tabular-nums text-slate-900">{formatMoney(subtotal)}</span>
+                          <span className="text-slate-600 dark:text-muted-foreground">Subtotal</span>
+                          <span className="font-medium tabular-nums text-slate-900 dark:text-foreground">{formatMoney(subtotal)}</span>
                         </div>
                         <div className="flex items-center justify-between gap-4">
-                          <Label htmlFor="discount" className="text-slate-500">
+                          <Label htmlFor="discount" className="font-normal text-slate-600 dark:text-muted-foreground">
                             Discount
                           </Label>
-                          <div className="relative w-24">
+                          <div className="relative w-28">
                             <span
                               aria-hidden="true"
-                              className="pointer-events-none absolute top-1/2 left-1.5 -translate-y-1/2 text-xs text-slate-400"
+                              className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-xs text-slate-400"
                             >
                               $
                             </span>
                             <Input
                               id="discount"
-                              className="h-8 border-[#b4becc] bg-[#fafbfc] pl-4 pr-1 text-right text-xs tabular-nums shadow-none"
+                              className="h-8 border-[#b4becc] bg-[#fafbfc] pl-5 pr-2 text-right text-sm tabular-nums shadow-none"
                               type="number"
                               min={0}
                               step="0.01"
@@ -2645,13 +2647,13 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                             />
                           </div>
                         </div>
-                        <div className="flex items-center justify-between gap-4 text-slate-500">
-                          <span>Tax ({taxRatePercent}%)</span>
-                          <span className="tabular-nums">{formatMoney(taxAmount)}</span>
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-slate-600 dark:text-muted-foreground">Tax ({taxRatePercent}%)</span>
+                          <span className="font-medium tabular-nums text-slate-900 dark:text-foreground">{formatMoney(taxAmount)}</span>
                         </div>
-                        <div className="flex items-center justify-between gap-4 border-t border-slate-200/80 pt-2.5 text-base dark:border-border-soft font-semibold text-slate-900">
+                        <div className="flex items-center justify-between gap-4 rounded-lg bg-primary/[0.07] px-3 py-2.5 text-base font-semibold text-slate-900 dark:bg-primary/15 dark:text-foreground">
                           <span>Total</span>
-                          <span className="tabular-nums">{formatMoney(grandTotal)}</span>
+                          <span className="text-lg tabular-nums text-primary dark:text-foreground">{formatMoney(grandTotal)}</span>
                         </div>
                       </div>
                     </div>
@@ -2726,7 +2728,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
                   {estimate?.id ? (
                     <>
-                      <div className="rounded-xl border border-slate-200/70 bg-white px-4 py-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.06),0_6px_16px_-8px_rgba(15,23,42,0.06)] dark:border-border dark:bg-card">
+                      <div className="rounded-xl border border-[#94a3b8] bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-border dark:bg-card">
                         <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
                           Notes &amp; updates
                         </h3>

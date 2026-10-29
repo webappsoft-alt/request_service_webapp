@@ -492,8 +492,8 @@ export function SectionStageButton({
 export function ProjectStagesSummary({ stages, onSchedule }: { stages: ProjectStage[]; onSchedule: () => void }) {
   const scheduled = stages.some((stage) => stage.startDate);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#b4becc] px-4 py-2.5 text-sm">
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-white px-4 py-2.5 text-sm dark:border-border-soft dark:bg-card">
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-slate-800 dark:text-foreground">
         <Layers className="size-4 text-primary" aria-hidden />
         <span>
           Project time <span className="font-semibold">{formatStageDuration(stageTotals(stages))}</span>
@@ -503,7 +503,12 @@ export function ProjectStagesSummary({ stages, onSchedule }: { stages: ProjectSt
           {stageProgress(stages)}% complete
         </span>
       </p>
-      <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs" onClick={onSchedule}>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-8 gap-1.5 border-primary/30 bg-primary/[0.06] text-xs font-semibold text-primary hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
+        onClick={onSchedule}
+      >
         <CalendarRange className="size-3.5" />
         {scheduled ? "Reschedule stages" : "Schedule stages"}
       </Button>

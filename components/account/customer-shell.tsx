@@ -24,10 +24,10 @@ import {
 } from "@/components/ui/sheet";
 import {
   Tooltip,
-  TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { NavHoverCardContent, type NavHoverRow } from "@/components/layout/nav-hover-card";
 import {
   customerNavGroups,
   isCustomerOverviewPath,
@@ -47,6 +47,7 @@ import {
   setCustomerInboxCleared,
 } from "@/components/account/customer-inbox-clears";
 import { cn } from "@/lib/utils";
+import { SidebarCollapseToggle } from "@/components/layout/sidebar-collapse-toggle";
 import { useAppDispatch, useAppSelector, useAppStore } from "@/store/hooks";
 import { selectAuthUser, type AuthUser } from "@/store/authSlice";
 import {
@@ -174,6 +175,32 @@ function NavLinks({
     return 0;
   }
 
+  /** Exact counts behind the badge, listed in the hover card. */
+  function hoverRowsFor(href: string): NavHoverRow[] {
+    if (href === customerPaths.messages) return [{ label: "Unread messages", count: unreadMessages }];
+    if (href === customerPaths.estimates) return [{ label: "New estimate updates", count: unreadEstimates }];
+    if (href === customerPaths.changeOrders) return [{ label: "Change orders to review", count: unreadChangeOrders }];
+    if (href === customerPaths.invoices) return [{ label: "New invoice updates", count: unreadInvoices }];
+    if (href === customerPaths.payments) return [{ label: "New payment updates", count: unreadPayments }];
+    if (href === customerPaths.orders) return [{ label: "New order updates", count: unreadOrders }];
+    return [];
+  }
+
+  /** Hover card on the desktop sidebar only (the mobile sheet is touch). */
+  function withHoverCard(
+    key: string,
+    trigger: ReactNode,
+    card: { title: string; description?: string; icon?: LucideIcon; rows?: NavHoverRow[]; subItems?: string[] },
+  ) {
+    if (closeOnNavigate) return trigger;
+    return (
+      <Tooltip key={key}>
+        <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+        <NavHoverCardContent {...card} />
+      </Tooltip>
+    );
+  }
+
   const matches = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const wrap = (node: ReactNode) => (closeOnNavigate ? <SheetClose asChild>{node}</SheetClose> : node);
   const badge = (count: number) =>
@@ -193,7 +220,15 @@ function NavLinks({
     );
 
   /** One icon link (expanded row, or icon + tooltip when collapsed). */
-  function renderLink(key: string, href: string, label: string, Icon: LucideIcon, active: boolean, count: number) {
+  function renderLink(
+    key: string,
+    href: string,
+    label: string,
+    Icon: LucideIcon,
+    active: boolean,
+    count: number,
+    description?: string,
+  ) {
     const link = (
       <Link
         href={href}
@@ -213,25 +248,19 @@ function NavLinks({
         {!collapsed ? badge(count) : null}
       </Link>
     );
+    const card = { title: label, description, icon: Icon, rows: hoverRowsFor(href) };
     if (!collapsed) {
       return (
         <span key={key} className="contents">
-          {wrap(link)}
+          {withHoverCard(key, wrap(link), card)}
         </span>
       );
     }
-    return (
-      <Tooltip key={key}>
-        <TooltipTrigger asChild>{link}</TooltipTrigger>
-        <TooltipContent side="right" sideOffset={10}>
-          {label}
-        </TooltipContent>
-      </Tooltip>
-    );
+    return withHoverCard(key, link, card);
   }
 
   return (
-    <TooltipProvider delayDuration={0}>
+    <TooltipProvider delayDuration={collapsed ? 0 : 120} skipDelayDuration={400} disableHoverableContent>
       <nav className="flex flex-col gap-4" aria-label="Customer dashboard">
         {customerNavGroups.map((group) => (
           <div key={group.id} className="flex flex-col gap-0.5">
@@ -248,7 +277,7 @@ function NavLinks({
                   : matches(item.href);
 
               if (!item.children?.length) {
-                return renderLink(item.href, item.href, item.label, item.icon, isActive, badgeFor(item.href));
+                return renderLink(item.href, item.href, item.label, item.icon, isActive, badgeFor(item.href), item.description);
               }
 
               // Collapsed sidebar: show each nested link as its own icon so none are unreachable.
@@ -256,7 +285,15 @@ function NavLinks({
                 return (
                   <span key={item.href} className="contents">
                     {item.children.map((child) =>
-                      renderLink(child.href, child.href, child.label, child.icon || item.icon, matches(child.href), badgeFor(child.href)),
+                      renderLink(
+                        child.href,
+                        child.href,
+                        child.label,
+                        child.icon || item.icon,
+                        matches(child.href),
+                        badgeFor(child.href),
+                        child.description,
+                      ),
                     )}
                   </span>
                 );
@@ -269,7 +306,7 @@ function NavLinks({
               const total = item.children.reduce((sum, child) => sum + badgeFor(child.href), 0);
               return (
                 <div key={item.href} className="flex flex-col">
-                  <button
+                  {withHoverCard(item.href, <button
                     type="button"
                     onClick={() => setOpenParents((prev) => ({ ...prev, [item.href]: !open }))}
                     aria-expanded={open}
@@ -282,7 +319,12 @@ function NavLinks({
                       className={cn("size-3.5 shrink-0 text-white/60 transition-transform duration-200", open && "rotate-180")}
                       aria-hidden="true"
                     />
-                  </button>
+                  </button>, {
+                    title: item.label,
+                    icon: Icon,
+                    description: item.description,
+                    rows: item.children.map((child) => ({ label: child.label, count: badgeFor(child.href) })),
+                  })}
                   {open ? (
                     <div className="mt-0.5 mb-1 ml-[1.45rem] flex flex-col gap-0.5 border-l border-white/20 pl-2.5">
                       {item.children.map((child) => {
@@ -594,13 +636,11 @@ export function CustomerShell({ children }: { children: ReactNode }) {
             unreadOrders={unreadOrders}
           />
         </div>
-        <button
-          type="button"
-          onClick={() => setCollapsed((current) => !current)}
-          className="border-t border-white/10 px-3 py-3 text-left text-xs font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-        >
-          {collapsed ? "Show" : "Hide labels"}
-        </button>
+        <SidebarCollapseToggle
+          collapsed={collapsed}
+          onToggle={() => setCollapsed((current) => !current)}
+          className="top-3"
+        />
       </aside>
 
       <div

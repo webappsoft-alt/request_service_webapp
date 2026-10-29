@@ -338,18 +338,43 @@ export function NewEstimateListView() {
             id: "customer",
             header: "Customer",
             sortValue: (row) => customerLabel(row),
-            cell: (row) => (
-              <div>
-                <p className="text-sm font-medium">{customerLabel(row)}</p>
-                {typeof row.customerId === "object" && row.customerId?.phone ? (
-                  <p className="mt-0.5 text-xs text-muted-foreground">{row.customerId.phone}</p>
-                ) : null}
-              </div>
-            ),
+            cell: (row) => <p className="text-sm font-medium">{customerLabel(row)}</p>,
+          },
+          {
+            id: "phone",
+            header: "Phone",
+            sortValue: (row) => (typeof row.customerId === "object" ? row.customerId?.phone || "" : ""),
+            searchValue: (row) => (typeof row.customerId === "object" ? row.customerId?.phone || "" : ""),
+            cell: (row) => {
+              const phone = typeof row.customerId === "object" ? row.customerId?.phone : "";
+              return phone ? (
+                <a href={`tel:${phone}`} className="text-sm whitespace-nowrap hover:text-primary hover:underline">
+                  {phone}
+                </a>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              );
+            },
+          },
+          {
+            id: "email",
+            header: "Email",
+            sortValue: (row) => (typeof row.customerId === "object" ? row.customerId?.email || "" : ""),
+            searchValue: (row) => (typeof row.customerId === "object" ? row.customerId?.email || "" : ""),
+            cell: (row) => {
+              const email = typeof row.customerId === "object" ? row.customerId?.email : "";
+              return email ? (
+                <a href={`mailto:${email}`} className="text-sm text-primary hover:underline">
+                  {email}
+                </a>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              );
+            },
           },
           {
             id: "property",
-            header: "Location",
+            header: "Address",
             sortValue: (row) => propertyLabel(row),
             cell: (row) => (
               <LocationCell

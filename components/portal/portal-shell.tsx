@@ -4,7 +4,7 @@ import { RouteMapProvider, useRouteOrigin } from "@/components/portal/route-map-
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, X } from "lucide-react";
+import { ChevronDown, Menu, X } from "lucide-react";
 import { PeopleSubnav, WorkSubnav } from "@/components/portal/people-subnav";
 import { PortalNotifications } from "@/components/portal/portal-notifications";
 import { GlobalSearch } from "@/components/portal/global-search";
@@ -53,6 +53,9 @@ function NavLinks({
   const inbox = usePortalInbox();
   const teamChatUnread = useTechChatUnread("provider");
   const pendingFieldRequests = useAppSelector(selectPendingReviewTotal);
+  /** Expanded state of items with nested links (default: open while inside that section). */
+  const [openParents, setOpenParents] = useState<Record<string, boolean>>({});
+  const matches = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
   /** Badges that pulse so incoming work is noticed immediately. */
   function pulsesBadge(href: string) {
@@ -111,7 +114,7 @@ function NavLinks({
                       : undefined
                   }
                   className={cn(
-                    "relative flex items-center gap-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                    "relative flex items-center gap-2.5 rounded-md py-1.5 text-[13px] font-medium transition-colors",
                     collapsed ? "justify-center px-0" : "px-3",
                     isActive ? "bg-white/15 text-white" : "text-white/75 hover:bg-white/10 hover:text-white",
                   )}
@@ -145,10 +148,70 @@ function NavLinks({
               );
 
               if (!collapsed) {
+                const wrapped = closeOnNavigate ? <SheetClose asChild>{link}</SheetClose> : link;
+                if (!item.children?.length) {
+                  return (
+                    <span key={item.href} className="contents">
+                      {wrapped}
+                    </span>
+                  );
+                }
+                const inSection = item.children.some((child) => matches(child.href));
+                const open = openParents[item.href] ?? inSection;
+                // Parent with nested links: the whole row is a dropdown toggle; only the children navigate.
                 return (
-                  <span key={item.href} className="contents">
-                    {closeOnNavigate ? <SheetClose asChild>{link}</SheetClose> : link}
-                  </span>
+                  <div key={item.href} className="flex flex-col">
+                    <button
+                      type="button"
+                      onClick={() => setOpenParents((prev) => ({ ...prev, [item.href]: !open }))}
+                      aria-expanded={open}
+                      className={cn(
+                        "relative flex w-full items-center gap-2.5 rounded-md px-3 py-1.5 text-left text-[13px] font-medium transition-colors",
+                        inSection && !open ? "bg-white/15 text-white" : inSection ? "text-white" : "text-white/75 hover:bg-white/10 hover:text-white",
+                      )}
+                    >
+                      <Icon className="size-4 shrink-0" aria-hidden="true" />
+                      <span className="flex-1">{item.label}</span>
+                      {count > 0 ? (
+                        <span
+                          className={cn(
+                            "inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-semibold leading-none text-[#003F7D]",
+                            pulsesBadge(item.href) && "animate-pulse ring-2 ring-amber-300 ring-offset-1 ring-offset-[#003F7D]",
+                          )}
+                        >
+                          {count > 99 ? "99+" : count}
+                        </span>
+                      ) : null}
+                      <ChevronDown
+                        className={cn("size-3.5 shrink-0 text-white/60 transition-transform duration-200", open && "rotate-180")}
+                        aria-hidden="true"
+                      />
+                    </button>
+                    {open ? (
+                      <div className="mt-0.5 mb-1 ml-[1.45rem] flex flex-col gap-0.5 border-l border-white/20 pl-2.5">
+                        {item.children.map((child) => {
+                          const childActive = matches(child.href);
+                          const childLink = (
+                            <Link
+                              href={child.href}
+                              aria-current={childActive ? "page" : undefined}
+                              className={cn(
+                                "rounded-md px-3 py-1.5 text-[12.5px] transition-colors",
+                                childActive ? "bg-white/15 font-semibold text-white" : "text-white/70 hover:bg-white/10 hover:text-white",
+                              )}
+                            >
+                              {child.label}
+                            </Link>
+                          );
+                          return (
+                            <span key={child.href} className="contents">
+                              {closeOnNavigate ? <SheetClose asChild>{childLink}</SheetClose> : childLink}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
                 );
               }
 

@@ -817,7 +817,7 @@ function VendorSettingsTab({
             />
           </Field>
         </div>
-        <Field label="Location" className="sm:col-span-2">
+        <Field label="Address" className="sm:col-span-2">
           <GoogleAddressAutocomplete
             id="vendor-settings-location"
             value={draft.street || ""}
@@ -1123,7 +1123,7 @@ function VendorInventoryTab({ vendor }: { vendor: PortalVendor }) {
             onChange={(event) => setUnitCost(event.target.value)}
           />
         </Field>
-        <Field label="Location" className="sm:col-span-2 lg:col-span-2">
+        <Field label="Address" className="sm:col-span-2 lg:col-span-2">
           <Input
             value={location}
             placeholder="Aisle 3"

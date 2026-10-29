@@ -217,12 +217,9 @@ export function TeamView() {
             searchValue: (row) => `${row.firstName} ${row.lastName} ${row.email} ${row.phone}`,
             exportValue: (row) => `${row.firstName} ${row.lastName}`,
             cell: (row) => (
-              <div>
-                <Link href={`/pro/dashboard/team/${row.id}`} className="font-medium text-primary hover:underline">
-                  {row.firstName} {row.lastName}
-                </Link>
-                <p className="text-xs text-muted-foreground">{row.email}</p>
-              </div>
+              <Link href={`/pro/dashboard/team/${row.id}`} className="font-medium text-primary hover:underline">
+                {row.firstName} {row.lastName}
+              </Link>
             ),
           },
           {

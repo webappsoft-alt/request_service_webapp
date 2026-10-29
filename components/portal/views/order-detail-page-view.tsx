@@ -886,7 +886,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                           </p>
                         </div>
                         <div className="rounded-md bg-secondary/70 px-3 py-3">
-                          <p className="text-xs text-muted-foreground">Location</p>
+                          <p className="text-xs text-muted-foreground">Address</p>
                           <p className="mt-1 text-sm font-semibold text-foreground">
                             {order.address?.city || "—"}
                             {order.address?.state

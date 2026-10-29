@@ -136,7 +136,7 @@ export function invoiceBoardColumns({
   columns.push(
     {
       id: "site",
-      header: "Location",
+      header: "Address",
       sortValue: (row) => siteOf(row),
       searchValue: (row) => siteOf(row),
       exportValue: (row) => siteOf(row),

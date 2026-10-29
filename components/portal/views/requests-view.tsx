@@ -558,7 +558,7 @@ export function RequestsView() {
           },
           {
             id: "area",
-            header: "Location",
+            header: "Address",
             sortValue: (row) => locationText(row.address, { city: row.city || row.neighborhood, state: row.state, zip: row.zip }),
             searchValue: (row) =>
               `${locationText(row.address, { city: row.city || row.neighborhood, state: row.state, zip: row.zip })} ${row.neighborhood}`,

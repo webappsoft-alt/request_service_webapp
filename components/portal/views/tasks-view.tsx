@@ -1318,7 +1318,7 @@ export function TaskDetailView({ id }: { id: string }) {
                         {linkedJob.address?.street ? (
                           <InfoRow
                             icon={MapPin}
-                            label="Location"
+                            label="Address"
                             value={`${linkedJob.address.street}, ${formatLocation(linkedJob.address.city || "", linkedJob.address.state || "", linkedJob.address.zip || "")}`}
                           />
                         ) : null}
@@ -1375,7 +1375,7 @@ export function TaskDetailView({ id }: { id: string }) {
                         ) : null}
                         <InfoRow
                           icon={MapPin}
-                          label="Location"
+                          label="Address"
                           value={formatLocation(linkedRequest.neighborhood || linkedRequest.city || "", linkedRequest.state || "", linkedRequest.zip || "")}
                         />
                         {linkedRequest.details ? (

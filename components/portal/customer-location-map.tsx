@@ -75,7 +75,7 @@ export function CustomerLocationMap({
     return (
       <section className="space-y-3">
         <div>
-          <p className="text-[11px] font-medium text-muted-foreground">Location</p>
+          <p className="text-[11px] font-medium text-muted-foreground">Address</p>
           <p className="mt-1 text-sm font-medium text-foreground">{line}</p>
         </div>
         <div className="rs-map h-72 overflow-hidden rounded-xl">{MapNode}</div>
@@ -87,11 +87,11 @@ export function CustomerLocationMap({
     <section className="overflow-hidden rounded-xl border border-border-soft dark:border-border bg-card shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
       {simpro ? (
         <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border-soft dark:border-border bg-muted/40 dark:bg-slate-800/80 px-4">
-          <h3 className="text-sm font-semibold text-primary">Location</h3>
+          <h3 className="text-sm font-semibold text-primary">Address</h3>
         </header>
       ) : (
         <header className="border-b border-border-soft dark:border-border px-5 py-3">
-          <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Location</p>
+          <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Address</p>
           <h3 className="text-sm font-semibold text-foreground">{line}</h3>
         </header>
       )}

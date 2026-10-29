@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
@@ -405,19 +406,35 @@ export function PortalDataTable<T>({
                   </TableRow>
                 );
               })
+            ) : loading ? (
+              // First load: placeholder rows keep the table at its normal size instead of collapsing.
+              Array.from({ length: Math.min(pageSize, 8) }, (_, index) => (
+                <TableRow key={`loading-${index}`} className="hover:bg-transparent">
+                  {columns.map((column) => (
+                    <TableCell key={column.id} className={cn("px-2.5 py-3", column.className)}>
+                      <Skeleton className="h-3.5 w-3/4 max-w-40" />
+                    </TableCell>
+                  ))}
+                  {actions ? (
+                    <TableCell className="px-2.5 py-3">
+                      <Skeleton className="ml-auto size-7 rounded-md" />
+                    </TableCell>
+                  ) : null}
+                </TableRow>
+              ))
             ) : (
               <TableRow>
                 <TableCell
                   colSpan={columns.length + (actions ? 1 : 0)}
                   className="px-4 py-16 text-center text-sm text-muted-foreground"
                 >
-                  {loading ? "\u00a0" : empty}
+                  {empty}
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
-        {loading ? (
+        {loading && pageRows.length ? (
           <div
             className="absolute inset-0 z-10 flex items-center justify-center bg-card/70"
             aria-busy="true"

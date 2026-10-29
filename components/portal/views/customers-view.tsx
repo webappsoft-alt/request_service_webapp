@@ -20,6 +20,7 @@ import {
 import { formatDate, formatMoney } from "@/lib/format";
 import { CUSTOMER_FILTER_OPTIONS, customerFilterLabel, originLabel } from "@/lib/data/lead-origins";
 import { AccountBadge } from "@/components/portal/account-badge";
+import { LocationCell, locationText } from "@/components/portal/location-cell";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import {
@@ -241,43 +242,22 @@ export function CustomersView() {
                   </Link>
                   <AccountBadge account={row.account} />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {row.entityKind === "company" ? `${row.firstName} ${row.lastName}` : row.email}
-                </p>
+                {/* Email has its own column; a company still shows its contact person. */}
+                {row.entityKind === "company" ? (
+                  <p className="text-xs text-muted-foreground">
+                    {row.firstName} {row.lastName}
+                  </p>
+                ) : null}
               </div>
             ),
           },
           {
-            id: "street",
-            header: "Street",
-            sortValue: (row) => row.addresses[0]?.street ?? "",
-            searchValue: (row) => row.addresses[0]?.street ?? "",
-            exportValue: (row) => row.addresses[0]?.street ?? "",
-            cell: (row) => row.addresses[0]?.street ?? "—",
-          },
-          {
-            id: "city",
-            header: "City",
-            sortValue: (row) => row.addresses[0]?.city ?? "",
-            searchValue: (row) => row.addresses[0]?.city ?? "",
-            exportValue: (row) => row.addresses[0]?.city ?? "",
-            cell: (row) => row.addresses[0]?.city ?? "—",
-          },
-          {
-            id: "state",
-            header: "ST",
-            sortValue: (row) => row.addresses[0]?.state ?? "",
-            searchValue: (row) => row.addresses[0]?.state ?? "",
-            exportValue: (row) => row.addresses[0]?.state ?? "",
-            cell: (row) => row.addresses[0]?.state ?? "—",
-          },
-          {
-            id: "zip",
-            header: "ZIP",
-            sortValue: (row) => row.addresses[0]?.zip ?? "",
-            searchValue: (row) => row.addresses[0]?.zip ?? "",
-            exportValue: (row) => row.addresses[0]?.zip ?? "",
-            cell: (row) => row.addresses[0]?.zip ?? "—",
+            id: "address",
+            header: "Address",
+            sortValue: (row) => locationText(...row.addresses),
+            searchValue: (row) => locationText(...row.addresses),
+            exportValue: (row) => locationText(...row.addresses),
+            cell: (row) => <LocationCell candidates={row.addresses} map={{ customerName: crmCustomerName(row) }} />,
           },
           {
             id: "email",

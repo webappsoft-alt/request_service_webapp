@@ -12,7 +12,6 @@ import {
   Images,
   Inbox,
   LayoutDashboard,
-  LayoutTemplate,
   ListTodo,
   MapPin,
   MapPinned,
@@ -31,6 +30,8 @@ export type PortalNavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** Nested links shown under the item in the expanded sidebar. */
+  children?: { href: string; label: string }[];
 };
 
 export type PortalNavGroup = {
@@ -65,7 +66,15 @@ export const portalNavGroups: PortalNavGroup[] = [
       { href: "/pro/dashboard/messages", label: "Messages", icon: MessageCircle },
       // Classic estimates — hidden for demo; use /new-estimate (labeled "Estimate") instead.
       // { href: "/pro/dashboard/estimates", label: "Estimates", icon: FileText },
-      { href: "/pro/dashboard/new-estimate", label: "Estimate", icon: ClipboardList },
+      {
+        href: "/pro/dashboard/new-estimate",
+        label: "Estimate",
+        icon: ClipboardList,
+        children: [
+          { href: "/pro/dashboard/new-estimate", label: "All estimates" },
+          { href: "/pro/dashboard/templates", label: "Estimate templates" },
+        ],
+      },
       { href: "/pro/dashboard/jobs", label: "Jobs", icon: Briefcase },
       { href: "/pro/dashboard/tasks", label: "Tasks", icon: ListTodo },
       { href: "/pro/dashboard/schedule", label: "Schedules", icon: CalendarDays },
@@ -90,7 +99,6 @@ export const portalNavGroups: PortalNavGroup[] = [
       { href: "/pro/dashboard/portfolio", label: "Portfolio", icon: Images },
       { href: "/pro/dashboard/service-areas", label: "Service areas", icon: MapPin },
       { href: "/pro/dashboard/services", label: "Fixed services", icon: Wrench },
-      { href: "/pro/dashboard/templates", label: "Estimate Templates", icon: LayoutTemplate },
       { href: "/pro/dashboard/billing", label: "Utilities", icon: Wallet },
       { href: "/pro/dashboard/reports", label: "Reports", icon: BarChart3 },
     ],
@@ -125,6 +133,7 @@ export const workSubnav: { href: string; label: string }[] = [
   // Classic estimates — hidden for demo; use /new-estimate (labeled "Estimate") instead.
   // { href: "/pro/dashboard/estimates", label: "Estimates" },
   { href: "/pro/dashboard/new-estimate", label: "Estimate" },
+  { href: "/pro/dashboard/templates", label: "Estimate templates" },
   { href: "/pro/dashboard/jobs", label: "Jobs" },
   { href: "/pro/dashboard/tasks", label: "Tasks" },
   { href: "/pro/dashboard/schedule", label: "Schedules" },

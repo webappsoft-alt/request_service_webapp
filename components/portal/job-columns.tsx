@@ -90,7 +90,7 @@ export function jobBoardColumns({
     },
     {
       id: "address",
-      header: "Location",
+      header: "Address",
       sortValue: (row) => locationText(...siteOf(row)),
       searchValue: (row) => locationText(...siteOf(row)),
       exportValue: (row) => locationText(...siteOf(row)),

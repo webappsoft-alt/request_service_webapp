@@ -193,7 +193,7 @@ export function QuoteBriefCard({ message, brief }: { message: BotMessage; brief:
             </ul>
           </Row>
         ) : null}
-        <Row label="Location">
+        <Row label="Address">
           <span className="flex items-start gap-1">
             <MapPin className="mt-0.5 size-3 shrink-0 text-muted-foreground" aria-hidden />
             {locationText || "Not set"}

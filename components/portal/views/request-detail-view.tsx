@@ -1583,7 +1583,7 @@ export function RequestDetailView({ id }: { id: string }) {
                         />
                         <InfoRow label="Phone" value={request.customerPhone?.trim() || null} />
                         <InfoRow
-                          label="Location"
+                          label="Address"
                           value={
                             customer?.addresses?.[0]?.street
                               ? `${customer.addresses[0].street}, ${formatLocation(

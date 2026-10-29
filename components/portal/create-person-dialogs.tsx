@@ -902,7 +902,7 @@ export function CreateVendorDialog({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="ven-location">Location</FieldLabel>
+            <FieldLabel htmlFor="ven-location">Address</FieldLabel>
             <GoogleAddressAutocomplete
               id="ven-location"
               value={street}

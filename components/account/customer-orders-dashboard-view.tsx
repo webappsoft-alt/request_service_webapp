@@ -275,7 +275,7 @@ export function CustomerOrdersDashboardView() {
           },
           {
             id: "location",
-            header: "Location",
+            header: "Address",
             sortValue: (row) => formatOrderAddressLine(row.address),
             cell: (row) => (
               <span className="line-clamp-2 max-w-[14rem] text-muted-foreground">

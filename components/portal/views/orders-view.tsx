@@ -439,17 +439,24 @@ export function OrdersView() {
       header: "Customer",
       sortValue: (row) => row.customer?.name || "",
       cell: (row) => (
-        <div className="space-y-0.5">
-          <p className="font-medium text-foreground">
-            {row.customer?.name || "Customer"}
-          </p>
-          {row.customer?.phone ? (
-            <p className="text-xs text-muted-foreground">
-              {row.customer.phone}
-            </p>
-          ) : null}
-        </div>
+        <p className="font-medium text-foreground">
+          {row.customer?.name || "Customer"}
+        </p>
       ),
+    },
+    {
+      id: "phone",
+      header: "Phone",
+      sortValue: (row) => row.customer?.phone || "",
+      searchValue: (row) => row.customer?.phone || "",
+      cell: (row) =>
+        row.customer?.phone ? (
+          <a href={`tel:${row.customer.phone}`} className="whitespace-nowrap hover:text-primary hover:underline">
+            {row.customer.phone}
+          </a>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
     {
       id: "location",

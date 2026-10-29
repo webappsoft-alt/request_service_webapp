@@ -135,7 +135,7 @@ export function TechnicianJobsView() {
           },
           {
             id: "location",
-            header: "Location",
+            header: "Address",
             exportValue: (row) => String(row.location?.address || ""),
             className: "min-w-56",
             // Directions links inside keep their own click; the rest of the cell opens the job.

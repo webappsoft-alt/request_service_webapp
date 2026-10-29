@@ -6,9 +6,9 @@ import { extractUploadedUrl, uploadFile } from "@/components/api/uploadFile";
 export const AI_DESIGNER_PATH = "/ai-kitchen-bath-designer";
 /**
  * Launch switch for customers. While false, the home banner shows a "coming soon" toast and the
- * designer page shows a placeholder (admins keep testing from the admin panel). Flip to true to launch.
+ * designer page shows a placeholder (admins keep testing from the admin panel). Live since launch.
  */
-export const AI_DESIGNER_LIVE = false;
+export const AI_DESIGNER_LIVE = true;
 
 export type RoomType = "kitchen" | "bathroom";
 export type FinishCategory = "cabinets" | "countertops" | "backsplash" | "hardware";
@@ -53,7 +53,12 @@ export type RedesignCatalog = {
   rooms?: Array<{ roomType: RoomType; categories: Array<{ key: FinishCategory; label: string }> }>;
   styles?: RedesignStyle[];
   finishes?: RedesignFinish[];
-  section?: { title: string; subtitle: string };
+  section?: {
+    title: string;
+    subtitle: string;
+    /** Home page before/after pair (an admin test run); null until one exists. */
+    showcase?: { before: string; after: string; style?: string } | null;
+  };
 };
 
 export type RedesignContact = { name: string; email: string; phone: string; zip: string };

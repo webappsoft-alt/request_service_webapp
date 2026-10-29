@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -108,28 +108,6 @@ async function downloadImage(url: string, name: string) {
   }
 }
 
-/** Largest box with `aspect` that fits inside the element (contain), recomputed on resize. */
-function useFittedBox(aspect: number | null, padding = 0) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState<{ width: number; height: number } | null>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || !aspect) return;
-    const measure = () => {
-      const width = Math.max(0, el.clientWidth - padding * 2);
-      const height = Math.max(0, el.clientHeight - padding * 2);
-      if (!width || !height) return;
-      const fitWidth = Math.min(width, height * aspect);
-      setBox({ width: Math.round(fitWidth), height: Math.round(fitWidth / aspect) });
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [aspect, padding]);
-  return { ref, box: aspect ? box : null };
-}
-
 function GeneratingOverlay({ startedAt }: { startedAt: number }) {
   const [now, setNow] = useState(startedAt);
   useEffect(() => {
@@ -176,7 +154,6 @@ export function RedesignerWizard() {
 
   const [step, setStep] = useState(0);
   const [photo, setPhoto] = useState<{ url: string | null; preview: string | null }>({ url: null, preview: null });
-  const [photoAspect, setPhotoAspect] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -198,7 +175,6 @@ export function RedesignerWizard() {
   const [starting, setStarting] = useState(false);
   const previewUrlRef = useRef<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const { ref: stageRef, box: stageBox } = useFittedBox(photoAspect, 20);
 
   useEffect(() => {
     void dispatch(fetchRedesignCatalog());
@@ -247,7 +223,6 @@ export function RedesignerWizard() {
     const preview = URL.createObjectURL(file);
     previewUrlRef.current = preview;
     setPhoto({ url: null, preview });
-    setPhotoAspect(null);
     setActiveId(null);
     setUploading(true);
     try {
@@ -398,7 +373,6 @@ export function RedesignerWizard() {
 
   const resetPhoto = () => {
     setPhoto({ url: null, preview: null });
-    setPhotoAspect(null);
     setActiveId(null);
     setStep(0);
   };
@@ -436,7 +410,6 @@ export function RedesignerWizard() {
       : shownPhoto
         ? "Your photo"
         : "No photo yet";
-  const frameStyle: CSSProperties | undefined = stageBox ? { width: stageBox.width, height: stageBox.height } : undefined;
 
   return (
     <div className="flex flex-col gap-6">
@@ -477,9 +450,10 @@ export function RedesignerWizard() {
         </div>
       </div>
 
-      <div className="grid overflow-hidden rounded-[28px] border border-input bg-card shadow-[0_30px_70px_-50px_rgba(0,0,0,0.45)] lg:grid-cols-[minmax(0,1.5fr)_minmax(24rem,1fr)]">
+      {/* Desktop: one fixed-height card; the photo fits inside and each step scrolls in its own panel. */}
+      <div className="grid overflow-hidden rounded-[28px] border border-input bg-card shadow-[0_30px_70px_-50px_rgba(0,0,0,0.45)] lg:h-[min(48rem,calc(100dvh-6rem))] lg:grid-cols-[minmax(0,1.5fr)_minmax(24rem,1fr)] lg:grid-rows-[minmax(0,1fr)]">
         {/* Preview */}
-        <div className="flex min-w-0 flex-col gap-4 bg-muted/40 bg-[radial-gradient(circle,rgba(0,0,0,0.07)_1px,transparent_1.2px)] [background-size:18px_18px] p-4 md:p-5 lg:border-r">
+        <div className="flex min-w-0 flex-col gap-4 bg-muted/40 bg-[radial-gradient(circle,rgba(0,0,0,0.07)_1px,transparent_1.2px)] [background-size:18px_18px] p-4 md:p-5 lg:min-h-0 lg:overflow-y-auto lg:border-r">
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-2 rounded-full bg-card px-3.5 py-1.5 text-[13px] font-medium shadow-sm capitalize">
               <span className={cn("size-1.5 rounded-full", running ? "animate-pulse bg-primary" : done ? "bg-emerald-500" : "bg-muted-foreground/60")} />
@@ -511,16 +485,11 @@ export function RedesignerWizard() {
           </div>
 
           {/* Stage */}
-          <div ref={stageRef} className="relative aspect-[4/3] w-full">
+          <div className="relative aspect-[4/3] w-full lg:aspect-auto lg:min-h-[30rem] lg:flex-1">
             {shownPhoto ? (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div
-                  className={cn(
-                    "relative overflow-hidden rounded-2xl shadow-[0_24px_50px_-28px_rgba(0,0,0,0.55)]",
-                    !frameStyle && "max-h-full max-w-full",
-                  )}
-                  style={frameStyle}
-                >
+              // Photo / result fill the whole stage width (cropped to fit) so the design reads big.
+              <div className="absolute inset-0">
+                <div className="relative size-full overflow-hidden rounded-2xl shadow-[0_24px_50px_-28px_rgba(0,0,0,0.55)]">
                   {done && active ? (
                     <BeforeAfterSlider
                       key={active.id}
@@ -534,11 +503,7 @@ export function RedesignerWizard() {
                     <img
                       src={shownPhoto}
                       alt="Your room"
-                      onLoad={(event) => {
-                        const img = event.currentTarget;
-                        if (img.naturalWidth && img.naturalHeight) setPhotoAspect(img.naturalWidth / img.naturalHeight);
-                      }}
-                      className={cn("block size-full object-cover", !frameStyle && "max-h-[60vh] w-auto")}
+                      className="block size-full object-cover"
                     />
                   )}
                   {running ? <GeneratingOverlay startedAt={running.startedAt} /> : null}
@@ -655,8 +620,8 @@ export function RedesignerWizard() {
         </div>
 
         {/* Steps */}
-        <div className="flex min-w-0 flex-col p-5 md:p-7">
-          <ol className="mb-7 grid grid-cols-4 gap-3">
+        <div className="flex min-w-0 flex-col p-5 md:p-7 lg:min-h-0">
+          <ol className="mb-6 grid shrink-0 grid-cols-4 gap-3">
             {STEPS.map((label, index) => {
               const isDone = index < step;
               const isCurrent = index === step;
@@ -690,7 +655,7 @@ export function RedesignerWizard() {
             })}
           </ol>
 
-          <div key={step} className="animate-in fade-in slide-in-from-right-2 flex-1 duration-300">
+          <div key={step} className="animate-in fade-in slide-in-from-right-2 flex-1 duration-300 lg:-mx-2 lg:min-h-0 lg:overflow-y-auto lg:px-2 lg:pb-2">
             {step === 0 ? (
               <PhotoStep
                 roomType={roomType}
@@ -740,7 +705,7 @@ export function RedesignerWizard() {
             ) : null}
           </div>
 
-          <div className="sticky bottom-0 mt-7 flex items-center gap-3 bg-card pt-4">
+          <div className="sticky bottom-0 mt-4 flex shrink-0 items-center gap-3 bg-card pt-4 lg:border-t lg:border-border-soft">
             {step > 0 ? (
               <button
                 type="button"

@@ -51,15 +51,15 @@ export default async function HomePage() {
             Customer journey section parked — restore by swapping it back in:
             <CustomerJourneySection />
           */}
-          {/* AI Kitchen & Bath Redesigner banner — renders only once the admin turns it on. */}
-          <DeferredHydration>
-            <RedesignerSection />
-          </DeferredHydration>
           <CustomerAssuranceSection />
 
           {/* Below the fold: server HTML stays crawlable, hydration waits until it scrolls near. */}
           <DeferredHydration>
             <WorkflowSection />
+          </DeferredHydration>
+          {/* AI Kitchen & Bath Redesigner banner — renders only once the admin turns it on. */}
+          <DeferredHydration>
+            <RedesignerSection />
           </DeferredHydration>
           <DeferredHydration>
             <HomeFaqSection />

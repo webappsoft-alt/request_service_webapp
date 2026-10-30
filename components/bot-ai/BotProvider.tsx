@@ -532,7 +532,7 @@ export function BotProvider({ children }: { children: ReactNode }) {
           pushMessage({
             id: newId("msg"),
             role: "bot",
-            text: "I couldn't find that address. Add the city or ZIP in the address box above and pick it from the list.",
+            text: "I couldn't find that address. Add the city or ZIP Code in the address box above and pick it from the list.",
             createdAt: Date.now(),
           });
         })

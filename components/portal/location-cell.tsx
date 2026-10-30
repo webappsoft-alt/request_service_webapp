@@ -98,7 +98,7 @@ export function LocationCell({
   className?: string;
   /** Labels for the route map (record number, customer). */
   map?: { recordType?: "job" | "estimate"; recordNumber?: string; customerName?: string };
-  /** Customer's profile address — shown as a second "Customer location" tab on the map. */
+  /** Customer's profile address — shown as a second "Customer address" tab on the map. */
   customerCandidates?: AddressLike[];
 }) {
   const openMap = useRouteMap();

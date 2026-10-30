@@ -82,7 +82,6 @@ export function ServiceOfferCard({ category }: { category: ServiceCategory }) {
         </span>
         <div className="min-w-0">
           <h3 className="font-semibold tracking-tight">{category.name}</h3>
-          <p className="mt-0.5 truncate text-sm text-muted-foreground">{category.tagline}</p>
         </div>
       </div>
       <ul className="flex flex-col gap-1.5">

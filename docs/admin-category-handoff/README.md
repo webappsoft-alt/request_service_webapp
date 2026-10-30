@@ -15,7 +15,7 @@ Hand this folder to the admin-panel developer. It is generated from the live fro
 
 ## Admin Category model mapping
 
-Backend model: `Category` (`parentCategory`, `name`, `slug`, `tagline`, `filterGroup`, `status`, `images[]`, `commonServices[]`, `workingArea[]`, `sortOrder`)
+Backend model: `Category` (`parentCategory`, `name`, `slug`, `filterGroup`, `status`, `images[]`, `commonServices[]`, `workingArea[]`, `sortOrder`)
 
 ### Create order
 1. Create **all 10 parents** first (`parentCategory = null`).
@@ -29,7 +29,6 @@ Backend model: `Category` (`parentCategory`, `name`, `slug`, `tagline`, `filterG
 |---|---|
 | `name` | `name` |
 | `slug` | `slug` (unique, lowercase) |
-| `tagline` | `tagline` |
 | `description` | store in CMS or ignore if not in schema yet |
 | `status` | `active` |
 | `sortOrder` | `sortOrder` |

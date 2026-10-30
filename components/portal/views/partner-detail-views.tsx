@@ -841,10 +841,10 @@ function VendorSettingsTab({
             placeholder="State"
           />
         </Field>
-        <Field label="ZIP">
+        <Field label="ZIP Code">
           <Input
             value={draft.zip || ""}
-            placeholder="ZIP"
+            placeholder="ZIP Code"
             onChange={(event) => setDraft({ ...draft, zip: event.target.value })}
             inputMode="numeric"
           />

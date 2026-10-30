@@ -74,7 +74,6 @@ export function toPublicFixedService(
       id: provider.id,
       companyName: provider.companyName,
       slug: provider.slug,
-      tagline: provider.tagline,
       avatarUrl: provider.logoUrl,
       coverImage: provider.coverImage,
       rating: {

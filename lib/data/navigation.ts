@@ -6,7 +6,7 @@ export const primaryNav: NavItem[] = [
   {
     label: "Find a Professional",
     href: "/find-a-professional",
-    description: "Search local Pros by service and ZIP code.",
+    description: "Search local Pros by service and ZIP Code.",
   },
   {
     label: "Get a quote",
@@ -54,7 +54,7 @@ export const footerNav = {
 
 export const customerWorkflow = [
   { step: 1, title: "Choose a service", body: "Select the category that matches the work you need." },
-  { step: 2, title: "Submit a request", body: "Add your ZIP, details, timing, and photos." },
+  { step: 2, title: "Submit a request", body: "Add your ZIP Code, details, timing, and photos." },
   { step: 3, title: "Connect with professionals", body: "Matching local Pros review the request." },
   { step: 4, title: "Review the estimate", body: "Compare line items, materials, labor, and terms." },
   { step: 5, title: "Approve and sign", body: "Accept digitally. The original estimate is preserved." },
@@ -65,7 +65,7 @@ export const customerWorkflow = [
 export const providerWorkflow = [
   { step: 1, title: "Create a business profile", body: "Add services, service area, hours, and company details." },
   { step: 2, title: "Subscribe", body: "Choose a plan. Portal access follows subscription status." },
-  { step: 3, title: "Receive opportunities", body: "Get requests that match your category and ZIP coverage." },
+  { step: 3, title: "Receive opportunities", body: "Get requests that match your category and ZIP Code coverage." },
   { step: 4, title: "Contact the customer", body: "Clarify scope, timing, and site conditions." },
   { step: 5, title: "Create an estimate", body: "Itemize labor, materials, tax, and terms." },
   { step: 6, title: "Receive approval", body: "Customer review, approval, and electronic signature." },

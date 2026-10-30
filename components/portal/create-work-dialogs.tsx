@@ -961,10 +961,10 @@ export function CreateEstimateDialog({
                     placeholder="State"
                   />
                 </Field>
-                <Field label="ZIP">
+                <Field label="ZIP Code">
                   <Input
                     value={zip}
-                    placeholder="ZIP"
+                    placeholder="ZIP Code"
                     onChange={(event) => setZip(event.target.value)}
                     inputMode="numeric"
                   />
@@ -1959,10 +1959,10 @@ export function CreateJobDialog({
                 placeholder="State"
               />
             </Field>
-            <Field label="ZIP">
+            <Field label="ZIP Code">
               <Input
                 value={zip}
-                placeholder="ZIP"
+                placeholder="ZIP Code"
                 onChange={(event) => setZip(event.target.value)}
                 inputMode="numeric"
               />

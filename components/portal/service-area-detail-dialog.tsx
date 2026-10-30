@@ -58,7 +58,7 @@ function ServiceAreaDetailBody({
       <DialogHeader>
         <DialogTitle>{cityLabel}</DialogTitle>
         <DialogDescription>
-          Customers anywhere in this city — any of its ZIP codes — can find you and send you requests.
+          Customers anywhere in this city — any of its ZIP Codes — can find you and send you requests.
         </DialogDescription>
       </DialogHeader>
 
@@ -67,7 +67,7 @@ function ServiceAreaDetailBody({
           {[
             { label: "City", value: area.location.city || area.title },
             { label: "State", value: usStateName(area.location.state) || area.location.state || "—" },
-            { label: "ZIP codes", value: String(zips.length) },
+            { label: "ZIP Codes", value: String(zips.length) },
           ].map((item) => (
             <div key={item.label} className="rounded-lg border border-input bg-card px-3 py-2">
               <p className="text-xs text-muted-foreground">{item.label}</p>
@@ -108,7 +108,7 @@ function ServiceAreaDetailBody({
               ))}
             </ul>
           ) : (
-            <p className="mt-3 text-sm text-muted-foreground">No ZIP codes are listed for this city.</p>
+            <p className="mt-3 text-sm text-muted-foreground">No ZIP Codes are listed for this city.</p>
           )}
         </div>
       </div>

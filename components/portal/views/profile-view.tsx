@@ -36,10 +36,8 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  PROVIDER_LANGUAGES,
   PROVIDER_PAYMENT_METHODS,
   normalizePaymentMethods,
-  type ProviderLanguage,
   type ProviderPaymentMethod,
 } from "@/lib/provider-preferences";
 import {
@@ -187,11 +185,6 @@ function hydrateFromProvider(provider: AuthProviderRecord | null) {
         ? String(provider.profile.yearsInBusiness)
         : "",
     employeeCount: API_TO_EMPLOYEE[employeeRaw] || employeeRaw,
-    language: (PROVIDER_LANGUAGES as readonly string[]).includes(
-      String(provider?.profile?.language || "").trim(),
-    )
-      ? (String(provider?.profile?.language).trim() as ProviderLanguage)
-      : ("" as const),
     paymentMethods: normalizePaymentMethods(provider?.profile?.paymentMethods),
     categoryIds: Array.isArray(provider?.services?.categoryIds)
       ? [...provider.services.categoryIds]
@@ -241,7 +234,6 @@ export function ProfileView() {
   const [insured, setInsured] = useState(false);
   const [yearsInBusiness, setYearsInBusiness] = useState("");
   const [employeeCount, setEmployeeCount] = useState("");
-  const [language, setLanguage] = useState<ProviderLanguage | "">("");
   const [paymentMethods, setPaymentMethods] = useState<ProviderPaymentMethod[]>(
     [],
   );
@@ -352,7 +344,6 @@ export function ProfileView() {
       setInsured(next.insured);
       setYearsInBusiness(next.yearsInBusiness);
       setEmployeeCount(next.employeeCount);
-      setLanguage(next.language);
       setPaymentMethods(next.paymentMethods);
       setCategoryIds(next.categoryIds);
       setJobs(next.jobs);
@@ -470,7 +461,6 @@ export function ProfileView() {
       yearsInBusiness: Number.isFinite(years) ? years : undefined,
       employeeCount:
         EMPLOYEE_TO_API[employeeCount] || employeeCount.trim() || undefined,
-      language: language || "",
       paymentMethods,
       licensed,
       insured,
@@ -481,7 +471,6 @@ export function ProfileView() {
           EMPLOYEE_TO_API[employeeCount] || employeeCount.trim() || undefined,
         licensed,
         insured,
-        language: language || "",
         paymentMethods,
       },
     };
@@ -554,7 +543,6 @@ export function ProfileView() {
             undefined,
           licensed,
           insured,
-          language: language || "",
           paymentMethods,
         },
         businessGallery: gallery,
@@ -1063,33 +1051,6 @@ export function ProfileView() {
                 </label>
               </div>
               <Field>
-                <FieldLabel htmlFor="profile-language">Language</FieldLabel>
-                <Select
-                  value={language || undefined}
-                  onValueChange={(value) =>
-                    setLanguage(value as ProviderLanguage)
-                  }
-                >
-                  <SelectTrigger id="profile-language" className="w-full">
-                    <SelectValue placeholder="Select a language" />
-                  </SelectTrigger>
-                  <SelectContent
-                    position="popper"
-                    align="start"
-                    className="z-[100] w-[var(--radix-select-trigger-width)]"
-                  >
-                    {PROVIDER_LANGUAGES.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {item}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FieldDescription>
-                  Shown on your public business information card.
-                </FieldDescription>
-              </Field>
-              <Field>
                 <FieldLabel>Payment methods</FieldLabel>
                 <FieldDescription>
                   Select every payment method you accept.
@@ -1209,9 +1170,6 @@ export function ProfileView() {
                       <span className="min-w-0">
                         <span className="block text-sm font-medium">
                           {category.name}
-                        </span>
-                        <span className="block text-xs text-muted-foreground">
-                          {category.tagline}
                         </span>
                       </span>
                     </label>

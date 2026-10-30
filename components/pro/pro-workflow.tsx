@@ -10,7 +10,7 @@ const featured = [
     number: "01",
     label: "Leads & requests",
     title: "Every lead lands in one inbox.",
-    body: "Marketplace requests matched to your trade and ZIP, plus the homeowners who booked your company by name. Photos, notes, and the address arrive attached.",
+    body: "Marketplace requests matched to your trade and ZIP Code, plus the homeowners who booked your company by name. Photos, notes, and the address arrive attached.",
     points: [
       "Pipeline view — new, contacted, estimate sent, accepted, converted",
       "Reply with an estimate or a message in one click",

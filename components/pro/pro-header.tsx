@@ -220,7 +220,6 @@ function IndustriesMega() {
               </span>
               <span className="min-w-0">
                 <span className="block text-sm font-semibold">{item.label}</span>
-                <span className="block truncate text-[11px] text-muted-foreground">{item.hint}</span>
               </span>
             </Link>
             <ul className="mt-1.5 flex flex-col pl-10">

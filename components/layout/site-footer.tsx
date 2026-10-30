@@ -75,9 +75,6 @@ export function SiteFooter() {
         {/* Branding, contact & socials */}
         <div className="flex flex-col gap-5">
           <Logo inverse />
-          <p className="max-w-xs text-sm leading-6 text-white/80">
-            {siteConfig.tagline}
-          </p>
 
           <ul className="flex flex-col gap-2 text-sm text-white/80">
             {addressLines.length ? (

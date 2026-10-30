@@ -686,7 +686,7 @@ export function CategoryExplorer({
                   setLocationDraft(value);
                 }}
                 onSelect={applyLivePlace}
-                placeholder="City, state, or ZIP"
+                placeholder="City, state, or ZIP Code"
                 autoComplete="off"
                 preferCityDisplay
                 hideStatus
@@ -704,7 +704,7 @@ export function CategoryExplorer({
                   onBlur={() => {
                     if (marketplace) syncMarketplaceUrl(serviceSlug, subService);
                   }}
-                  placeholder="City, state, or ZIP"
+                  placeholder="City, state, or ZIP Code"
                   className="h-10 rounded-lg bg-card pr-9 pl-9"
                   aria-label="Address"
                 />
@@ -850,7 +850,7 @@ export function CategoryExplorer({
               </p>
               <p className="truncate text-base font-semibold">{match.job}</p>
               <p className="text-sm text-muted-foreground">
-                {match.zip ? `ZIP ${match.zip}` : "Your area"}
+                {match.zip ? `ZIP Code ${match.zip}` : "Your area"}
                 {match.sent
                   ? ` · ${match.sent.number} sent to ${match.sent.count} ${match.sent.count === 1 ? "company" : "companies"}`
                   : " · written estimate after a visit"}

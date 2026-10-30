@@ -12,7 +12,7 @@ const reasons = [
   {
     icon: ShieldCheck,
     title: "Licensed local companies",
-    body: "Profiles show license, insurance, and the ZIP codes they actually cover.",
+    body: "Profiles show license, insurance, and the ZIP Codes they actually cover.",
   },
   {
     icon: MapPin,

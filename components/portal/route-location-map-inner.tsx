@@ -473,7 +473,7 @@ export function RouteLocationMapInner({
           <Popup>
             <div className="space-y-1 p-1">
               <span className="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-800 uppercase tracking-wider">
-                Start · Provider Location
+                Start · Provider Address
               </span>
               <p className="text-sm font-semibold text-slate-900">
                 {businessName || provider?.companyName || "Service Business"}

@@ -22,7 +22,7 @@ export function ServicesHero({ query, onSearch }: ServicesHeroProps) {
               Find a licensed local pro
             </p>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Search a service and city or ZIP.
+              Search a service and city or ZIP Code.
             </p>
           </div>
           <div className="relative z-20 w-full max-w-[47rem] justify-self-center">

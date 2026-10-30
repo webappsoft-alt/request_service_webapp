@@ -416,8 +416,8 @@ export function NewEstimateCreateView() {
     if (!street || !city || !state || !zip) {
       toast.error(
         fromContinue
-          ? "Finish the new service location (street, city, state and ZIP), or clear it to use the selected property."
-          : "Street, city, state, and ZIP are required for the property.",
+          ? "Finish the new service address (street, city, state and ZIP Code), or clear it to use the selected property."
+          : "Street, city, state, and ZIP Code are required for the property.",
       );
       return false;
     }
@@ -425,7 +425,7 @@ export function NewEstimateCreateView() {
     try {
       const nextAddress: ServiceAddress = {
         id: `addr_${Date.now().toString(36)}`,
-        label: "Service location",
+        label: "Service address",
         address: street,
         street,
         city,
@@ -503,7 +503,7 @@ export function NewEstimateCreateView() {
       const opportunity = await createEstimateV2Opportunity({
         customerId: selectedCustomer.id,
         propertyAddress: {
-          label: selectedAddress.label || "Service location",
+          label: selectedAddress.label || "Service address",
           addressId:
             selectedAddress.id && /^[a-f\d]{24}$/i.test(selectedAddress.id)
               ? selectedAddress.id
@@ -681,7 +681,7 @@ export function NewEstimateCreateView() {
           </div>
 
           <div className="rounded-xl border border-input bg-card p-4">
-            <h2 className="text-sm font-semibold">Service location</h2>
+            <h2 className="text-sm font-semibold">Service address</h2>
             <p className="text-xs text-muted-foreground">
               The estimate belongs to a specific property, not only the customer.
             </p>

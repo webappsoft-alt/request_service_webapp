@@ -140,7 +140,6 @@ export function getProIndustryLinks() {
   return serviceCategories.map((category) => ({
     href: `${proPaths.home}#process`,
     label: category.name,
-    hint: category.tagline,
     icon: serviceIcons[category.slug],
     jobs: category.commonServices.slice(0, 3),
   }));

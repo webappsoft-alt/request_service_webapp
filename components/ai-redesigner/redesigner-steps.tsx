@@ -412,7 +412,7 @@ export function DetailsStep({
 
       <div className="grid gap-3.5 sm:grid-cols-2">
         {field("name", "Name", { autoComplete: "name", maxLength: 80 })}
-        {field("zip", "ZIP code", { autoComplete: "postal-code", inputMode: "numeric", maxLength: 10 })}
+        {field("zip", "ZIP Code", { autoComplete: "postal-code", inputMode: "numeric", maxLength: 10 })}
         {field("email", "Email", { type: "email", autoComplete: "email", maxLength: 160 })}
         {field("phone", "Phone (optional)", { type: "tel", autoComplete: "tel", maxLength: 20 })}
       </div>

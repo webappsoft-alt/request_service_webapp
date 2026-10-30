@@ -1020,7 +1020,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                     </SoftPanel>
 
                     <SoftPanel
-                      title="Property Location"
+                      title="Property Address"
                       action={
                         <a
                           href={mapsUrl}
@@ -1047,7 +1047,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                           }
                         />
                         <Fact
-                          label="City, State, Zip"
+                          label="City, State, ZIP Code"
                           value={`${order.address?.city || ""}, ${order.address?.state || ""} ${order.address?.zip || ""}`}
                         />
                         <Fact

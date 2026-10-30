@@ -5,7 +5,7 @@ const items = [
   {
     icon: Inbox,
     label: "Job requests",
-    body: "Matched to your trade and ZIP, or sent to you by name.",
+    body: "Matched to your trade and ZIP Code, or sent to you by name.",
   },
   {
     icon: FileText,

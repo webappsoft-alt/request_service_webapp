@@ -127,7 +127,6 @@ function fixedServiceFromActive(
       id: professional.id,
       companyName: professional.companyName,
       slug: professional.slug,
-      tagline: professional.tagline,
       avatarUrl: professional.avatarUrl,
       rating: {
         average: professional.performanceMetrics.rating.average,
@@ -310,7 +309,6 @@ function categoryStubFromService(service: PublicFixedService): ServiceCategory {
     slug,
     name,
     shortName: name,
-    tagline: "",
     description: "",
     longDescription: "",
     commonServices: [],
@@ -387,7 +385,6 @@ function providerFromService(
     coverImage: p.coverImage?.trim() || bannerUrlFromRecord(p),
     images: undefined,
     startingPrice: service.price,
-    tagline: p.tagline || "",
     description: "",
     rating: p.rating.average,
     reviewCount: p.rating.totalReviews,

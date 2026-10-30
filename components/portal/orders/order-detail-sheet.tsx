@@ -346,7 +346,7 @@ export function OrderDetailSheet({
               <div className="rounded-lg border border-border p-3.5 space-y-2.5 bg-card">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    <MapPin className="size-3.5 text-red-500" /> Service Location & Geofence
+                    <MapPin className="size-3.5 text-red-500" /> Service Address & Geofence
                   </div>
                   <a
                     href={mapsUrl}

@@ -1,7 +1,4 @@
-/** Shared Pro language + payment method options (registration + profile). */
-
-export const PROVIDER_LANGUAGES = ["English", "Spanish"] as const;
-export type ProviderLanguage = (typeof PROVIDER_LANGUAGES)[number];
+/** Shared Pro payment method options (registration + profile). */
 
 export const PROVIDER_PAYMENT_METHODS = [
   "Check",
@@ -12,10 +9,6 @@ export const PROVIDER_PAYMENT_METHODS = [
   "Zelle",
 ] as const;
 export type ProviderPaymentMethod = (typeof PROVIDER_PAYMENT_METHODS)[number];
-
-export function isProviderLanguage(value: string): value is ProviderLanguage {
-  return (PROVIDER_LANGUAGES as readonly string[]).includes(value);
-}
 
 export function isProviderPaymentMethod(
   value: string,

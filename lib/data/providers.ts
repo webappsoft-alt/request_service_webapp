@@ -21,7 +21,6 @@ export const providers: Provider[] = [
       "/images/home/hero-home.jpg",
     ],
     startingPrice: 129,
-    tagline: "Plumbing and HVAC for Austin homes.",
     description:
       "Summit Home Systems is a locally owned plumbing and HVAC company serving Central Austin. The team focuses on diagnostics first, written estimates, and clean job close-out so homeowners know exactly what is being repaired and why.",
     rating: 4.9,
@@ -88,7 +87,6 @@ export const providers: Provider[] = [
     logoInitials: "HE",
     images: [],
     startingPrice: 149,
-    tagline: "Licensed electrical work with documented scopes.",
     description:
       "Harbor Electric handles residential electrical repairs, lighting, and panel upgrades across Greater Boston. Every job starts with a documented scope and a signed estimate before work begins.",
     rating: 4.8,
@@ -138,7 +136,6 @@ export const providers: Provider[] = [
     logoInitials: "CL",
     images: [],
     startingPrice: 219,
-    tagline: "Interior and exterior painting with prep in writing.",
     description:
       "Cedar Line Painting is a Denver-area painting company known for careful prep, clean masking, and finish details that are specified before the first coat.",
     rating: 4.7,
@@ -190,7 +187,6 @@ export const providers: Provider[] = [
       "/images/home/hero-home.jpg",
     ],
     startingPrice: 289,
-    tagline: "Inspections, leak repair, and replacement estimates.",
     description:
       "Northstar Roofing serves Minneapolis homeowners with photo-backed inspections, leak repair, and replacement estimates that separate materials, labor, and optional upgrades.",
     rating: 4.8,
@@ -240,7 +236,6 @@ export const providers: Provider[] = [
     logoInitials: "BP",
     images: [],
     startingPrice: 129,
-    tagline: "Recurring house cleaning with a published checklist.",
     description:
       "Bright Path Cleaning provides recurring and one-time residential cleaning in Seattle. Every visit follows a published checklist so customers know what is included before the crew arrives.",
     rating: 4.9,
@@ -290,7 +285,6 @@ export const providers: Provider[] = [
     logoInitials: "OI",
     images: [],
     startingPrice: 99,
-    tagline: "Small repairs, mounting, and punch-list work.",
     description:
       "Oak & Iron Handyman helps Charlotte homeowners close out small repairs that do not need a full contractor. Requests with photos are scoped before a visit is scheduled.",
     rating: 4.6,
@@ -342,7 +336,6 @@ export const providers: Provider[] = [
       "/images/home/split-provider.jpg",
     ],
     startingPrice: 159,
-    tagline: "Lawn care and seasonal outdoor maintenance.",
     description:
       "Greenfield Landscape maintains residential properties across Phoenix. Recurring lawn care and seasonal cleanup are estimated with a defined property scope.",
     rating: 4.7,
@@ -392,7 +385,6 @@ export const providers: Provider[] = [
     logoInitials: "SP",
     images: [],
     startingPrice: 109,
-    tagline: "Inspections, treatment, and prevention plans.",
     description:
       "Shield Pest Solutions provides residential inspections and treatment plans in Tampa. Follow-up visits are scheduled from the original estimate so customers can see the full plan before approving.",
     rating: 4.8,

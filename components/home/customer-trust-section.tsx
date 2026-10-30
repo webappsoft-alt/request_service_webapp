@@ -11,7 +11,7 @@ const pillars = [
     surface: "from-blue-50/60 via-white/40 to-transparent",
     accent: "from-[#0B4379]/10 via-[#0B4379]/3 to-transparent",
     title: "Tell Us What You Need",
-    body: "Select a service, enter your ZIP code, and describe your project. Add photos to help professionals understand the job.",
+    body: "Select a service, enter your ZIP Code, and describe your project. Add photos to help professionals understand the job.",
   },
   {
     icon: Users,

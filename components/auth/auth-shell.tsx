@@ -41,7 +41,7 @@ function panelFor(audience: DemoRole) {
         headline: "Take the jobs that fit.",
         body: "See requests in your service area, send a clear estimate, and keep the original quote intact.",
         points: [
-          { icon: ClipboardList, label: "Requests matched to your trades and ZIP" },
+          { icon: ClipboardList, label: "Requests matched to your trades and ZIP Code" },
           { icon: FileCheck2, label: "Itemized estimates and change orders" },
           { icon: ShieldCheck, label: "Jobs, invoices, and payments in one portal" },
         ] satisfies PanelPoint[],

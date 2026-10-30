@@ -419,7 +419,7 @@ function ContractorForm({
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="con-location">Location address</FieldLabel>
+          <FieldLabel htmlFor="con-location">Address</FieldLabel>
           <GoogleAddressAutocomplete
             id="con-location"
             value={street}

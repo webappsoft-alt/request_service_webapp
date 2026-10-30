@@ -8,7 +8,7 @@ import type { Provider, ServiceCategory } from "@/lib/types";
 
 const fallbackSteps = [
   { label: "Choose a service", hint: "Step 01", icon: Briefcase },
-  { label: "Add your ZIP", hint: "Step 02", icon: MapPin },
+  { label: "Add your ZIP Code", hint: "Step 02", icon: MapPin },
   { label: "Describe the work", hint: "Step 03", icon: ClipboardList },
 ];
 
@@ -52,12 +52,12 @@ export function RequestServiceHero({
   const description = provider
     ? intent === "book" && fixedServiceName
       ? `${fixedServiceName} is a priced service. Confirm your address and time and ${provider.companyName} opens it as a job — no estimate.`
-      : `This request goes to ${provider.companyName}${category ? ` for ${category.name.toLowerCase()}` : ""}${job ? ` — ${job}` : ""}. Add your ZIP and a short description so they can send a written estimate.`
+      : `This request goes to ${provider.companyName}${category ? ` for ${category.name.toLowerCase()}` : ""}${job ? ` — ${job}` : ""}. Add your ZIP Code and a short description so they can send a written estimate.`
     : job && category
-      ? `${category.name} in your area. Add your ZIP and any notes so local pros can review ${job.toLowerCase()} and send a written estimate.`
+      ? `${category.name} in your area. Add your ZIP Code and any notes so local pros can review ${job.toLowerCase()} and send a written estimate.`
       : category
-        ? `Choose the ${category.name.toLowerCase()} job, add your ZIP, and describe the work. Matching licensed pros send a written estimate before anything starts.`
-        : "Choose a service, add your ZIP, and describe the work. Or start from Find a professional to answer a few job questions first.";
+        ? `Choose the ${category.name.toLowerCase()} job, add your ZIP Code, and describe the work. Matching licensed pros send a written estimate before anything starts.`
+        : "Choose a service, add your ZIP Code, and describe the work. Or start from Find a professional to answer a few job questions first.";
 
   const facts = [
     category
@@ -71,7 +71,7 @@ export function RequestServiceHero({
     provider
       ? { label: "Professional", value: provider.companyName, icon: UserRound }
       : undefined,
-    zip ? { label: "ZIP", value: zip, icon: MapPin } : undefined,
+    zip ? { label: "ZIP Code", value: zip, icon: MapPin } : undefined,
   ].filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   const chips = facts.length ? facts : fallbackSteps.map((step) => ({

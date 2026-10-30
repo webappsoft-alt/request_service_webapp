@@ -18,8 +18,6 @@ export type ProSubscriptionPlan = {
   id: string;
   slug: string;
   name: string;
-  /** Short audience label shown under the plan name. */
-  tagline: string;
   /** Monthly price in USD. */
   monthlyPrice: number;
   /** Per-month price in USD when billed annually (yearly total ÷ 12). */
@@ -42,7 +40,6 @@ export type ApiSubscriptionPlan = {
   id?: string;
   slug?: string;
   tierName?: string;
-  tagline?: string;
   shortMarketingPitch?: string;
   monthlyPrice?: number | null;
   yearlyPrice?: number | null;
@@ -79,7 +76,6 @@ export function mapApiSubscriptionPlan(row: ApiSubscriptionPlan): ProSubscriptio
     id: String(row._id || row.id || row.slug || name),
     slug: String(row.slug || ""),
     name,
-    tagline: row.tagline || "",
     monthlyPrice: monthly,
     annualMonthlyPrice: roundCents(annualTotal / 12),
     annualTotal,

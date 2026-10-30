@@ -58,9 +58,11 @@ export function RedesignerSection() {
     router.push(AI_DESIGNER_PATH);
   };
 
+  // Logout / session expiry resets the store (catalog back to null) while this stays
+  // mounted, so fetch again whenever the catalog is missing or the sign-in state changes.
   useEffect(() => {
-    void dispatch(fetchRedesignCatalog());
-  }, [dispatch]);
+    if (!catalog) void dispatch(fetchRedesignCatalog());
+  }, [dispatch, catalog, isLoggedIn]);
 
   if (!catalog?.enabled) return null;
 

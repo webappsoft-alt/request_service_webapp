@@ -640,7 +640,7 @@ function RequestServiceFormInner({
       Number.isFinite(lat) &&
       Number.isFinite(lng);
     if (!hasCoords && zip && !isValidZip(zip)) {
-      toast.error("Enter a valid ZIP code or pick an address suggestion.");
+      toast.error("Enter a valid ZIP Code or pick an address suggestion.");
       return;
     }
 
@@ -757,7 +757,7 @@ function RequestServiceFormInner({
       return;
     }
     if (!isValidZip(zip)) {
-      toast.error("Enter a valid 5-digit ZIP code.");
+      toast.error("Enter a valid 5-digit ZIP Code.");
       return;
     }
     const category = serviceCategories.find((item) => item.slug === service);
@@ -802,7 +802,7 @@ function RequestServiceFormInner({
       });
       if (!result.requests.length) {
         toast.error(
-          "No matching companies for that ZIP yet. Try another area or pick a professional.",
+          "No matching companies for that ZIP Code yet. Try another area or pick a professional.",
         );
         return;
       }
@@ -906,7 +906,7 @@ function RequestServiceFormInner({
         return;
       }
       if (!isValidZip(zip)) {
-        toast.error("Enter a valid 5-digit ZIP code.");
+        toast.error("Enter a valid 5-digit ZIP Code.");
         return;
       }
       if (!street.trim()) {
@@ -940,7 +940,7 @@ function RequestServiceFormInner({
       return;
     }
     if (!isValidZip(zip)) {
-      toast.error("Enter a valid 5-digit ZIP code.");
+      toast.error("Enter a valid 5-digit ZIP Code.");
       return;
     }
     if (!firstName.trim() || !lastName.trim() || !email.trim()) {
@@ -1370,8 +1370,8 @@ function RequestServiceFormInner({
             : provider
               ? "This is a direct provider request. It will be routed to this company rather than the open marketplace."
               : jobRecord
-                ? `This request starts with ${jobRecord.job}. Add your ZIP and any notes so local ${jobRecord.category.name.toLowerCase()} pros can send a written estimate.`
-                : "Matching companies in your ZIP receive this request. They review your answers and send a written estimate."}
+                ? `This request starts with ${jobRecord.job}. Add your ZIP Code and any notes so local ${jobRecord.category.name.toLowerCase()} pros can send a written estimate.`
+                : "Matching companies in your ZIP Code receive this request. They review your answers and send a written estimate."}
         </p>
       </div>
       <FieldGroup>
@@ -1420,7 +1420,7 @@ function RequestServiceFormInner({
           />
         ) : (
           <Field>
-            <FieldLabel htmlFor="request-zip">ZIP</FieldLabel>
+            <FieldLabel htmlFor="request-zip">ZIP Code</FieldLabel>
             <Input
               id="request-zip"
               value={zip}

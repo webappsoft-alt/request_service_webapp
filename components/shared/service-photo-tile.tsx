@@ -45,9 +45,6 @@ export function ServicePhotoTile({
           <span className="text-sm font-semibold tracking-tight md:text-base">
             {category.name}
           </span>
-          <span className="truncate text-xs text-ink-foreground/80">
-            {category.tagline}
-          </span>
         </span>
         <ArrowRight
           className="mb-0.5 size-4 shrink-0 translate-x-0 opacity-0 transition-all duration-300 ease-out group-hover:translate-x-0.5 group-hover:opacity-100"

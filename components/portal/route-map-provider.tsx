@@ -22,7 +22,7 @@ export type RouteTarget = {
   /** Site location — where the work happens (estimate Service location / job site). */
   customerAddress: string;
   customerCoords?: LatLng | null;
-  /** Customer's own profile address; adds a "Customer location" tab (provider portal). */
+  /** Customer's own profile address; adds a "Customer address" tab (provider portal). */
   customerLocation?: { address: string; coords?: LatLng | null } | null;
 };
 

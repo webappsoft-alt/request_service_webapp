@@ -120,13 +120,6 @@ export function ServiceAreasView() {
   // Search & pagination → soft table overlay.
   const tableLoading = actionLoading || (loading && items.length === 0);
   const showBlockingLoader = softLoader && !actionLoading;
-  const isTrulyEmpty =
-    !showBlockingLoader &&
-    !tableLoading &&
-    total === 0 &&
-    items.length === 0 &&
-    !search.trim() &&
-    !searchInput.trim();
 
   function refreshList() {
     void dispatch(fetchServiceAreas());
@@ -178,7 +171,7 @@ export function ServiceAreasView() {
     <PortalPage
       eyebrow="Catalog"
       title="Service areas"
-      description="The cities you serve. Customers in these cities (any of their ZIP codes) can find you and send you requests."
+      description="The cities you serve. Customers in these cities (any of their ZIP Codes) can find you and send you requests."
       actions={
         <Button type="button" onClick={openCreate}>
           Add service area
@@ -188,12 +181,6 @@ export function ServiceAreasView() {
       {showBlockingLoader ? (
         <div className="flex min-h-48 items-center justify-center border border-input bg-card">
           <Loader2 className="size-6 animate-spin text-primary" aria-label="Loading service areas" />
-        </div>
-      ) : isTrulyEmpty ? (
-        <div className="flex min-h-[50vh] items-center justify-center border border-input bg-card px-6 py-16 text-center">
-          <p className="max-w-md text-base text-muted-foreground">
-            No service areas yet. Add the cities you serve.
-          </p>
         </div>
       ) : (
         <PortalDataTable

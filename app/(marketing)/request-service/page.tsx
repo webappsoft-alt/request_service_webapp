@@ -20,7 +20,7 @@ const OBJECT_ID_REGEX = /^[a-f\d]{24}$/i;
 export const metadata = buildMetadata({
   title: "Request Home Service",
   description:
-    "Submit a marketplace service request or book a specific provider. Include your ZIP code, service details, and preferred timing.",
+    "Submit a marketplace service request or book a specific provider. Include your ZIP Code, service details, and preferred timing.",
   path: "/request-service",
 });
 

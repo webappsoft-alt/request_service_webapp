@@ -28,11 +28,11 @@ const screens = [
     icon: ClipboardList,
     label: "Get a quote",
     title: "A few guided questions, not a blank form",
-    body: "Pick the service, describe the job and add your ZIP. We show a typical starting range and the licensed companies that cover your area.",
+    body: "Pick the service, describe the job and add your ZIP Code. We show a typical starting range and the licensed companies that cover your area.",
     points: [
       "Questions change based on the service you pick",
       "Typical starting range before you submit",
-      "Only licensed pros who cover your ZIP get the request",
+      "Only licensed pros who cover your ZIP Code get the request",
     ],
     url: "requestservice.com/get-a-quote",
     alt: "Get a quote form asking which service you need, with next steps and trust notes alongside",

@@ -188,7 +188,7 @@ export async function createQuoteFromIntake(answers: IntakeAnswers) {
     throw new Error("Select a service address from the suggestions before sending.");
   }
   if (zip && !/^\d{5}$/.test(zip) && !hasCoords) {
-    throw new Error("Select a complete service address that includes a ZIP code.");
+    throw new Error("Select a complete service address that includes a ZIP Code.");
   }
   try {
     const result = await createMarketplaceQuote({

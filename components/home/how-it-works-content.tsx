@@ -41,7 +41,7 @@ const customerSteps = customerWorkflow.map((item, index) => ({
 }));
 
 const PRO_HIGHLIGHTS = [
-  "Matched requests in your ZIP and trade",
+  "Matched requests in your ZIP Code and trade",
   "Estimate, schedule, and invoice on one file",
   "No commission on the work you win",
 ] as const;

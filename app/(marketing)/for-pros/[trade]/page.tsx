@@ -50,7 +50,7 @@ export default async function ProTradePage({ params }: PageParams<{ trade: strin
         ]}
         eyebrow={`For ${trade.people.toLowerCase()}`}
         title={`More ${trade.category.name.toLowerCase()} jobs. Less office work.`}
-        description={`Homeowners search Request Service for ${trade.people.toLowerCase()} by service and ZIP. Get listed, send itemized estimates for ${trade.category.commonServices
+        description={`Homeowners search Request Service for ${trade.people.toLowerCase()} by service and ZIP Code. Get listed, send itemized estimates for ${trade.category.commonServices
           .slice(0, 3)
           .map((item) => item.toLowerCase())
           .join(", ")}, and get paid — with no commission on the work you win.`}

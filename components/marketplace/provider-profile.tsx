@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from "react";
 import Link from "next/link";
-import { CalendarDays, CreditCard, Globe, Languages, Mail, MapPin, Phone, UserRound, Users, type LucideIcon } from "lucide-react";
+import { CalendarDays, CreditCard, Globe, Mail, MapPin, Phone, UserRound, Users, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -135,7 +135,6 @@ export function ProviderProfile({
   const paymentMethodsLabel = formatPaymentMethodsLabel(
     provider.paymentMethods,
   );
-  const languageLabel = provider.language?.trim() || "";
   const ownerName = contact?.name?.trim() || "";
   const ownerRole = contact?.role?.trim() || "";
   const addressLine = provider.street?.trim() || "";
@@ -368,11 +367,6 @@ export function ProviderProfile({
                 {paymentMethodsLabel ? (
                   <BusinessInfoItem icon={CreditCard} label="Payment methods">
                     <p>{paymentMethodsLabel}</p>
-                  </BusinessInfoItem>
-                ) : null}
-                {languageLabel ? (
-                  <BusinessInfoItem icon={Languages} label="Languages">
-                    <p>{languageLabel}</p>
                   </BusinessInfoItem>
                 ) : null}
               </CardContent>

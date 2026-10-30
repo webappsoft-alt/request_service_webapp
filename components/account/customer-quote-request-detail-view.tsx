@@ -118,7 +118,7 @@ function formatAddress(batch: CustomerQuoteBatch) {
     [batch.street, batch.city, batch.state, batch.zip]
       .filter(Boolean)
       .join(", ") ||
-    (batch.zip ? `ZIP ${batch.zip}` : "Address pending")
+    (batch.zip ? `ZIP Code ${batch.zip}` : "Address pending")
   );
 }
 

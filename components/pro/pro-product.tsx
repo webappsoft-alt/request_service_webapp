@@ -12,7 +12,7 @@ const beats = [
     id: "lead",
     label: "Lead",
     title: "Request lands in your inbox",
-    body: "Matched by ZIP and trade — or sent straight to your company by name.",
+    body: "Matched by ZIP Code and trade — or sent straight to your company by name.",
   },
   {
     id: "estimate",
@@ -110,9 +110,6 @@ export function ProProduct() {
                   <span className="min-w-0">
                     <span className="block text-[14px] font-semibold tracking-tight text-foreground">
                       {category.name}
-                    </span>
-                    <span className="block text-[12px] leading-5 text-muted-foreground">
-                      {category.tagline}
                     </span>
                   </span>
                 </li>

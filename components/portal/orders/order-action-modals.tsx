@@ -79,7 +79,7 @@ export function AcceptOrderModal({
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Location:</span>
+            <span className="text-muted-foreground">Address:</span>
             <span className="font-medium text-foreground">
               {order.address?.city}, {order.address?.state}
             </span>
@@ -410,7 +410,7 @@ export function TransitOrderModal({
             <Navigation className="size-6" />
           </div>
           <DialogTitle className="text-lg font-semibold">
-            Depart for Job Location
+            Depart for Job Address
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground flex flex-wrap items-center gap-1">
             Mark order <span className="font-semibold text-foreground">{order.orderNumber}</span> as{" "}

@@ -7,7 +7,7 @@ import { proPaths } from "@/lib/pro-paths";
 const stats = [
   { value: "0%", label: "Commission taken from the work you win" },
   { value: "24/7", label: "Job requests arrive while your crew is on a roof" },
-  { value: "20+", label: "Colorado cities matched by trade and ZIP" },
+  { value: "20+", label: "Colorado cities matched by trade and ZIP Code" },
 ] as const;
 
 const feed = [
@@ -28,7 +28,7 @@ export function ProJobs() {
               Homeowners are already looking for your trade.
             </h2>
             <p className="max-w-lg text-base leading-7 text-muted-foreground">
-              Set your services and the ZIPs you cover. Matching requests land in your portal with
+              Set your services and the ZIP Codes you cover. Matching requests land in your portal with
               photos, notes, and the address attached — ready to quote before you spend a truck roll.
             </p>
           </div>
@@ -88,7 +88,7 @@ export function ProJobs() {
 
           <div className="flex items-center justify-between gap-4 border-t bg-muted/40 px-5 py-3.5">
             <p className="text-xs text-muted-foreground">
-              Matched to the trades and ZIPs on your profile.
+              Matched to the trades and ZIP Codes on your profile.
             </p>
             <Link
               href={proPaths.register}

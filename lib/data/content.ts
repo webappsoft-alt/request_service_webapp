@@ -6,14 +6,14 @@ export const faqs: FaqItem[] = [
     category: "customers",
     question: "How do I find a service professional?",
     answer:
-      "Choose a service category, enter your ZIP code, and submit a request — or browse the marketplace and open a specific Pro profile. Both paths use the same professional request details.",
+      "Choose a service category, enter your ZIP Code, and submit a request — or browse the marketplace and open a specific Pro profile. Both paths use the same professional request details.",
   },
   {
     id: "faq_c_2",
     category: "customers",
     question: "Is Request Service available nationwide?",
     answer:
-      "The public website is built for a USA-focused marketplace. Matching depends on Pros who serve your ZIP code. Coverage expands as local businesses join the platform.",
+      "The public website is built for a USA-focused marketplace. Matching depends on Pros who serve your ZIP Code. Coverage expands as local businesses join the platform.",
   },
   {
     id: "faq_c_3",
@@ -55,7 +55,7 @@ export const faqs: FaqItem[] = [
     category: "providers",
     question: "How do new jobs reach my inbox?",
     answer:
-      "Two ways. Homeowners request a trade and ZIP, and matching companies in that area see it. Or they open your public profile and request you by name. Both land on the same job file.",
+      "Two ways. Homeowners request a trade and ZIP Code, and matching companies in that area see it. Or they open your public profile and request you by name. Both land on the same job file.",
   },
   {
     id: "faq_p_6",

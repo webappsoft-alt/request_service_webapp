@@ -127,7 +127,6 @@ function categoriesFromProfessional(
       slug: (primary.slug || name.toLowerCase().replace(/\s+/g, "-")) as ServiceCategorySlug,
       name,
       shortName: name,
-      tagline: "",
       description: "",
       longDescription: "",
       commonServices: [],
@@ -227,10 +226,6 @@ function providerFromRelatedProfessional(raw: unknown): Provider | null {
     coverImage: bannerUrlFromRecord(record),
     startingPrice:
       typeof metrics.startingPrice === "number" ? metrics.startingPrice : undefined,
-    tagline:
-      (typeof record.headline === "string" && record.headline) ||
-      (typeof record.tagline === "string" && record.tagline) ||
-      "",
     description:
       (typeof record.bio === "string" && record.bio) ||
       (typeof record.description === "string" && record.description) ||
@@ -372,7 +367,6 @@ function stashRelatedProfessional(related: Provider): PublicProfessional {
     fullName: "",
     companyName: related.companyName,
     slug: related.slug,
-    tagline: related.tagline,
     avatarUrl: related.logoUrl || "",
     businessGallery: related.coverImage
       ? [{ url: related.coverImage, isBanner: true, sortOrder: 0 }]
@@ -392,7 +386,7 @@ function stashRelatedProfessional(related: Provider): PublicProfessional {
           }
         : null,
       categoryIds: related.categoryIds,
-      tradeTitle: related.tagline,
+      tradeTitle: related.serviceLabels?.[0] || "",
       specialties: [],
     },
     performanceMetrics: {
@@ -665,7 +659,7 @@ export function PublicProfessionalDetail({
     return categoriesFromProfessional(
       provider.categoryIds,
       professional.tradeDetails.primaryCategory,
-      professional.tradeDetails.tradeTitle || professional.tagline,
+      professional.tradeDetails.tradeTitle,
     );
   }, [professional, provider]);
 

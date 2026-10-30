@@ -12,7 +12,7 @@ import { HERO_HOME_IMAGE } from "@/lib/site";
 
 const steps = [
   { n: "01", label: "Describe the job", icon: ClipboardList },
-  { n: "02", label: "Add your ZIP", icon: MapPin },
+  { n: "02", label: "Add your ZIP Code", icon: MapPin },
   { n: "03", label: "Compare matching pros", icon: Users },
 ];
 
@@ -25,7 +25,7 @@ const nextSteps = [
   {
     n: "2",
     title: "See local matches",
-    body: "Licensed companies that serve your ZIP, with a typical starting range.",
+    body: "Licensed companies that serve your ZIP Code, with a typical starting range.",
   },
   {
     n: "3",
@@ -85,7 +85,7 @@ export function QuoteHero({ categoryName }: { categoryName?: string }) {
             </h1>
             <p className="mt-3 max-w-lg text-sm text-white/80 md:text-base">
               Answer a few questions. We’ll show a typical starting range and the
-              licensed companies that do this work in your ZIP.
+              licensed companies that do this work in your ZIP Code.
             </p>
           </div>
 

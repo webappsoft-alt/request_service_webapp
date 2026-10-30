@@ -61,7 +61,6 @@ export type PendingProviderRegistration = {
   description?: string;
   yearsInBusiness?: number;
   employeeCount?: string;
-  language?: string;
   paymentMethods?: string[];
   licensed?: boolean;
   insured?: boolean;

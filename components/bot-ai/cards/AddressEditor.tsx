@@ -58,7 +58,7 @@ export function AddressEditor() {
         value={draft}
         onChange={setDraft}
         onSelect={applyAddress}
-        placeholder="Street address, city or ZIP"
+        placeholder="Street address, city or ZIP Code"
         autoComplete="off"
         hideStatus
         // 16px on phones so iOS doesn't zoom in on focus.

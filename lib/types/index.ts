@@ -65,7 +65,6 @@ export interface ServiceCategory {
   slug: ServiceCategorySlug;
   name: string;
   shortName: string;
-  tagline: string;
   description: string;
   longDescription: string;
   commonServices: string[];
@@ -602,7 +601,6 @@ export interface Provider {
   images?: string[];
   /** Starting / base price in USD. */
   startingPrice?: number;
-  tagline: string;
   description: string;
   rating: number;
   reviewCount: number;
@@ -643,7 +641,6 @@ export interface Provider {
   gallery: string[];
   foundedYear: number;
   employeeCount: string;
-  language?: string;
   paymentMethods?: string[];
   reviews: Review[];
   featured?: boolean;

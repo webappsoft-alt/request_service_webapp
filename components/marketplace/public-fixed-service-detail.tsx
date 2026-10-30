@@ -87,7 +87,6 @@ function categoryFromService(service: PublicFixedService): ServiceCategory {
     slug,
     name,
     shortName: name,
-    tagline: service.provider?.tagline || service.subcategory?.name || "",
     description: "",
     longDescription: "",
     commonServices: [],
@@ -173,7 +172,6 @@ function providerFromService(service: PublicFixedService): Provider | null {
     coverImage: service.images[0],
     images: service.images,
     startingPrice: service.price,
-    tagline: p.tagline || "",
     description: p.description || "",
     rating: p.rating.average,
     reviewCount: p.rating.totalReviews,
@@ -252,10 +250,6 @@ function providerFromRelatedProfessional(raw: unknown): Provider | null {
     coverImage: bannerUrlFromRecord(record),
     startingPrice:
       typeof metrics.startingPrice === "number" ? metrics.startingPrice : undefined,
-    tagline:
-      (typeof record.headline === "string" && record.headline) ||
-      (typeof record.tagline === "string" && record.tagline) ||
-      "",
     description:
       (typeof record.bio === "string" && record.bio) ||
       (typeof record.description === "string" && record.description) ||
@@ -742,11 +736,6 @@ function PublicFixedServiceDetailInner({
             imageUrls: service.images,
             description: descriptionFromService(service),
             points: service.covered,
-            tagline:
-              service.provider?.tagline ||
-              service.subcategory?.name ||
-              service.category?.name ||
-              "",
             benefits: defaultBenefits(service),
             hideRelated: true,
             faqs: service.faqs ?? [],

@@ -109,9 +109,6 @@ export function RelatedBrowse({
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-semibold">{item.name}</span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {item.tagline}
-                      </span>
                     </span>
                   </Link>
                 </li>

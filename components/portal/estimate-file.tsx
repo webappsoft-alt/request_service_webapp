@@ -492,11 +492,11 @@ export function EstimateSettingsTab({
               disabled={isLocked || saving}
             />
           </Field>
-          <Field label="ZIP">
+          <Field label="ZIP Code">
             <Input
               disabled={isLocked || saving}
               value={draft.zip}
-              placeholder="ZIP"
+              placeholder="ZIP Code"
               onChange={(event) => patch({ zip: event.target.value })}
               inputMode="numeric"
             />

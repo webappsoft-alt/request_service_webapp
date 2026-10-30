@@ -11,7 +11,6 @@ export type PublicCategory = {
   id: string;
   name: string;
   slug: string;
-  tagline?: string;
   parentCategory: string | null;
   status?: string;
   commonServices: string[];
@@ -159,7 +158,6 @@ export function normalizePublicCategory(raw: unknown): PublicCategory | null {
     id,
     name: typeof record.name === "string" ? record.name : "",
     slug: typeof record.slug === "string" ? record.slug : "",
-    tagline: typeof record.tagline === "string" ? record.tagline : undefined,
     parentCategory,
     status: typeof record.status === "string" ? record.status : undefined,
     commonServices: toStringArray(record.commonServices),

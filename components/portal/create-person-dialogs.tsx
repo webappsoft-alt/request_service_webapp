@@ -195,7 +195,7 @@ export function CreateCustomerDialog({
 
     if (isEdit && customer) {
       if (!street.trim() || !city.trim() || !state.trim() || !zip.trim()) {
-        toast.error("Street, city, state, and ZIP are required.");
+        toast.error("Street, city, state, and ZIP Code are required.");
         return;
       }
       setSaving(true);
@@ -255,7 +255,7 @@ export function CreateCustomerDialog({
     const stateLine = state.trim();
     const zipLine = zip.trim();
     if (!streetLine || !cityLine || !stateLine || !zipLine) {
-      toast.error("Add a full service address (street, city, state, and ZIP) before saving.");
+      toast.error("Add a full service address (street, city, state, and ZIP Code) before saving.");
       return;
     }
     if (!firstName.trim() && !companyName.trim()) {
@@ -506,7 +506,7 @@ export function CreateCustomerDialog({
             required
           />
           <p className="text-xs text-muted-foreground">
-            Required. Street stays in Address; city, state, and ZIP fill below (no country).
+            Required. Street stays in Address; city, state, and ZIP Code fill below (no country).
           </p>
           <Field>
             <FieldLabel htmlFor="cust-notes">Notes</FieldLabel>
@@ -921,7 +921,7 @@ export function CreateVendorDialog({
             }}
           />
           <p className="text-xs text-muted-foreground">
-            City, state, and ZIP fill in when you pick an address.
+            City, state, and ZIP Code fill in when you pick an address.
           </p>
         </FieldGroup>
         <DialogFooter>

@@ -2,7 +2,15 @@
 export type AiPhoneNumberStatus = "active" | "pending" | "unassigned";
 
 /** Cartesia Sonic voice keys; the backend maps each key to a Cartesia voice id. */
-export type AiVoiceId = "skylar" | "max" | "gemma" | "parker";
+export type AiVoiceId =
+  | "skylar"
+  | "iris"
+  | "cindy"
+  | "morgan"
+  | "parker"
+  | "kenneth"
+  | "wyatt"
+  | "heath";
 
 export type AiVoiceOption = {
   id: AiVoiceId;

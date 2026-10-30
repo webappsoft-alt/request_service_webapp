@@ -29,7 +29,6 @@ export type JobDetailContent = {
   imageUrls?: string[];
   description?: string;
   points?: string[];
-  tagline?: string;
   benefits?: string[];
   /** Hide static “related jobs” when showing a live Fixed Service. */
   hideRelated?: boolean;
@@ -96,7 +95,6 @@ export function JobDetail({
     content?.description ??
     `${detail.description} This is typical ${category.name.toLowerCase()} work, not a company listing. The written estimate comes after a visit.`;
   const points = content?.points?.length ? content.points : detail.points;
-  const tagline = content?.tagline ?? category.tagline;
   const benefits = content?.benefits?.length
     ? content.benefits
     : category.benefits.slice(0, 4);
@@ -183,7 +181,7 @@ export function JobDetail({
                 <h2 className="text-xl font-semibold">How it works</h2>
                 <ul className="flex flex-col gap-2.5">
                   {[
-                    "Send a booking request with your ZIP and a short description.",
+                    "Send a booking request with your ZIP Code and a short description.",
                     "Local licensed pros review the job and send a written estimate.",
                     "Compare the estimates, then hire only if you want to move forward.",
                   ].map((step) => (
@@ -213,7 +211,6 @@ export function JobDetail({
             <aside className="rounded-2xl border bg-card p-5 shadow-sm lg:sticky lg:top-24">
               <Badge variant="secondary">{category.shortName}</Badge>
               <h1 className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">{job}</h1>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground capitalize">{tagline}</p>
 
               <p className="mt-5">
                 <span className="block text-[11px] text-muted-foreground">Typical starting price</span>

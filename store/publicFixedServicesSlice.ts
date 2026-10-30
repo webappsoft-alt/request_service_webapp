@@ -33,7 +33,6 @@ export type PublicFixedServiceProvider = {
   id: string;
   companyName: string;
   slug: string;
-  tagline: string;
   description?: string;
   /** Professional profile photo from API (`avatarUrl`). */
   avatarUrl?: string;
@@ -208,7 +207,6 @@ function normalizeProvider(raw: unknown): PublicFixedServiceProvider | null {
     companyName:
       typeof record.companyName === "string" ? record.companyName : "",
     slug: typeof record.slug === "string" ? record.slug : "",
-    tagline: typeof record.tagline === "string" ? record.tagline : "",
     description:
       typeof record.description === "string" ? record.description : undefined,
     avatarUrl:

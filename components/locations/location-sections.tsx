@@ -70,7 +70,7 @@ export function LinkChips({
   );
 }
 
-/** Category cards (icon + name + tagline) pointing at `hrefFor(category)`. */
+/** Category cards (icon + name) pointing at `hrefFor(category)`. */
 export function CategoryLinkGrid({
   eyebrow,
   title,
@@ -105,7 +105,6 @@ export function CategoryLinkGrid({
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold">{labelFor(category)}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{category.tagline}</span>
                   </span>
                 </Link>
               </li>

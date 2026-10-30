@@ -130,7 +130,7 @@ function ServiceAreaFormBody({
     const options = rows.map((row) => ({
       value: row.name,
       label: row.name,
-      description: row.zipCount ? `${row.zipCount} ZIP codes` : undefined,
+      description: row.zipCount ? `${row.zipCount} ZIP Codes` : undefined,
     }));
     // Keep the edited city listed so its label shows while the list loads.
     for (const name of cityNames) {
@@ -228,7 +228,7 @@ function ServiceAreaFormBody({
             />
           )}
           <FieldDescription>
-            Customers in these cities can find you and send you requests. Every ZIP code
+            Customers in these cities can find you and send you requests. Every ZIP Code
             in a city is covered.
           </FieldDescription>
         </Field>

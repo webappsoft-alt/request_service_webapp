@@ -56,7 +56,7 @@ export default function AboutPage() {
             <CardHeader>
               <CardTitle>Customer value</CardTitle>
               <CardDescription>
-                Search by service and ZIP, review a company profile, receive an itemized estimate, approve digitally, and pay against a clear invoice.
+                Search by service and ZIP Code, review a company profile, receive an itemized estimate, approve digitally, and pay against a clear invoice.
               </CardDescription>
             </CardHeader>
           </Card>

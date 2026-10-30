@@ -352,7 +352,7 @@ export function ServiceSearchForm({
           setLocationDraft(value);
         }}
         onSelect={applyPlace}
-        placeholder="City / ZIP code"
+        placeholder="City / ZIP Code"
         autoComplete="off"
         preferCityDisplay
         preferCityZipDisplay={locationDisplayMode === "city-zip"}
@@ -399,7 +399,7 @@ export function ServiceSearchForm({
           {serviceField}
         </Field>
         <Field className="md:max-w-72">
-          <FieldLabel htmlFor="service-location">City / ZIP code</FieldLabel>
+          <FieldLabel htmlFor="service-location">City / ZIP Code</FieldLabel>
           {locationField}
         </Field>
         <Button type="submit" size="xl" className="h-11 w-full md:w-auto">

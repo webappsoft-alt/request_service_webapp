@@ -74,7 +74,6 @@ export type PublicProfessional = {
   fullName: string;
   companyName: string;
   slug: string;
-  tagline: string;
   avatarUrl: string;
   verificationBadge: {
     isVerified: boolean;
@@ -122,7 +121,6 @@ export type PublicProfessional = {
     employeeCount: string;
     licensed: boolean;
     insured: boolean;
-    language?: string;
     paymentMethods?: string[];
   };
   coverage?: {
@@ -546,7 +544,6 @@ export function normalizePublicProfessional(
     companyName:
       typeof record.companyName === "string" ? record.companyName : "",
     slug: typeof record.slug === "string" ? record.slug : "",
-    tagline: typeof record.tagline === "string" ? record.tagline : "",
     avatarUrl:
       (typeof record.avatarUrl === "string" && record.avatarUrl) ||
       (typeof record.avatar === "string" && record.avatar) ||
@@ -635,10 +632,6 @@ export function normalizePublicProfessional(
             : "",
       licensed: Boolean(profileRecord?.licensed),
       insured: Boolean(profileRecord?.insured),
-      language:
-        typeof profileRecord?.language === "string"
-          ? profileRecord.language.trim()
-          : "",
       paymentMethods: Array.isArray(profileRecord?.paymentMethods)
         ? profileRecord.paymentMethods
             .map((item) => String(item || "").trim())
@@ -874,14 +867,12 @@ export function publicProfessionalToProvider(
         : [
             primary?.name?.trim() ||
               professional.tradeDetails.tradeTitle?.trim() ||
-              professional.tagline?.trim() ||
               "",
           ]
   ).filter(Boolean);
 
   const tradeLabel =
     professional.tradeDetails.tradeTitle?.trim() ||
-    professional.tagline?.trim() ||
     serviceLabels[0] ||
     "Home services";
   const city = professional.location.city.trim();
@@ -963,10 +954,6 @@ export function publicProfessionalToProvider(
     coverImage: banner?.url,
     images: galleryUrls.length ? galleryUrls : undefined,
     startingPrice: professional.activeOfferings.startingPrice || undefined,
-    tagline:
-      professional.tagline ||
-      professional.tradeDetails.tradeTitle ||
-      "",
     description: aboutParts.join(" "),
     rating: professional.performanceMetrics.rating.average,
     reviewCount: professional.performanceMetrics.rating.totalReviews,
@@ -1002,7 +989,6 @@ export function publicProfessionalToProvider(
     gallery: galleryFromServices,
     foundedYear,
     employeeCount: professional.profile?.employeeCount?.trim() || "",
-    language: professional.profile?.language?.trim() || "",
     paymentMethods: Array.isArray(professional.profile?.paymentMethods)
       ? professional.profile.paymentMethods.filter(
           (item): item is string =>

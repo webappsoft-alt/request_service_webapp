@@ -114,9 +114,6 @@ export function PlanCard({
       ) : null}
 
       <Title className="text-lg font-semibold tracking-tight text-foreground">{plan.name}</Title>
-      <p className="text-xs font-medium tracking-wide text-primary/80 uppercase dark:text-primary">
-        {plan.tagline}
-      </p>
       <p className="mt-1.5 md:min-h-[2lh] lg:min-h-[3lh] text-sm leading-relaxed text-muted-foreground">
         {plan.description}
       </p>

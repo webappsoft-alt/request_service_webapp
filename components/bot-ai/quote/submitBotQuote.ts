@@ -25,7 +25,7 @@ export function composeBriefDetails(brief: BotQuoteBrief, locationText: string, 
     `Issue: ${brief.issueSummary}`,
     brief.area ? `Area / room: ${brief.area}` : "",
     `Urgency: ${brief.urgencyLabel}`,
-    locationText ? `Location: ${locationText}` : "",
+    locationText ? `Address: ${locationText}` : "",
     brief.customerDetails.length ? `Customer details:\n${brief.customerDetails.map((item) => `• ${item}`).join("\n")}` : "",
     brief.answers?.length
       ? `Customer's answers:\n${brief.answers.map((item) => `• ${item.question} — ${item.answer}`).join("\n")}`

@@ -1357,7 +1357,7 @@ export function JobSettingsTab({
               placeholder="State"
             />
           </Field>
-          <Field label="ZIP">
+          <Field label="ZIP Code">
             <Input value={draft.zip} onChange={(event) => patch({ zip: event.target.value })} />
           </Field>
           <label className="grid gap-1.5 text-sm sm:col-span-2">

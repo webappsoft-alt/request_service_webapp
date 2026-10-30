@@ -6,11 +6,10 @@ export const serviceCategories: ServiceCategory[] = [
     slug: "plumbing",
     name: "Plumbing",
     shortName: "Plumbing",
-    tagline: "Leaks & water heaters",
     description:
       "Licensed plumbers for leaks, water heaters, drain cleaning, and fixture installation.",
     longDescription:
-      "Connect with licensed local plumbers for repairs, replacements, and planned upgrades. From a dripping faucet to a full water heater replacement, Request Service helps you submit one request and hear from professionals who actually serve your ZIP code.",
+      "Connect with licensed local plumbers for repairs, replacements, and planned upgrades. From a dripping faucet to a full water heater replacement, Request Service helps you submit one request and hear from professionals who actually serve your ZIP Code.",
     commonServices: [
       "Leak detection and repair",
       "Water heater installation",
@@ -39,7 +38,6 @@ export const serviceCategories: ServiceCategory[] = [
     slug: "hvac",
     name: "HVAC",
     shortName: "HVAC",
-    tagline: "Heating & cooling",
     description:
       "Heating, cooling, and indoor air quality service from local HVAC professionals.",
     longDescription:
@@ -72,7 +70,6 @@ export const serviceCategories: ServiceCategory[] = [
     slug: "electrical",
     name: "Electrical",
     shortName: "Electrical",
-    tagline: "Panels & lighting",
     description:
       "Panel upgrades, lighting, outlets, and electrical safety work from licensed electricians.",
     longDescription:
@@ -104,7 +101,6 @@ export const serviceCategories: ServiceCategory[] = [
     slug: "handyman",
     name: "Handyman",
     shortName: "Handyman",
-    tagline: "Small home repairs",
     description:
       "Reliable help for small repairs, assembly, mounting, and punch-list home projects.",
     longDescription:
@@ -136,7 +132,6 @@ export const serviceCategories: ServiceCategory[] = [
     slug: "house-cleaning",
     name: "House Cleaning",
     shortName: "Cleaning",
-    tagline: "Recurring & deep cleans",
     description:
       "Recurring and one-time home cleaning with clear scopes and professional crews.",
     longDescription:
@@ -168,7 +163,6 @@ export const serviceCategories: ServiceCategory[] = [
     slug: "roofing",
     name: "Roofing",
     shortName: "Roofing",
-    tagline: "Repairs & replacement",
     description:
       "Roof inspections, repairs, and replacement estimates from local roofing companies.",
     longDescription:
@@ -200,7 +194,6 @@ export const serviceCategories: ServiceCategory[] = [
     slug: "landscaping",
     name: "Landscaping",
     shortName: "Landscaping",
-    tagline: "Lawns & outdoor care",
     description:
       "Lawn care, seasonal cleanup, planting, and outdoor maintenance from local crews.",
     longDescription:
@@ -232,7 +225,6 @@ export const serviceCategories: ServiceCategory[] = [
     slug: "painting",
     name: "Painting",
     shortName: "Painting",
-    tagline: "Interior & exterior",
     description:
       "Interior and exterior painting with written scopes, prep details, and finish options.",
     longDescription:
@@ -265,7 +257,6 @@ export const serviceCategories: ServiceCategory[] = [
     slug: "bathroom-remodeling",
     name: "Bathroom Remodeling",
     shortName: "Bath Remodel",
-    tagline: "Tile & fixtures",
     description:
       "Vanity, tile, fixture, and full bathroom remodel projects with staged estimates.",
     longDescription:
@@ -297,7 +288,6 @@ export const serviceCategories: ServiceCategory[] = [
     slug: "pest-control",
     name: "Pest Control",
     shortName: "Pest Control",
-    tagline: "Inspect & prevent",
     description:
       "Inspections, treatments, and prevention plans from local pest control professionals.",
     longDescription:

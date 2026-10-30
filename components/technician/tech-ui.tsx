@@ -231,7 +231,7 @@ export function ClockProblemDialog({
           <div className="flex items-start gap-2 rounded-md border border-input bg-muted/40 px-3 py-2 text-sm">
             <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
             <span className="min-w-0">
-              <span className="block text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Site location</span>
+              <span className="block text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Site address</span>
               {line}
             </span>
           </div>

@@ -391,7 +391,6 @@ export function usePortalWorkspace() {
           banner?.url ||
           undefined,
         images: gallery.map((item) => item.url),
-        tagline: String(authProvider?.tagline || ""),
         description: String(authProvider?.description || ""),
         rating: 0,
         reviewCount: 0,
@@ -451,7 +450,6 @@ export function usePortalWorkspace() {
       ),
       website:
         typeof authProvider?.website === "string" ? authProvider.website : seed.website,
-      tagline: String(authProvider?.tagline || seed.tagline || ""),
       description: String(authProvider?.description || seed.description || ""),
       slug: String(authProvider?.slug || seed.slug || ""),
       street: String(authProvider?.location?.address || seed.street || ""),

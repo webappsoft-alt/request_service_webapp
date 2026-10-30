@@ -24,7 +24,7 @@ export default function PrivacyPage() {
       <div className="section-space">
         <Container className="flex flex-col gap-5 text-sm leading-7 text-muted-foreground">
           <p>
-            {siteConfig.name} collects only the information you submit through public forms, such as name, email, ZIP code, and service details. Demo submissions on this Phase 1 site are not dispatched to Pros.
+            {siteConfig.name} collects only the information you submit through public forms, such as name, email, ZIP Code, and service details. Demo submissions on this Phase 1 site are not dispatched to Pros.
           </p>
           <p>
             We use that information to operate the marketplace, respond to inquiries, and — when accounts are connected — to match requests, estimates, jobs, and invoices.

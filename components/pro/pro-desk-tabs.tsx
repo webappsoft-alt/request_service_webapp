@@ -172,7 +172,7 @@ const tabs: readonly DeskTab[] = [
       "Coverage shows on your public profile",
     ],
     shot: "service-areas",
-    alt: "Service areas list with covered neighborhoods, cities, and ZIP codes",
+    alt: "Service areas list with covered neighborhoods, cities, and ZIP Codes",
     url: "…/pro/dashboard/service-areas",
   },
   {

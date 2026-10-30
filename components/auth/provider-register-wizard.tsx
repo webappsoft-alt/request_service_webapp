@@ -50,9 +50,7 @@ import {
   type PendingProviderRegistration,
 } from "@/lib/auth/pending-registration";
 import {
-  PROVIDER_LANGUAGES,
   PROVIDER_PAYMENT_METHODS,
-  type ProviderLanguage,
   type ProviderPaymentMethod,
 } from "@/lib/provider-preferences";
 import { cn } from "@/lib/utils";
@@ -104,7 +102,6 @@ type Draft = {
   employeeCount: string;
   website: string;
   contactRole: string;
-  language: ProviderLanguage | "";
   paymentMethods: ProviderPaymentMethod[];
   areaNames: string[];
 };
@@ -133,7 +130,6 @@ const emptyDraft: Draft = {
   employeeCount: "",
   website: "",
   contactRole: "",
-  language: "",
   paymentMethods: [],
   areaNames: [],
 };
@@ -148,7 +144,7 @@ function stepCopy(step: Step) {
     case "business":
       return {
         title: "Your company",
-        description: "Customers see this name on your profile. Location helps match nearby jobs.",
+        description: "Customers see this name on your profile. Address helps match nearby jobs.",
       };
     case "services":
       return {
@@ -162,9 +158,8 @@ function stepCopy(step: Step) {
       };
     case "preferences":
       return {
-        title: "Language & payments",
-        description:
-          "Tell customers which language you speak and how they can pay you.",
+        title: "Payment methods",
+        description: "Tell customers how they can pay you.",
       };
     case "coverage":
       return {
@@ -334,7 +329,6 @@ export function ProviderRegisterWizard() {
         ? yearsInBusiness
         : undefined,
       employeeCount: mapEmployeeCount(draft.employeeCount),
-      language: draft.language || undefined,
       paymentMethods: draft.paymentMethods.length
         ? draft.paymentMethods
         : undefined,
@@ -673,7 +667,6 @@ export function ProviderRegisterWizard() {
                     />
                     <span className="min-w-0">
                       <span className="block text-sm font-medium">{category.name}</span>
-                      <span className="block text-xs text-muted-foreground">{category.tagline}</span>
                     </span>
                   </label>
                 );
@@ -814,33 +807,6 @@ export function ProviderRegisterWizard() {
 
         {step === "preferences" ? (
           <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="language">Language</FieldLabel>
-              <Select
-                value={draft.language || undefined}
-                onValueChange={(value) =>
-                  patch({ language: value as ProviderLanguage })
-                }
-              >
-                <SelectTrigger id="language" className="w-full">
-                  <SelectValue placeholder="Select a language" />
-                </SelectTrigger>
-                <SelectContent
-                  position="popper"
-                  align="start"
-                  className="z-[100] w-[var(--radix-select-trigger-width)]"
-                >
-                  {PROVIDER_LANGUAGES.map((language) => (
-                    <SelectItem key={language} value={language}>
-                      {language}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FieldDescription>
-                Customers see this on your public profile.
-              </FieldDescription>
-            </Field>
             <Field>
               <FieldLabel>Payment methods</FieldLabel>
               <FieldDescription>

@@ -65,7 +65,7 @@ function formatAddress(batch: CustomerQuoteBatch) {
   const line = [batch.street, batch.city, batch.state, batch.zip]
     .filter(Boolean)
     .join(", ");
-  return line || (batch.zip ? `ZIP ${batch.zip}` : "Address pending");
+  return line || (batch.zip ? `ZIP Code ${batch.zip}` : "Address pending");
 }
 
 function batchKey(batch: CustomerQuoteBatch) {

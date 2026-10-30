@@ -88,7 +88,7 @@ function validateContact(contact: RedesignContact, consent: boolean): ContactErr
   const errors: ContactErrors = {};
   if (contact.name.trim().length < 2) errors.name = "Please enter your name.";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contact.email.trim())) errors.email = "Please enter a valid email.";
-  if (!/^\d{5}(-\d{4})?$/.test(contact.zip.trim())) errors.zip = "Please enter a 5-digit ZIP code.";
+  if (!/^\d{5}(-\d{4})?$/.test(contact.zip.trim())) errors.zip = "Please enter a 5-digit ZIP Code.";
   if (contact.phone.trim() && !/^[0-9+().\s-]{7,20}$/.test(contact.phone.trim())) errors.phone = "Please enter a valid phone number.";
   if (!consent) errors.consent = "Please agree so we can share your design.";
   return errors;

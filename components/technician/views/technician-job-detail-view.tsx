@@ -331,7 +331,7 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
                     ) : null}
                   </div>
                 </DetailCard>
-                <DetailCard title="Job location" className="lg:col-span-2">
+                <DetailCard title="Job address" className="lg:col-span-2">
                   <LocationBlock location={location} record={{ recordType: "job", recordNumber: job.number, customerName: name }} />
                 </DetailCard>
               </div>

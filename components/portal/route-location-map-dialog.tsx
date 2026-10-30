@@ -54,7 +54,7 @@ export type RouteLocationMapDialogProps = RouteLocationMapInnerProps & {
   description?: string;
   /**
    * Customer's own (profile) address. When given, the dialog shows two tabs:
-   * "Site location" (where the work is) and "Customer location".
+   * "Site address" (where the work is) and "Customer address".
    */
   billingAddress?: string;
   billingCoords?: RouteLocationMapInnerProps["customerCoords"];
@@ -95,9 +95,9 @@ export function RouteLocationMapDialog({
   technicians,
 }: RouteLocationMapDialogProps) {
   const tabs = useMemo<RouteTab[]>(() => {
-    const list: RouteTab[] = [{ key: "site", label: "Site location", kind: "site" }];
+    const list: RouteTab[] = [{ key: "site", label: "Site address", kind: "site" }];
     if (billingAddress) {
-      list.push({ key: "customer", label: "Customer location", kind: "customer" });
+      list.push({ key: "customer", label: "Customer address", kind: "customer" });
     }
     for (const tech of technicians ?? []) {
       if (!tech.employeeId) continue;
@@ -191,8 +191,8 @@ export function RouteLocationMapDialog({
           originName: tab.name || techLocation?.name || "Technician",
           originAddress: techLocation?.at ? `Shared ${ago(techLocation.at)}` : "",
           originCoords: techCoords,
-          destLabel: "Site Location (Destination)",
-          destName: "Site location",
+          destLabel: "Site Address (Destination)",
+          destName: "Site address",
           destAddress: customerAddress,
           destCoords: customerCoords ?? null,
           serviceAddress,
@@ -203,7 +203,7 @@ export function RouteLocationMapDialog({
             originName: resolvedBusinessName,
             originAddress: resolvedBusinessAddress,
             originCoords: businessCoords ?? null,
-            destLabel: "Customer Location",
+            destLabel: "Customer Address",
             destName: resolvedCustomerName,
             destAddress: billingAddress || "",
             destCoords: billingCoords ?? null,
@@ -214,8 +214,8 @@ export function RouteLocationMapDialog({
             originName: resolvedBusinessName,
             originAddress: resolvedBusinessAddress,
             originCoords: businessCoords ?? null,
-            destLabel: "Site Location (Destination)",
-            destName: "Site location",
+            destLabel: "Site Address (Destination)",
+            destName: "Site address",
             destAddress: customerAddress,
             destCoords: customerCoords ?? null,
             serviceAddress,
@@ -265,7 +265,7 @@ export function RouteLocationMapDialog({
           </div>
 
           {tabs.length > 1 ? (
-            <div role="tablist" aria-label="Locations" className="mt-3 flex flex-wrap gap-1.5">
+            <div role="tablist" aria-label="Addresses" className="mt-3 flex flex-wrap gap-1.5">
               {tabs.map((item) => {
                 const Icon = item.kind === "site" ? Building2 : item.kind === "customer" ? Home : HardHat;
                 const active = item.key === tab.key;

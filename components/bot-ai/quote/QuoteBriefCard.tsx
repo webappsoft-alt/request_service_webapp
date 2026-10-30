@@ -100,7 +100,7 @@ export function QuoteBriefCard({ message, brief }: { message: BotMessage; brief:
       return;
     }
     if (needsZip && !/^\d{5}$/.test(zipDraft.trim())) {
-      setError("Enter the 5-digit ZIP code where the work is needed.");
+      setError("Enter the 5-digit ZIP Code where the work is needed.");
       return;
     }
     if (!email || !name) {
@@ -226,7 +226,7 @@ export function QuoteBriefCard({ message, brief }: { message: BotMessage; brief:
       <div className="mt-2.5 flex flex-col gap-2 border-t pt-2.5">
         {needsZip ? (
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold">ZIP code of the job</span>
+            <span className="text-[11px] font-semibold">ZIP Code of the job</span>
             <input
               value={zipDraft}
               onChange={(event) => setZipDraft(event.target.value.replace(/\D/g, "").slice(0, 5))}

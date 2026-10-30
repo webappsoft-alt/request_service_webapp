@@ -14,7 +14,7 @@ export function PersonAddressFields({
   idPrefix,
   value,
   onChange,
-  label = "Location address",
+  label = "Address",
   disabled = false,
 }: {
   idPrefix: string;

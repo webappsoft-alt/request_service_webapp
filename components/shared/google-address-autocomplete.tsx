@@ -120,7 +120,7 @@ export type GoogleAddressAutocompleteProps = {
 };
 
 const LOCATION_BLOCKED_MESSAGE =
-  "Location permission is currently blocked. Please enable location access in your browser site settings, or search manually by entering your City or ZIP code.";
+  "Location permission is currently blocked. Please enable location access in your browser site settings, or search manually by entering your City or ZIP Code.";
 
 
 /** True when the browser reports geolocation as already denied for this site. */
@@ -836,13 +836,13 @@ export function GoogleAddressAutocomplete({
                 setLocationBlocked(false);
                 applyResolvedAddress(address, "manual_after_blocked_location");
               }}
-              placeholder="City / ZIP code"
+              placeholder="City / ZIP Code"
               preferCityDisplay
               preferCityZipDisplay={preferCityZipDisplay}
               hideLocateButton
               hideStatus
             />
-            <p className="text-xs text-muted-foreground">Start typing, then pick your city or ZIP from the list.</p>
+            <p className="text-xs text-muted-foreground">Start typing, then pick your city or ZIP Code from the list.</p>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setLocationBlocked(false)}>

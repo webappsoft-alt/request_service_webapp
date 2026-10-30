@@ -60,7 +60,7 @@ export function CityStateZipFields({
         />
       </Field>
       <Field>
-        <FieldLabel htmlFor={`${idPrefix}-zip`}>ZIP</FieldLabel>
+        <FieldLabel htmlFor={`${idPrefix}-zip`}>ZIP Code</FieldLabel>
         <Input
           ref={zipRef}
           id={`${idPrefix}-zip`}
@@ -68,7 +68,7 @@ export function CityStateZipFields({
           onChange={(event) =>
             onChange({ ...value, zip: event.target.value })
           }
-          placeholder="ZIP"
+          placeholder="ZIP Code"
           disabled={disabled}
           autoComplete="postal-code"
           inputMode="numeric"

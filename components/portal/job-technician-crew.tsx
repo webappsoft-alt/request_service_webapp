@@ -21,6 +21,7 @@ import { employeeName, type PortalEmployee } from "@/lib/data/portal";
 import type { Job } from "@/lib/types";
 import { useAppDispatch } from "@/store/hooks";
 import { fetchJobDetail, updateJobRecord } from "@/store/jobsSlice";
+import { ADD_TECHNICIAN_HREF } from "@/lib/crew-links";
 
 /**
  * More than one technician on a job: everyone besides the lead (the person on the calendar row),
@@ -185,8 +186,11 @@ function AddTechnicianDialog({
             value={value}
             selectedLabel={label}
             options={paging.options.filter((option) => !exclude.includes(option.id))}
-            placeholder="Select person"
-            emptyLabel="No other team members found."
+            placeholder="Select technician"
+            emptyLabel={paging.search ? "No team members match." : "No other technicians yet. Add one to assign them."}
+            addLabel="Add technician"
+            addPlacement="top"
+            onAdd={() => window.location.assign(ADD_TECHNICIAN_HREF)}
             loading={paging.loading}
             loadingMore={paging.loadingMore}
             hasMore={paging.hasMore}

@@ -2,7 +2,8 @@ import { mapFieldNote, mapFieldNotes, type FieldNote } from "@/lib/field-notes";
 import { mapLocationReport, type LocationReport } from "@/lib/time-tracking";
 import type { DeviceLocation } from "@/lib/geolocation";
 import { technicianApi, providerCrmApi } from "@/components/api/ApiRoutesFile";
-import { getData, postData, putData } from "@/components/api/sliceHttp";
+import { getData, patchData, postData, putData } from "@/components/api/sliceHttp";
+import { mapProjectStages, type ProjectStage, type StageProgressInput } from "@/lib/project-stages";
 import {
   browserTimeZone,
   mapTimeEntry,
@@ -143,6 +144,8 @@ export type TechEstimateDetail = {
     customerSnapshot?: Record<string, unknown>;
   };
   job: { id: string; number?: string; title?: string; status?: string } | null;
+  /** Clocking in on an estimate: only for a site visit booked for this technician, until it becomes a job. */
+  clockIn: { allowed: boolean; reason: string };
   schedule: TechScheduleRow[];
   timeEntries: TimeEntry[];
   timeSummary: TimeSummary;
@@ -459,6 +462,11 @@ export async function getTechnicianEstimate(id: string): Promise<TechEstimateDet
       customer: mapCustomer(estimate.customer),
     } as TechEstimateDetail["estimate"],
     job: job.id ? { id: String(job.id), number: String(job.number || ""), title: String(job.title || ""), status: String(job.status || "") } : null,
+    // Older servers don't send it: clocking in stays as it was.
+    clockIn: {
+      allowed: asRecord(data.clockIn).allowed !== false,
+      reason: String(asRecord(data.clockIn).reason || ""),
+    },
     schedule: (Array.isArray(data.schedule) ? data.schedule : []).map(mapSchedule),
     timeEntries: mapEntries(data.timeEntries),
     timeSummary: mapTimeSummary(data.timeSummary),
@@ -918,4 +926,21 @@ export async function addTechnicianNote(
 ): Promise<FieldNote | null> {
   const endpoint = kind === "job" ? technicianApi.jobNotes(id) : technicianApi.estimateNotes(id);
   return mapFieldNote(dataOf(await postData(endpoint, input, { silent: true })));
+}
+
+/** Project stages of an assigned job / estimate. */
+export async function listTechnicianStages(kind: "job" | "estimate", id: string): Promise<ProjectStage[]> {
+  const endpoint = kind === "job" ? technicianApi.jobStages(id) : technicianApi.estimateStages(id);
+  return mapProjectStages(asRecord(dataOf(await getData(endpoint, undefined, quiet))).stages);
+}
+
+/** Start / complete a stage and/or note a delay; returns the updated stages. */
+export async function updateTechnicianStage(
+  kind: "job" | "estimate",
+  id: string,
+  stageId: string,
+  input: StageProgressInput,
+): Promise<ProjectStage[]> {
+  const endpoint = `${kind === "job" ? technicianApi.jobStages(id) : technicianApi.estimateStages(id)}/${stageId}`;
+  return mapProjectStages(asRecord(dataOf(await patchData(endpoint, input, { silent: true }))).stages);
 }

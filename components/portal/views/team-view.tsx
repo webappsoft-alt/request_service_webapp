@@ -31,6 +31,7 @@ import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import { PasswordInput } from "@/components/auth/password-input";
 import { validateTechnicianCredentials } from "@/components/portal/create-employee-dialog";
 import { formatMoney } from "@/lib/format";
+import { takeAddParam } from "@/lib/crew-links";
 import { formatHours } from "@/lib/time-tracking";
 import type { PortalEmployee, PortalEmployeeRole } from "@/lib/data/portal";
 import { emptyPersonAddress, employeeRoleLabel, type PortalPersonAddress } from "@/lib/data/portal";
@@ -91,6 +92,13 @@ export function TeamView() {
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<PortalEmployee | null>(null);
+
+  // Opened from a crew picker ("Add technician" / "Add contractor"): start with the add form.
+  useEffect(() => {
+    void Promise.resolve().then(() => {
+      if (takeAddParam()) setOpen(true);
+    });
+  }, []);
   const [deleteTarget, setDeleteTarget] = useState<PortalEmployee | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [searchInput, setSearchInput] = useState(search);
@@ -510,7 +518,7 @@ function EmployeeFormDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-md" data-lenis-prevent>
+      <DialogContent className="max-h-[94svh] overflow-y-auto sm:max-w-xl" data-lenis-prevent>
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit employee" : "Add employee"}</DialogTitle>
           <DialogDescription>

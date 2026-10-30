@@ -27,6 +27,7 @@ import {
 import { formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { stageDisplayStatus, stageStatusLabel, type StageDisplayStatus } from "@/lib/project-stages";
 
 /** Visits the AI receptionist booked on a phone call get their own light AI card, not the solid card. */
 const isAiBooked = (event: { source?: string }) => event.source === "ai_receptionist";
@@ -1585,6 +1586,7 @@ function TimedBar({
         <div className="space-y-0.5">
           {/* Job No */}
           <span className="truncate text-xs font-bold leading-tight block">{event.title}</span>
+          {event.stageId ? <StageCardPill event={event} /> : null}
 
           {/* Estimate / Job / Request / Task Name */}
           {event.detail && event.detail !== event.title ? (
@@ -1691,6 +1693,24 @@ function TimedBar({
   );
 }
 
+const STAGE_PILL_TONE: Record<StageDisplayStatus, string> = {
+  pending: "bg-white/90 text-slate-700",
+  in_progress: "bg-sky-100 text-sky-900",
+  completed: "bg-emerald-100 text-emerald-900",
+  late: "bg-rose-100 text-rose-900",
+};
+
+/** A project-stage card's progress: Pending, In progress, Completed, or Late once its days passed. */
+function StageCardPill({ event }: { event: PortalCalendarEvent }) {
+  const status = event.status === "in_progress" || event.status === "completed" ? event.status : "pending";
+  const shown = stageDisplayStatus({ status, startDate: event.date, endDate: event.endDate });
+  return (
+    <span className={cn("inline-block rounded-full px-1.5 py-px text-[9px] leading-tight font-bold", STAGE_PILL_TONE[shown])}>
+      {stageStatusLabel(shown)}
+    </span>
+  );
+}
+
 function CalendarChip({
   event,
   employeeLabel,
@@ -1780,6 +1800,7 @@ function CalendarChip({
       <div className="min-w-0 space-y-0.5">
         {/* Job No */}
         <span className="block truncate text-[11px] font-bold leading-snug">{event.title}</span>
+        {event.stageId ? <StageCardPill event={event} /> : null}
 
         {/* Estimate / Job / Request / Task Name */}
         {event.detail && event.detail !== event.title ? (

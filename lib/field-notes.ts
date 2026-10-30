@@ -9,6 +9,9 @@ export type FieldNote = {
   authorName: string;
   authorRole: "provider" | "technician" | "contractor";
   visibleToCustomer: boolean;
+  /** Written on one project stage (e.g. why it is late). */
+  stageId?: string;
+  stageName?: string;
   createdAt: string;
 };
 
@@ -18,6 +21,8 @@ export type ProjectUpdate = {
   content: string;
   authorName: string;
   authorRole: FieldNote["authorRole"];
+  stageId?: string;
+  stageName?: string;
   createdAt: string;
   /** Written on the estimate or on the job it became. */
   on: "estimate" | "job";
@@ -40,6 +45,8 @@ export function mapFieldNote(raw: unknown): FieldNote | null {
     authorName: String(row.authorName || ""),
     authorRole: roleOf(row.authorRole),
     visibleToCustomer: row.visibleToCustomer === true,
+    stageId: row.stageId ? String(row.stageId) : undefined,
+    stageName: String(row.stageName || "") || undefined,
     createdAt: String(row.createdAt || ""),
   };
 }
@@ -50,7 +57,7 @@ export function mapFieldNotes(raw: unknown): FieldNote[] {
 
 export function mapProjectUpdates(raw: unknown): ProjectUpdate[] {
   return (Array.isArray(raw) ? raw : [])
-    .map((item) => {
+    .map((item): ProjectUpdate | null => {
       const row = asRecord(item);
       const id = String(row.id || "");
       if (!id || !row.content) return null;
@@ -59,6 +66,8 @@ export function mapProjectUpdates(raw: unknown): ProjectUpdate[] {
         content: String(row.content),
         authorName: String(row.authorName || ""),
         authorRole: roleOf(row.authorRole),
+        stageId: row.stageId ? String(row.stageId) : undefined,
+        stageName: String(row.stageName || "") || undefined,
         createdAt: String(row.createdAt || ""),
         on: row.on === "job" ? "job" : "estimate",
       } satisfies ProjectUpdate;

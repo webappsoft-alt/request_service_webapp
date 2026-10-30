@@ -5,7 +5,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { AiGeneratedBadge, isAiGenerated } from "@/components/portal/estimate-v2/ai-generated-badge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, CheckCircle2, ChevronDown, ChevronUp, Handshake, HardHat, LayoutTemplate, Link2, Loader2, MapPin, Pencil, Printer, Trash2 } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, ChevronUp, Handshake, HardHat, LayoutTemplate, Link2, Loader2, MapPin, MoreHorizontal, Pencil, Printer, Trash2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { RouteLocationMapDialog } from "@/components/portal/route-location-map-dialog";
 import { defaultAddressFirst, locationCoords, locationText } from "@/components/portal/location-cell";
@@ -104,8 +110,10 @@ import {
   ProjectStagesDialog,
   ProjectStagesPrompt,
   ProjectStagesSummary,
+  STAGES_SUMMARY_ID,
   SectionStageButton,
   shouldAskStages,
+  stagesNeedDates,
 } from "@/components/portal/estimate-v2/project-stages";
 import { fetchTaxRatePercent } from "@/lib/tax/state-tax";
 import {
@@ -593,6 +601,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const [sendOpen, setSendOpen] = useState(false);
   const [acceptOpen, setAcceptOpen] = useState(false);
   const [stagesOpen, setStagesOpen] = useState(false);
+  /** Stages dialog opened by Preview & send for the missing start date: sending continues once it's set. */
+  const [sendAfterDates, setSendAfterDates] = useState(false);
+  /** Stages saved by the dialog, read when it closes (state updates land a render later). */
+  const savedStagesRef = useRef<Estimate["stages"] | null>(null);
   const [acceptStep, setAcceptStep] = useState<"choose" | "job" | "invoice">("choose");
   const [jobStartAt, setJobStartAt] = useState("");
   const [jobDueAt, setJobDueAt] = useState("");
@@ -1020,7 +1032,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const { contractors } = useCrmDirectory();
   const [crewMode, setCrewMode] = useState<EstimateCrewMode | null>(null);
   const [removingCrew, setRemovingCrew] = useState<EstimateCrewMode | null>(null);
-  const crewLocked = opportunity?.status === "won" || opportunity?.status === "lost";
+  // Accepted estimates keep Assign technician / contractor until they become a job (then the job has the crew).
+  const crewLocked = opportunity?.status === "lost" || Boolean(estimate?.jobId);
   const openVisitCount = visits.filter((visit) => !["completed", "cancelled", "no_show"].includes(visit.status)).length;
   const technicianId = opportunity?.assignedEmployeeId || "";
   const technicianLabel = useMemo(() => {
@@ -1641,6 +1654,12 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
   /** Runs on "Send for approval": save the sheet, finalize a draft, and return what to share. */
   async function prepareForSend(): Promise<Estimate | null> {
+    // A project with stages goes to the customer with its start date (Build estimate doesn't need it).
+    if (stagesNeedDates(estimate?.stages)) {
+      setSendOpen(false);
+      askStartDate();
+      return null;
+    }
     const saved = await saveEstimateDraft({ silent: true, reload: false });
     if (!saved?.id) return null;
     let current: Estimate = saved;
@@ -1683,6 +1702,35 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     offerSaveTemplate(() => askStagesThen(undefined, built));
   }
 
+  /**
+   * Scheduled stages already say when the work runs (first stage start → last stage end), so the
+   * job takes those dates without asking. Otherwise the Pro picks the start and due dates.
+   */
+  function convertToJob() {
+    const dated = (estimate?.stages || []).filter((stage) => stage.startDate);
+    if (dated.length) {
+      const start = dated.map((stage) => stage.startDate!.slice(0, 10)).sort()[0];
+      const due = dated.map((stage) => (stage.endDate || stage.startDate)!.slice(0, 10)).sort().at(-1)!;
+      void handleAcceptance("schedule_later", { start, due });
+      return;
+    }
+    setAcceptStep("job");
+    setAcceptOpen(true);
+  }
+
+  /** The customer accepted: converting / invoicing are the next steps, sending is secondary. */
+  const accepted = estimate?.status === "accepted" || estimate?.status === "converted_to_job";
+
+  function saveDraftNow() {
+    void saveEstimateDraft().then((saved) => {
+      if (saved) offerSaveTemplate();
+    });
+  }
+
+  function sendNow() {
+    offerSaveTemplate(() => askStagesThen(openSendDialog));
+  }
+
   /** Ask "multi-day project?" first when it applies (several sections, no stages, not answered yet). */
   function askStagesThen(next?: () => void, target: Estimate | null = estimate) {
     const sectionCount = lineSections.filter(Boolean).length;
@@ -1690,7 +1738,34 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       setStagePrompt({ then: next });
       return;
     }
+    // Sending (not Build estimate) needs the project start date first.
+    if (next === openSendDialog && target?.id && stagesNeedDates(target.stages)) {
+      askStartDate();
+      return;
+    }
     next?.();
+  }
+
+  /** Open the stages dialog asking for the start date; sending continues once it's saved. */
+  function askStartDate() {
+    savedStagesRef.current = null;
+    setSendAfterDates(true);
+    setStagesOpen(true);
+  }
+
+  /** Stages dialog closed: carry on to sending, or point at the missing start date. */
+  function onStagesOpenChange(next: boolean) {
+    setStagesOpen(next);
+    if (next || !sendAfterDates) return;
+    setSendAfterDates(false);
+    if (stagesNeedDates(savedStagesRef.current ?? estimate?.stages)) {
+      toast.error("Set the start date first", {
+        description: "Pick when the first stage starts, then send the estimate to the customer.",
+      });
+      document.getElementById(STAGES_SUMMARY_ID)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    openSendDialog();
   }
 
   /**
@@ -1788,17 +1863,21 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
   async function handleAcceptance(
     nextAction: "start_now" | "schedule_later" | "invoice_now",
+    /** Job dates decided elsewhere (the scheduled stages) instead of the dialog's fields. */
+    dates?: { start: string; due: string },
   ) {
     if (!opportunity || !estimate?.id) return;
+    const startAt = dates?.start ?? jobStartAt;
+    const dueAt = dates?.due ?? jobDueAt;
     if (nextAction === "invoice_now") {
       if (!invoiceDueAt) {
         toast.error("Set the invoice due date before creating it.");
         return;
       }
-    } else if (!jobStartAt || !jobDueAt) {
+    } else if (!startAt || !dueAt) {
       toast.error("Set the job start and due dates.");
       return;
-    } else if (jobDueAt < jobStartAt) {
+    } else if (dueAt < startAt) {
       toast.error("Due date must be on or after the start date.");
       return;
     }
@@ -1812,8 +1891,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           estimate.status !== "converted_to_job",
         signedBy: "Customer (office)",
         title: opportunity.title,
-        dueAt: nextAction === "invoice_now" ? invoiceDueAt : jobDueAt,
-        scheduledAt: nextAction === "invoice_now" ? undefined : jobStartAt,
+        dueAt: nextAction === "invoice_now" ? invoiceDueAt : dueAt,
+        scheduledAt: nextAction === "invoice_now" ? undefined : startAt,
       });
       if (nextAction === "invoice_now") {
         toast.success(
@@ -2453,80 +2532,81 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       </p>
                     ) : null}
                   </div>
+                  {/*
+                    Next step up front: Save draft + Send before the customer answers; Convert to job /
+                    Create invoice (or Open job / invoice) after they accept. The rest is under "More". An accepted
+                    estimate is locked (signed), so it can't be saved or sent again.
+                  */}
                   <div className="flex flex-wrap items-center justify-end gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5"
-                      onClick={() => setMapOpen(true)}
-                    >
-                      <MapPin className="size-3.5 text-primary" />
-                      View on map
-                    </Button>
                     {(!estimate || estimate.id === autoCreatedEstimateId) && !showVisits && !estimateLocked ? (
                       <Button size="sm" disabled={saving} onClick={() => void buildEstimateNow()}>
                         Build estimate
                       </Button>
                     ) : null}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={saving || estimateLocked}
-                      onClick={() =>
-                        void saveEstimateDraft().then((saved) => {
-                          if (saved) offerSaveTemplate();
-                        })
-                      }
-                    >
-                      Save draft
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={saving || !estimate?.id}
-                      onClick={() => void copyShareLink()}
-                    >
-                      <Link2 className="size-3.5" />
-                      Copy share link
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={saving || estimateLocked}
-                      onClick={() => offerSaveTemplate(() => askStagesThen(openSendDialog))}
-                    >
-                      {sendButtonLabel}
-                    </Button>
-                    {/* Only after the customer accepts — never while still awaiting their response. */}
-                    {(estimate?.status === "accepted" ||
-                      estimate?.status === "converted_to_job") ? (
+                    {accepted ? (
                       <>
-                        {estimate.jobId ? (
-                          <Button size="sm" variant="outline" asChild>
-                            <Link href={`/pro/dashboard/jobs/${estimate.jobId}`}>
-                              Open job
-                            </Link>
-                          </Button>
-                        ) : null}
-                        {estimate.invoiceId ? (
-                          <Button size="sm" variant="outline" asChild>
-                            <Link href={`/pro/dashboard/invoices/${estimate.invoiceId}`}>
-                              Open invoice
-                            </Link>
-                          </Button>
-                        ) : null}
                         {/* With a job, the invoice comes from the job when the work is done. */}
-                        {!estimate.jobId ? (
+                        {!estimate?.jobId ? (
                           <Button
                             size="sm"
-                            variant="secondary"
                             disabled={saving}
-                            onClick={() => setAcceptOpen(true)}
+                            onClick={convertToJob}
                           >
-                            {estimate.invoiceId ? "Convert to job" : "Create job or invoice…"}
+                            {saving && !acceptOpen ? "Creating job…" : "Convert to job"}
+                          </Button>
+                        ) : null}
+                        {!estimate?.jobId && !estimate?.invoiceId ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={saving}
+                            onClick={() => {
+                              setAcceptStep("invoice");
+                              setAcceptOpen(true);
+                            }}
+                          >
+                            Create invoice
+                          </Button>
+                        ) : null}
+                        {estimate?.jobId ? (
+                          <Button size="sm" asChild>
+                            <Link href={`/pro/dashboard/jobs/${estimate.jobId}`}>Open job</Link>
+                          </Button>
+                        ) : null}
+                        {estimate?.invoiceId ? (
+                          <Button size="sm" variant="outline" asChild>
+                            <Link href={`/pro/dashboard/invoices/${estimate.invoiceId}`}>Open invoice</Link>
                           </Button>
                         ) : null}
                       </>
-                    ) : null}
+                    ) : (
+                      <>
+                        <Button size="sm" variant="outline" disabled={saving || estimateLocked} onClick={saveDraftNow}>
+                          Save draft
+                        </Button>
+                        <Button size="sm" disabled={saving || estimateLocked} onClick={sendNow}>
+                          {sendButtonLabel}
+                        </Button>
+                      </>
+                    )}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="outline" className="gap-1.5" aria-label="More actions">
+                          <MoreHorizontal className="size-4" />
+                          More
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onSelect={() => setMapOpen(true)}>
+                          <MapPin className="size-4 text-primary" />
+                          View on map
+                        </DropdownMenuItem>
+                        <DropdownMenuItem disabled={saving || !estimate?.id} onSelect={() => void copyShareLink()}>
+                          <Link2 className="size-4" />
+                          Copy share link
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
 
@@ -2821,12 +2901,16 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         <>
           <ProjectStagesDialog
             open={stagesOpen}
-            onOpenChange={setStagesOpen}
+            onOpenChange={onStagesOpenChange}
+            requireDates={sendAfterDates}
             estimateId={estimate.id}
             estimateNumber={estimate.number || opportunity?.number || "Estimate"}
             stages={estimate.stages || []}
             sections={lineSections}
-            onSaved={(stages) => setEstimate((current) => (current ? { ...current, stages } : current))}
+            onSaved={(stages) => {
+              savedStagesRef.current = stages;
+              setEstimate((current) => (current ? { ...current, stages } : current));
+            }}
           />
           <ProjectStagesPrompt
             open={Boolean(stagePrompt)}

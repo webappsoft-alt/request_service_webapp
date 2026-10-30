@@ -5,6 +5,12 @@
 
 export type ProjectStageStatus = "pending" | "in_progress" | "completed";
 
+/** A field update on one stage: new progress and/or a note (e.g. why it is late). */
+export type StageProgressInput = { status?: ProjectStageStatus; note?: string };
+
+/** What a stage shows: its progress, or Late once its last day passed before it was completed. */
+export type StageDisplayStatus = ProjectStageStatus | "late";
+
 export type ProjectStage = {
   id: string;
   name: string;
@@ -16,6 +22,10 @@ export type ProjectStage = {
   /** Calendar dates once scheduled (ISO). */
   startDate?: string;
   endDate?: string;
+  /** When the crew started / finished it, and who last changed its progress. */
+  startedAt?: string;
+  completedAt?: string;
+  statusUpdatedBy?: string;
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -47,6 +57,9 @@ export function mapProjectStages(raw: unknown): ProjectStage[] {
         status,
         startDate: isoOrUndefined(row.startDate),
         endDate: isoOrUndefined(row.endDate),
+        startedAt: isoOrUndefined(row.startedAt),
+        completedAt: isoOrUndefined(row.completedAt),
+        statusUpdatedBy: String(row.statusUpdatedBy || "") || undefined,
       },
       order: Number.isFinite(Number(row.order)) ? Number(row.order) : index,
     });
@@ -70,16 +83,39 @@ export function formatStageDuration({ days, hours }: { days: number; hours: numb
   return parts.join(" ") || "—";
 }
 
-export function stageStatusLabel(status: ProjectStageStatus) {
-  return status === "completed" ? "Completed" : status === "in_progress" ? "In progress" : "Not started";
+/** Calendar dates are UTC days: late when the last one ended before today and it isn't completed. */
+export function isStageLate(
+  stage: { status: ProjectStageStatus; startDate?: string; endDate?: string },
+  now = new Date(),
+) {
+  if (stage.status === "completed") return false;
+  const last = stage.endDate || stage.startDate;
+  if (!last) return false;
+  return new Date(last).getTime() < Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-export function stageStatusTone(status: ProjectStageStatus) {
+export function stageDisplayStatus(stage: { status: ProjectStageStatus; startDate?: string; endDate?: string }): StageDisplayStatus {
+  return isStageLate(stage) ? "late" : stage.status;
+}
+
+export function stageStatusLabel(status: StageDisplayStatus) {
+  return status === "completed"
+    ? "Completed"
+    : status === "in_progress"
+      ? "In progress"
+      : status === "late"
+        ? "Late"
+        : "Pending";
+}
+
+export function stageStatusTone(status: StageDisplayStatus) {
   return status === "completed"
     ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
     : status === "in_progress"
       ? "bg-sky-50 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300"
-      : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+      : status === "late"
+        ? "bg-rose-50 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
+        : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
 }
 
 /** Share of stages completed, 0–100. */

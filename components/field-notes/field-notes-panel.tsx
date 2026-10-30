@@ -125,6 +125,7 @@ export function FieldNotesPanel({
                   <span className="font-semibold text-foreground">{note.authorName || noteRoleLabel(note.authorRole)}</span>
                   <span>{noteRoleLabel(note.authorRole)}</span>
                   <span>· {formatWhen(note.createdAt)}</span>
+                  {note.stageName ? <span>· Stage: {note.stageName}</span> : null}
                   {note.visibleToCustomer ? (
                     <span className="rounded-full bg-emerald-50 px-1.5 py-px text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
                       Customer can see

@@ -3,6 +3,7 @@ import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { getData } from "@/components/api/sliceHttp";
 import { userApi } from "@/components/api/ApiRoutesFile";
 import type { RootState } from "@/store";
+import { mapProjectStages, type ProjectStage } from "@/lib/project-stages";
 
 export const CUSTOMER_QUOTE_REQUESTS_PAGE_LIMIT = 10;
 
@@ -60,6 +61,9 @@ export type CustomerApiEstimate = {
   requestId: string | null;
   jobId: string | null;
   jobNumber?: string | null;
+  jobStatus?: string | null;
+  /** Project stages (progress and dates), for the dashboard's active projects. */
+  stages?: ProjectStage[];
   createdAt?: string;
   updatedAt?: string;
   provider?: {
@@ -356,6 +360,8 @@ export const fetchCustomerEstimates = createAsyncThunk(
           requestId: stringValue(row.requestId) || null,
           jobId: stringValue(row.jobId) || null,
           jobNumber: stringValue(row.jobNumber) || null,
+          jobStatus: stringValue(row.jobStatus) || null,
+          stages: mapProjectStages(row.stages),
           createdAt: stringValue(row.createdAt) || undefined,
           updatedAt: stringValue(row.updatedAt) || undefined,
           provider: provider

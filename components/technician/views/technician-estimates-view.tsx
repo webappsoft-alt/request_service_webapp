@@ -27,7 +27,8 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { formatHours } from "@/lib/time-tracking";
 import { technicianPaths } from "@/lib/technician-paths";
 import { FieldNotesPanel } from "@/components/field-notes/field-notes-panel";
-import { addTechnicianNote, listTechnicianNotes } from "@/lib/api/technician-client";
+import { StageProgressPanel } from "@/components/field-notes/stage-progress-panel";
+import { addTechnicianNote, listTechnicianNotes, listTechnicianStages, updateTechnicianStage } from "@/lib/api/technician-client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   TECH_PAGE_SIZE,
@@ -347,6 +348,13 @@ export function TechnicianEstimateDetailView({ id }: { id: string }) {
               <ClockControl
                 target={{ kind: "estimate", id: estimate.id }}
                 site={{ location, record: { recordType: "estimate", recordNumber: estimate.number, customerName: name } }}
+                disabled={!data.clockIn.allowed}
+                disabledReason={data.clockIn.reason || undefined}
+              />
+              <StageProgressPanel
+                recordKey={estimate.id}
+                load={() => listTechnicianStages("estimate", estimate.id)}
+                update={(stageId, input) => updateTechnicianStage("estimate", estimate.id, stageId, input)}
               />
               <div className="grid gap-3 lg:grid-cols-3">
                 <DetailCard title="Customer">

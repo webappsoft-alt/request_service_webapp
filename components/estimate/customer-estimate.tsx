@@ -47,6 +47,7 @@ import {
   showApiErrorToast,
 } from "@/components/api/apiFuntions";
 import { publicApi, userApi } from "@/components/api/ApiRoutesFile";
+import { subscribeRealtime } from "@/components/realtime/realtime-provider";
 import { CustomerProjectProgress } from "@/components/estimate/customer-project-progress";
 import { mapProjectUpdates, type ProjectUpdate } from "@/lib/field-notes";
 import { mapProjectStages, type ProjectStage } from "@/lib/project-stages";
@@ -665,6 +666,27 @@ export function CustomerEstimatePage({
   }, [load]);
 
   const estimateId = snapshot?.estimateId || String(estimateIdProp || "").trim();
+
+  // Stage progress and crew notes update live while the page is open.
+  useEffect(() => {
+    if (!estimateId || !accessKey) return;
+    return subscribeRealtime((detail) => {
+      if (detail.type !== "ESTIMATE_UPDATED") return;
+      if (stringValue(asRecord(detail.payload)?.estimateId) !== estimateId) return;
+      const request = viaUserApi
+        ? getData(userApi.estimate(accessKey), undefined, { silent: true, force: true })
+        : getData(publicApi.estimate(accessKey), undefined, { token: null, skipLogoutOn401: true, silent: true, force: true });
+      void request
+        .then((response) => {
+          const root = asRecord(response);
+          const data = asRecord(root?.data) ?? root;
+          if (!data || root?.success === false) return;
+          setProjectStages(mapProjectStages(data.stages));
+          setProjectUpdates(mapProjectUpdates(data.projectUpdates));
+        })
+        .catch(() => undefined);
+    });
+  }, [estimateId, accessKey, viaUserApi]);
   const canSign = Boolean(
     snapshot && !approval && canCustomerSignStatus(snapshot.status),
   );

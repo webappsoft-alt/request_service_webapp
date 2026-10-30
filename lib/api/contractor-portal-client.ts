@@ -1,7 +1,8 @@
 import { mapFieldNote, mapFieldNotes, type FieldNote } from "@/lib/field-notes";
 import type { DeviceLocation } from "@/lib/geolocation";
 import { contractorPortalApi, providerCrmApi, technicianApi } from "@/components/api/ApiRoutesFile";
-import { deleteData, getData, postData, putData } from "@/components/api/sliceHttp";
+import { deleteData, getData, patchData, postData, putData } from "@/components/api/sliceHttp";
+import { mapProjectStages, type ProjectStage, type StageProgressInput } from "@/lib/project-stages";
 import {
   mapLocationReport,
   mapTimeEntry,
@@ -928,4 +929,15 @@ export async function addContractorJobNote(
   input: { content: string; visibleToCustomer: boolean },
 ): Promise<FieldNote | null> {
   return mapFieldNote(dataOf(await postData(contractorPortalApi.jobNotes(jobId), input, { silent: true })));
+}
+
+/** Project stages of an assigned job. */
+export async function listContractorJobStages(jobId: string): Promise<ProjectStage[]> {
+  return mapProjectStages(asRecord(dataOf(await getData(contractorPortalApi.jobStages(jobId), undefined, quiet))).stages);
+}
+
+/** Start / complete a stage and/or note a delay; returns the updated stages. */
+export async function updateContractorJobStage(jobId: string, stageId: string, input: StageProgressInput): Promise<ProjectStage[]> {
+  const endpoint = `${contractorPortalApi.jobStages(jobId)}/${stageId}`;
+  return mapProjectStages(asRecord(dataOf(await patchData(endpoint, input, { silent: true }))).stages);
 }

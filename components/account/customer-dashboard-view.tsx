@@ -15,6 +15,7 @@ import {
   enterStyle,
 } from "@/components/account/customer-dashboard-widgets";
 import { useCustomerPendingBadge } from "@/components/account/use-customer-pending-badge";
+import { CustomerActiveProjects } from "@/components/account/customer-active-projects";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill, moneyTone } from "@/components/portal/status-pill";
 import { estimateStatusToneClass } from "@/lib/data/estimate-v2-status";
@@ -398,6 +399,11 @@ export function CustomerDashboardView() {
           note={unreadMessages ? `${unreadMessages} unread message${unreadMessages === 1 ? "" : "s"}` : "Chat with professionals"}
           href={customerPaths.messages}
         />
+      </div>
+
+      {/* Ongoing / upcoming work with stage progress */}
+      <div style={enterStyle(5)} className={ENTER_CLASS}>
+        <CustomerActiveProjects estimates={estimates} />
       </div>
 
       {/* Visual summaries */}

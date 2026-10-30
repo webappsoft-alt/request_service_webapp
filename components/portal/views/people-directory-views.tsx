@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { takeAddParam } from "@/lib/crew-links";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Archive, ArchiveRestore, CheckCircle2, Loader2, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -107,6 +108,13 @@ export function ContractorsView() {
   const { contractors: directoryRows, remove } = useCrmDirectory();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<PortalContractor | null>(null);
+
+  // Opened from a crew picker ("Add technician" / "Add contractor"): start with the add form.
+  useEffect(() => {
+    void Promise.resolve().then(() => {
+      if (takeAddParam()) setOpen(true);
+    });
+  }, []);
   const [deleteTarget, setDeleteTarget] = useState<PortalContractor | null>(null);
   const [deleting, setDeleting] = useState(false);
 

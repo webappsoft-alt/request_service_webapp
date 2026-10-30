@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,7 +35,6 @@ import {
   originLabel,
   type CustomerListFilter,
 } from "@/lib/data/lead-origins";
-import { AccountBadge } from "@/components/portal/account-badge";
 import { getServiceCategoryById } from "@/lib/data/services";
 import {
   createEstimateV2Opportunity,
@@ -43,7 +43,14 @@ import {
   listEstimateV2Opportunities,
   type PrepChoice,
 } from "@/lib/api/estimate-v2-client";
-import { getCustomer, getRequest, queryCustomers, updateCustomer } from "@/lib/api/crm-client";
+import {
+  addRegisteredCustomer,
+  getCustomer,
+  getRequest,
+  queryPickerCustomers,
+  updateCustomer,
+  type PickerCustomer,
+} from "@/lib/api/crm-client";
 import {
   findTemplateCategory,
   getEstimateTemplateCatalog,
@@ -52,9 +59,8 @@ import {
 import { QuoteAnswersCard, quoteNotesFromDetails } from "@/components/portal/quote-answers-card";
 import type { QuoteAnswer } from "@/lib/data/portal";
 import type { ServiceAddress } from "@/lib/types";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthProvider, selectAuthUser } from "@/store/authSlice";
-import { fetchCustomers } from "@/store/customersSlice";
 import { cn } from "@/lib/utils";
 
 const EMPTY_PROPERTY: AddressFieldsValue = {
@@ -102,6 +108,9 @@ function serviceAddressToFields(addr?: ServiceAddress | null): AddressFieldsValu
 
 type Step = "customer" | "request" | "prep";
 
+/** Customers per page in the picker ("Load more" fetches the next page). */
+const PICKER_PAGE_SIZE = 10;
+
 function addressLine(addr: {
   address?: string;
   street?: string;
@@ -120,12 +129,10 @@ export function NewEstimateCreateView() {
   const searchParams = useSearchParams();
   const requestParam = String(searchParams.get("request") || "").trim();
   const customerParam = String(searchParams.get("customer") || "").trim();
-  const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
   const authProvider = useAppSelector(selectAuthProvider);
   const reduxCustomers = useAppSelector((state) => state.customers?.items || []);
-  const customersLoading = useAppSelector((state) => Boolean(state.customers?.loading));
   const { customers: directoryCustomers } = useCrmDirectory();
 
   const providerCategories = useMemo(() => {
@@ -158,7 +165,13 @@ export function NewEstimateCreateView() {
   const [customerQuery, setCustomerQuery] = useState("");
   /** Source filter for the picker ("" = all). Fetched on its own, so the Customers page filter is untouched. */
   const [customerOrigin, setCustomerOrigin] = useState<CustomerListFilter | "">("");
-  const [originResults, setOriginResults] = useState<{ key: string; items: PortalCustomerCrm[] } | null>(null);
+  /** The picker's loaded pages for the current search + source (10 per page, "Load more"). */
+  const [picker, setPicker] = useState<{ key: string; items: PickerCustomer[]; page: number; total: number; hasMore: boolean } | null>(null);
+  /** Pages loaded for one search + source; a new search starts again from page 1. */
+  const [pickerMore, setPickerMore] = useState<{ key: string; page: number }>({ key: "", page: 1 });
+  const [pickerReload, setPickerReload] = useState(0);
+  /** A registered site account being added to the Pro's customers. */
+  const [addingAccountId, setAddingAccountId] = useState("");
   const [addressId, setAddressId] = useState("");
 
   const [newProperty, setNewProperty] = useState<AddressFieldsValue>(EMPTY_PROPERTY);
@@ -176,11 +189,6 @@ export function NewEstimateCreateView() {
     auth.hydrated &&
     Boolean(auth.token) &&
     (user?.role === "provider" || auth.role === "provider");
-
-  useEffect(() => {
-    if (!useApi) return;
-    void dispatch(fetchCustomers({ force: true, limit: 100 }));
-  }, [dispatch, useApi]);
 
   // Reuse existing opportunity for this lead, otherwise prefill from the request.
   useEffect(() => {
@@ -255,59 +263,57 @@ export function NewEstimateCreateView() {
   // A subcategory from another category no longer applies once the category changes.
   const validSubcategory = subcategoryOptions.some((item) => item.name === subcategoryName) ? subcategoryName : "";
 
+  // Picker list from the customers API, 10 per page: this Pro's customers (every source), then every
+  // customer registered on the site ("All sources", "Website", "Has account"). Searched on the server.
+  const pickerKey = `${customerOrigin}|${customerQuery.trim()}|${pickerReload}`;
+  const pickerPage = pickerMore.key === pickerKey ? pickerMore.page : 1;
   useEffect(() => {
-    if (!useApi || !customerQuery.trim()) return;
-    const handle = window.setTimeout(() => {
-      void dispatch(
-        fetchCustomers({
-          force: true,
-          limit: 50,
-          search: customerQuery.trim(),
-          page: 1,
-        }),
-      );
-    }, 300);
-    return () => window.clearTimeout(handle);
-  }, [customerQuery, dispatch, useApi]);
-
-  // With a source picked, list exactly what the API returns for that source (+ search).
-  const originKey = customerOrigin ? `${customerOrigin}|${customerQuery.trim()}` : "";
-  useEffect(() => {
-    if (!useApi || !originKey) return;
-    const [origin, search] = [customerOrigin, customerQuery.trim()];
+    if (!useApi) return;
+    const [origin, search, page] = [customerOrigin, customerQuery.trim(), pickerPage];
     let cancelled = false;
-    const handle = window.setTimeout(() => {
-      queryCustomers({
-        origin: origin && !isAccountFilter(origin) ? origin : undefined,
-        account: isAccountFilter(origin) ? origin : undefined,
-        search: search || undefined,
-        page: 1,
-        limit: 100,
-        silent: true,
-        force: true,
-      })
-        .then((result) => {
-          if (!cancelled) setOriginResults({ key: originKey, items: result.items });
+    const handle = window.setTimeout(
+      () => {
+        queryPickerCustomers({
+          origin: origin && !isAccountFilter(origin) ? origin : undefined,
+          account: origin && isAccountFilter(origin) ? origin : undefined,
+          search,
+          page,
+          limit: PICKER_PAGE_SIZE,
         })
-        .catch(() => {
-          if (!cancelled) setOriginResults({ key: originKey, items: [] });
-        });
-    }, search ? 300 : 0);
+          .then((result) => {
+            if (cancelled) return;
+            setPicker((prev) => ({
+              key: pickerKey,
+              items: page > 1 && prev?.key === pickerKey ? [...prev.items, ...result.items] : result.items,
+              page,
+              total: result.total,
+              hasMore: result.hasMore,
+            }));
+          })
+          .catch(() => {
+            if (cancelled) return;
+            if (page === 1) setPicker({ key: pickerKey, items: [], page, total: 0, hasMore: false });
+            else toast.error("Couldn't load more customers. Please try again.");
+          });
+      },
+      search && pickerPage === 1 ? 300 : 0,
+    );
     return () => {
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [customerOrigin, customerQuery, originKey, useApi]);
-  const originItems = originKey && originResults?.key === originKey ? originResults.items : null;
-  const originLoading = Boolean(originKey) && !originItems;
+  }, [customerOrigin, customerQuery, pickerKey, pickerPage, useApi]);
+  const pickerItems = picker?.key === pickerKey ? picker.items : null;
+  const pickerLoading = !pickerItems || (picker?.page ?? 0) < pickerPage;
 
   const customers = useMemo(() => {
     const map = new Map<string, PortalCustomerCrm>();
     for (const item of [
       ...directoryCustomers,
       ...reduxCustomers,
+      ...(pickerItems || []).filter((item) => !item.registeredUserId),
+      // Saved on this page (new property, new customer): newest, so it wins over the loaded lists.
       ...localCustomers,
-      ...(originItems || []),
     ]) {
       // Keep the origin label when a source without it (directory) holds the same customer.
       if (item?.id) {
@@ -316,7 +322,7 @@ export function NewEstimateCreateView() {
       }
     }
     return Array.from(map.values());
-  }, [directoryCustomers, localCustomers, reduxCustomers, originItems]);
+  }, [directoryCustomers, localCustomers, reduxCustomers, pickerItems]);
 
   const selectedCustomer = useMemo(
     () => customers.find((item) => item.id === customerId) || null,
@@ -343,22 +349,38 @@ export function NewEstimateCreateView() {
     };
   }, [pinnedCustomer, pinnedCustomerId, useApi]);
 
-  const filteredCustomers = useMemo(() => {
-    const q = customerQuery.trim().toLowerCase();
-    const matches = (item: PortalCustomerCrm) =>
-      !q || `${crmCustomerName(item)} ${item.email || ""} ${item.phone || ""}`.toLowerCase().includes(q);
-    if (customerOrigin) {
-      // Server already filtered by source + search; keep the API order.
-      const list = (originItems || []).filter(matches);
-      if (!pinnedCustomer || !list.some((item) => item.id === pinnedCustomer.id)) return list;
-      return [pinnedCustomer, ...list.filter((item) => item.id !== pinnedCustomer.id)];
-    }
-    const list = customers.filter(matches).slice(0, 40);
-    // The customer this estimate was started for stays at the very top (while it matches the search).
-    if (!pinnedCustomer || !matches(pinnedCustomer)) return list;
+  const filteredCustomers = useMemo((): PickerCustomer[] => {
+    // The server already searched and filtered; keep its order.
+    const list = pickerItems || [];
+    // The customer this estimate was started for stays at the very top (when no search hides it).
+    if (!pinnedCustomer || (customerQuery.trim() && !list.some((item) => item.id === pinnedCustomer.id))) return list;
     return [pinnedCustomer, ...list.filter((item) => item.id !== pinnedCustomer.id)];
-  }, [customers, customerQuery, customerOrigin, originItems, pinnedCustomer]);
-  const pickerLoading = customerOrigin ? originLoading : customersLoading;
+  }, [pickerItems, customerQuery, pinnedCustomer]);
+
+  /** Pick a row; a registered site account is added to the Pro's customers first. */
+  async function pickCustomer(item: PickerCustomer) {
+    if (!item.registeredUserId) {
+      setCustomerId(item.id);
+      return;
+    }
+    if (addingAccountId) return;
+    setAddingAccountId(item.registeredUserId);
+    try {
+      const saved = await addRegisteredCustomer(item);
+      if (!saved?.id) throw new Error("The customer could not be added.");
+      setLocalCustomers((prev) => [...prev.filter((row) => row.id !== saved.id), saved]);
+      // The row now stands for the Pro's own customer.
+      setPicker((prev) =>
+        prev ? { ...prev, items: prev.items.map((row) => (row.id === item.id ? saved : row)) } : prev,
+      );
+      setCustomerId(saved.id);
+      toast.success(`${crmCustomerName(saved)} added to your customers.`);
+    } catch (err) {
+      toast.error("Couldn't add this customer", { description: extractErrorMessage(err) || "Please try again." });
+    } finally {
+      setAddingAccountId("");
+    }
+  }
 
   const addresses = selectedCustomer?.addresses || [];
 
@@ -453,7 +475,6 @@ export function NewEstimateCreateView() {
       setNewProperty(EMPTY_PROPERTY);
       setSameAsCustomerAddress(false);
       toast.success("Property added.");
-      void dispatch(fetchCustomers({ force: true, limit: 100, page: 1, search: "" }));
       return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not add property.");
@@ -622,7 +643,7 @@ export function NewEstimateCreateView() {
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <Input
                 className="sm:flex-1"
-                placeholder="Search by name, email, or phone"
+                placeholder="Search by name or email"
                 value={customerQuery}
                 onChange={(e) => setCustomerQuery(e.target.value)}
               />
@@ -640,12 +661,13 @@ export function NewEstimateCreateView() {
                   Loading customers…
                 </p>
               ) : null}
-              {filteredCustomers.map((item: PortalCustomerCrm) => (
+              {filteredCustomers.map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   aria-pressed={customerId === item.id}
-                  onClick={() => setCustomerId(item.id)}
+                  disabled={Boolean(addingAccountId)}
+                  onClick={() => void pickCustomer(item)}
                   className={cn(
                     "flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition",
                     customerId === item.id
@@ -656,15 +678,19 @@ export function NewEstimateCreateView() {
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="flex items-center gap-1.5">
                       <span className="font-medium">{crmCustomerName(item)}</span>
-                      {item.origin && item.origin !== "manual" ? (
+                      {/* One label: a site account, else where the customer came from. */}
+                      {item.registeredUserId || item.account === "registered" ? (
+                        <span className="rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-medium text-primary">
+                          {addingAccountId && addingAccountId === item.registeredUserId ? "Adding…" : "Registered on site"}
+                        </span>
+                      ) : item.origin && item.origin !== "manual" ? (
                         <span className="rounded-full bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
                           {originLabel(item.origin)}
                         </span>
                       ) : null}
-                      <AccountBadge account={item.account} />
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {[item.email, item.phone].filter(Boolean).join(" · ") || "No contact yet"}
+                      {item.email || "No email yet"}
                     </span>
                   </span>
                   <SelectionMark selected={customerId === item.id} />
@@ -676,6 +702,23 @@ export function NewEstimateCreateView() {
                     ? `No customers match "${customerFilterLabel(customerOrigin)}".`
                     : "No customers match. Create a new customer to continue."}
                 </p>
+              ) : null}
+              {pickerItems?.length && picker ? (
+                <div className="flex flex-col items-center gap-1.5 py-2">
+                  <p className="text-xs text-muted-foreground">
+                    Showing {Math.min(pickerItems.length, picker.total)} of {picker.total}
+                  </p>
+                  {picker.hasMore ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={pickerLoading}
+                      onClick={() => setPickerMore({ key: pickerKey, page: picker.page + 1 })}
+                    >
+                      {pickerLoading ? "Loading…" : "Load more"}
+                    </Button>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </div>
@@ -982,7 +1025,8 @@ export function NewEstimateCreateView() {
           setCustomerId(customer.id);
           // Keep the search box empty so list fetch isn't filtered away from the new customer.
           setCustomerQuery("");
-          void dispatch(fetchCustomers({ force: true, limit: 100, page: 1, search: "" }));
+          setPinnedCustomerId(customer.id);
+          setPickerReload((count) => count + 1);
         }}
       />
     </PortalPage>

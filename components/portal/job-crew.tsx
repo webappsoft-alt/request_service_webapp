@@ -31,6 +31,7 @@ import {
 } from "@/lib/api/contractor-portal-client";
 import { formatMoney } from "@/lib/format";
 import type { Job, JobContractorAssignment } from "@/lib/types";
+import { ADD_CONTRACTOR_HREF } from "@/lib/crew-links";
 
 function errorText(error: unknown, fallback: string) {
   const message = error && typeof error === "object" && "message" in error ? String(error.message) : "";
@@ -178,7 +179,10 @@ function AssignContractorForm({
               selectedLabel={contractorLabel}
               options={paging.options}
               placeholder="Select contractor"
-              emptyLabel="No contractors found."
+              emptyLabel={paging.search ? "No contractors match." : "No contractors yet. Add one to assign them."}
+              addLabel="Add contractor"
+              addPlacement="top"
+              onAdd={() => window.location.assign(ADD_CONTRACTOR_HREF)}
               loading={paging.loading}
               loadingMore={paging.loadingMore}
               hasMore={paging.hasMore}

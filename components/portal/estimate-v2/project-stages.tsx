@@ -20,7 +20,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { saveEstimateStages, scheduleEstimateStages } from "@/lib/api/crm-client";
 import {
   formatStageDuration,
+  isStageLate,
   stageDateRange,
+  stageDisplayStatus,
   stageProgress,
   stageStatusLabel,
   stageTotals,
@@ -83,6 +85,7 @@ export function ProjectStagesDialog({
   stages,
   sections,
   onSaved,
+  requireDates = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -92,6 +95,8 @@ export function ProjectStagesDialog({
   /** Line sections on the estimate, in order ("" = General). */
   sections: string[];
   onSaved: (stages: ProjectStage[]) => void;
+  /** Opened from Preview & send: the start date is needed before the estimate goes out. */
+  requireDates?: boolean;
 }) {
   const [drafts, setDrafts] = useState<DraftStage[]>([]);
   const [schedule, setSchedule] = useState(true);
@@ -165,6 +170,12 @@ export function ProjectStagesDialog({
             and the customer sees the stages and their progress.
           </DialogDescription>
         </DialogHeader>
+        {requireDates ? (
+          <p className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200">
+            <CalendarRange className="mt-0.5 size-4 shrink-0" aria-hidden />
+            Set the start date first: pick when the first stage starts, then Save &amp; schedule to send the estimate.
+          </p>
+        ) : null}
 
         <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
           <div className="hidden grid-cols-[minmax(0,1fr)_80px_80px_140px_32px] gap-2 px-1 text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase sm:grid">
@@ -212,7 +223,7 @@ export function ProjectStagesDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pending">Not started</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="in_progress">In progress</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>
@@ -375,7 +386,7 @@ export function SectionStageButton({
         size="sm"
         variant="outline"
         className={cn("h-7 gap-1 text-xs", stage && "border-primary/40 text-primary")}
-        title={stage ? `${label}: ${stageStatusLabel(stage.status)}` : `Set the time for ${label}`}
+        title={stage ? `${label}: ${stageStatusLabel(stageDisplayStatus(stage))}` : `Set the time for ${label}`}
         onClick={() => setOpen(true)}
       >
         <Clock3 className="size-3" />
@@ -384,7 +395,13 @@ export function SectionStageButton({
           <span
             className={cn(
               "size-1.5 rounded-full",
-              stage.status === "completed" ? "bg-emerald-500" : stage.status === "in_progress" ? "bg-sky-500" : "bg-slate-300",
+              stage.status === "completed"
+                ? "bg-emerald-500"
+                : isStageLate(stage)
+                  ? "bg-rose-500"
+                  : stage.status === "in_progress"
+                    ? "bg-sky-500"
+                    : "bg-slate-300",
             )}
             aria-hidden
           />
@@ -434,7 +451,7 @@ export function SectionStageButton({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pending">Not started</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="in_progress">In progress</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>
@@ -489,10 +506,17 @@ export function SectionStageButton({
 }
 
 /** In the Estimate summary: total project time across the stages, progress, and Schedule. */
+/** Element id of the stages summary (Send scrolls here when the start date is missing). */
+export const STAGES_SUMMARY_ID = "estimate-project-stages";
+
 export function ProjectStagesSummary({ stages, onSchedule }: { stages: ProjectStage[]; onSchedule: () => void }) {
   const scheduled = stages.some((stage) => stage.startDate);
+  const late = stages.filter((stage) => isStageLate(stage)).length;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-white px-4 py-2.5 text-sm dark:border-border-soft dark:bg-card">
+    <div
+      id={STAGES_SUMMARY_ID}
+      className="flex scroll-mt-32 flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 bg-white px-4 py-2.5 text-sm dark:border-border-soft dark:bg-card"
+    >
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-slate-800 dark:text-foreground">
         <Layers className="size-4 text-primary" aria-hidden />
         <span>
@@ -502,6 +526,11 @@ export function ProjectStagesSummary({ stages, onSchedule }: { stages: ProjectSt
           · {stages.length} stage{stages.length === 1 ? "" : "s"} ({stages.map((stage) => stage.name).join(", ")}) ·{" "}
           {stageProgress(stages)}% complete
         </span>
+        {late ? (
+          <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
+            {late} late
+          </span>
+        ) : null}
       </p>
       <Button
         size="sm"
@@ -510,7 +539,7 @@ export function ProjectStagesSummary({ stages, onSchedule }: { stages: ProjectSt
         onClick={onSchedule}
       >
         <CalendarRange className="size-3.5" />
-        {scheduled ? "Reschedule stages" : "Schedule stages"}
+        {scheduled ? "Reschedule stages" : "Set start date"}
       </Button>
     </div>
   );
@@ -598,3 +627,10 @@ export function ProjectStagesPrompt({
     </Dialog>
   );
 }
+
+/** Stages with time but no start date yet: the customer can't see when each stage happens. */
+export function stagesNeedDates(stages: ProjectStage[] | undefined) {
+  const timed = (stages || []).filter((stage) => stage.durationDays > 0 || stage.durationHours > 0);
+  return timed.length > 0 && !timed.some((stage) => stage.startDate);
+}
+

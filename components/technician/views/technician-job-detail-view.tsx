@@ -38,7 +38,8 @@ import { technicianPaths } from "@/lib/technician-paths";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchTechJob } from "@/store/technicianSlice";
 import { FieldNotesPanel } from "@/components/field-notes/field-notes-panel";
-import { addTechnicianNote, listTechnicianNotes } from "@/lib/api/technician-client";
+import { StageProgressPanel } from "@/components/field-notes/stage-progress-panel";
+import { addTechnicianNote, listTechnicianNotes, listTechnicianStages, updateTechnicianStage } from "@/lib/api/technician-client";
 
 const CLOSED_STATUSES = ["cancelled", "paid", "invoiced"];
 
@@ -314,6 +315,11 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
                 site={{ location, record: { recordType: "job", recordNumber: job.number, customerName: name } }}
                 disabled={closed}
                 disabledReason={closed ? `This job is ${job.status}; clocking in is closed.` : undefined}
+              />
+              <StageProgressPanel
+                recordKey={job.id}
+                load={() => listTechnicianStages("job", job.id)}
+                update={(stageId, input) => updateTechnicianStage("job", job.id, stageId, input)}
               />
               <div className="grid gap-3 lg:grid-cols-3">
                 <DetailCard title="Customer">

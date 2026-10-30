@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { assignEstimateV2Crew, type EstimateV2Opportunity } from "@/lib/api/estimate-v2-client";
+import { ADD_CONTRACTOR_HREF, ADD_TECHNICIAN_HREF } from "@/lib/crew-links";
 
 export type EstimateCrewMode = "technician" | "contractor";
 
@@ -99,9 +100,17 @@ export function EstimateCrewDialog({
               id="estimate-crew-person"
               value={value}
               selectedLabel={label}
-              options={[{ id: "", label: "Unassigned" }, ...paging.options]}
-              placeholder="Unassigned"
-              emptyLabel={mode === "technician" ? "No team members found." : "No contractors found."}
+              // "Unassigned" only to remove the person assigned now.
+              options={value ? [{ id: "", label: "Unassigned" }, ...paging.options] : paging.options}
+              placeholder={mode === "technician" ? "Select technician" : "Select contractor"}
+              emptyLabel={
+                paging.search
+                  ? mode === "technician" ? "No team members match." : "No contractors match."
+                  : mode === "technician" ? "No technicians yet. Add one to assign them." : "No contractors yet. Add one to assign them."
+              }
+              addLabel={mode === "technician" ? "Add technician" : "Add contractor"}
+              addPlacement="top"
+              onAdd={() => window.location.assign(mode === "technician" ? ADD_TECHNICIAN_HREF : ADD_CONTRACTOR_HREF)}
               loading={paging.loading}
               loadingMore={paging.loadingMore}
               hasMore={paging.hasMore}

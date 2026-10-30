@@ -355,6 +355,9 @@ export const technicianApi = {
   /** GET / POST — notes on an assigned job (field updates; the office sees them) */
   jobNotes: (id: string) => `technician/jobs/${id}/notes`,
   estimateNotes: (id: string) => `technician/estimates/${id}/notes`,
+  /** GET stages / PATCH one stage (status and/or note). */
+  jobStages: (id: string) => `technician/jobs/${id}/stages`,
+  estimateStages: (id: string) => `technician/estimates/${id}/stages`,
   /** POST: technician asks the office for a change order (reviewed on the job's Requests tab). */
   jobChangeRequests: (id: string) => `technician/jobs/${id}/change-requests`,
   jobChangeOrderAccept: (id: string, orderId: string) => `technician/jobs/${id}/change-orders/${orderId}/accept`,
@@ -392,6 +395,8 @@ export const contractorPortalApi = {
   jobClockOut: (id: string) => `contractor/jobs/${id}/clock-out`,
   /** GET / POST — notes on an assigned job (field updates; the office sees them) */
   jobNotes: (id: string) => `contractor/jobs/${id}/notes`,
+  /** GET stages / PATCH one stage (status and/or note). */
+  jobStages: (id: string) => `contractor/jobs/${id}/stages`,
   activeEntry: "contractor/time-entries/active",
   /** POST — pause / restart the running timer (restart sends the device location) */
   pauseActive: "contractor/time-entries/pause",

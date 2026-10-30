@@ -45,6 +45,8 @@ type PaginatedEntitySelectProps = {
    */
   onAdd?: () => void;
   addLabel?: string;
+  /** "top": the Add action is always the first row of the menu, even when the list is empty (default: bottom). */
+  addPlacement?: "top" | "bottom";
 };
 
 function isNearBottom(el: HTMLElement, threshold = 72) {
@@ -93,6 +95,7 @@ export function PaginatedEntitySelect({
   searchPlaceholder = "Search…",
   onAdd,
   addLabel = "Add",
+  addPlacement = "bottom",
 }: PaginatedEntitySelectProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -250,6 +253,25 @@ export function PaginatedEntitySelect({
     return () => observer.disconnect();
   }, [open, options.length, hasMore, loadingMore]);
 
+  const addRow = (className?: string) =>
+    onAdd ? (
+      <div className={cn("shrink-0 bg-muted/30 p-1.5", className)}>
+        <button
+          type="button"
+          className="flex w-full items-center gap-1.5 rounded-md px-2.5 py-2 text-left text-sm font-medium text-primary hover:bg-primary/5"
+          onMouseDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            closeMenu();
+            onAdd();
+          }}
+        >
+          <Plus className="size-3.5 shrink-0" aria-hidden />
+          {addLabel}
+        </button>
+      </div>
+    ) : null;
+
   const menu = open ? (
     <div
       id={listId}
@@ -266,6 +288,7 @@ export function PaginatedEntitySelect({
         event.stopPropagation();
       }}
     >
+      {addPlacement === "top" ? addRow("border-b border-border") : null}
       <div
         ref={listRef}
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
@@ -277,7 +300,12 @@ export function PaginatedEntitySelect({
           </div>
         ) : null}
 
-        {!loading && !loadingMore && options.length === 0 ? (
+        {/* With the Add row on top, an empty list is just a short note under it. */}
+        {!loading && !loadingMore && options.length === 0 && addPlacement === "top" ? (
+          <p className="px-3 py-3 text-xs text-muted-foreground">{emptyLabel}</p>
+        ) : null}
+
+        {!loading && !loadingMore && options.length === 0 && addPlacement !== "top" ? (
           <div className="flex min-h-32 flex-col items-center justify-center gap-3 px-4 py-6 text-center">
             <div>
               <p className="text-sm font-medium text-foreground">No results</p>
@@ -339,23 +367,7 @@ export function PaginatedEntitySelect({
           <div aria-hidden className="h-1 w-full" data-paginated-sentinel="" />
         ) : null}
       </div>
-      {onAdd && options.length > 0 ? (
-        <div className="shrink-0 border-t border-border bg-muted/30 p-1.5">
-          <button
-            type="button"
-            className="flex w-full items-center gap-1.5 rounded-md px-2.5 py-2 text-left text-sm font-medium text-primary hover:bg-primary/5"
-            onMouseDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              closeMenu();
-              onAdd();
-            }}
-          >
-            <Plus className="size-3.5 shrink-0" aria-hidden />
-            {addLabel}
-          </button>
-        </div>
-      ) : null}
+      {addPlacement === "bottom" && options.length > 0 ? addRow("border-t border-border") : null}
     </div>
   ) : null;
 

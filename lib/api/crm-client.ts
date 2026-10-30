@@ -878,6 +878,51 @@ export async function queryCustomers(query: CrmListQuery = {}) {
   return mapCrmList(response, mapPortalCustomerCrm);
 }
 
+/** A picker row; `registeredUserId` is set for a site account that isn't one of the Pro's customers yet. */
+export type PickerCustomer = PortalCustomerCrm & { registeredUserId?: string };
+
+/**
+ * New-estimate picker (GET /provider/customers with `includeAccounts`): one page of this Pro's
+ * customers (every source), then customer accounts registered on the site that aren't theirs yet.
+ */
+export async function queryPickerCustomers(
+  query: { page?: number; limit?: number; search?: string; origin?: string; account?: string } = {},
+) {
+  const params: Record<string, string | number> = {
+    page: Math.max(1, query.page ?? 1),
+    limit: query.limit ?? 10,
+    includeAccounts: "true",
+  };
+  const search = query.search?.trim();
+  if (search) params.search = search;
+  if (query.origin) params.origin = query.origin;
+  if (query.account) params.account = query.account;
+  const response = await getData(providerCrmApi.customers, params, { silent: true, force: true });
+  const list = mapCrmList<PickerCustomer>(response, (raw) => {
+    const customer = mapPortalCustomerCrm(raw);
+    const row = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+    return customer && row.notInDirectory === true ? { ...customer, registeredUserId: String(row.registeredUserId || customer.id) } : customer;
+  });
+  return { ...list, hasMore: list.page < list.totalPages };
+}
+
+/** Add a registered site account to this Pro's customers (POST /provider/customers, linked to the account). */
+export async function addRegisteredCustomer(account: PickerCustomer) {
+  const response = await postData(
+    providerCrmApi.customers,
+    {
+      firstName: account.firstName || "",
+      lastName: account.lastName || "",
+      email: account.email || "",
+      phone: account.phone || "",
+      source: "website",
+      linkedUserId: account.registeredUserId,
+    },
+    { silent: true },
+  );
+  return mapCrmEntity(response, mapPortalCustomerCrm);
+}
+
 export async function getCustomer(id: string) {
   const detail = await getCustomerDetail(id);
   return detail?.customer ?? null;
@@ -2675,6 +2720,8 @@ export async function querySchedule(query: CrmListQuery = {}, bundle?: CalendarB
         // Pro schedules them. Estimates the Pro creates are unaffected.
         if (est.type === "site_assessment") return;
         if (est.source === "ai_receptionist" && !est.scheduledDate) return;
+        // Converted: the job's card stands for the work now (no second, estimate card).
+        if (est.status === "converted_to_job" || est.jobId) return;
         const dateSource =
           est.scheduledDate ||
           est.siteVisit?.scheduledAt ||

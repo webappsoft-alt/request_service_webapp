@@ -26,7 +26,13 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchContractorJob } from "@/store/contractorPortalSlice";
 import { FieldNotesPanel } from "@/components/field-notes/field-notes-panel";
-import { addContractorJobNote, listContractorJobNotes } from "@/lib/api/contractor-portal-client";
+import { StageProgressPanel } from "@/components/field-notes/stage-progress-panel";
+import {
+  addContractorJobNote,
+  listContractorJobNotes,
+  listContractorJobStages,
+  updateContractorJobStage,
+} from "@/lib/api/contractor-portal-client";
 
 const CLOSED_STATUSES = ["completed", "invoiced", "paid", "cancelled"];
 
@@ -161,6 +167,12 @@ export function ContractorJobDetailView({ id }: { id: string }) {
               </p>
             )}
           </DetailCard>
+
+          <StageProgressPanel
+            recordKey={job.id}
+            load={() => listContractorJobStages(job.id)}
+            update={(stageId, input) => updateContractorJobStage(job.id, stageId, input)}
+          />
 
           <DetailCard title="Requirements">
             <div className="flex flex-col gap-4">

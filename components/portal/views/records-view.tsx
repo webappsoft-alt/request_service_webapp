@@ -198,6 +198,8 @@ export function EstimatesView() {
       setChangesRequestedCount(Math.max(0, Number(total) || 0));
       return;
     }
+    // Recount once each list load finishes, not also when it starts.
+    if (loading) return;
     let cancelled = false;
     void (async () => {
       try {

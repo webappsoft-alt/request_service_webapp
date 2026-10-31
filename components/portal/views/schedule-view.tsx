@@ -37,7 +37,7 @@ import { crmCustomerName } from "@/lib/data/crm-people";
 import { formatDate } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuthUser } from "@/store/authSlice";
-import { fetchTeam } from "@/store/teamSlice";
+import { fetchTeam, TEAM_DEFAULT_LIMIT } from "@/store/teamSlice";
 
 export type ScheduleMemberOption = {
   id: string;
@@ -91,7 +91,7 @@ export function ScheduleView() {
   const crmEnabled = crm.enabled;
   const ensureCrmLoaded = crm.ensureLoaded;
   const reduxTeam = useAppSelector((state) => state.team.items);
-  const { contractors: directoryContractors } = useCrmDirectory();
+  const { contractors: directoryContractors } = useCrmDirectory({ customerLookup: false });
   const { assign, employeeLabel, removeSchedule } = usePortalCrew();
 
   // Per signed-in user, so another account in the same tab never sees this calendar.
@@ -811,7 +811,7 @@ export function ScheduleView() {
 
   useEffect(() => {
     if (!legacyLoad) return;
-    void dispatch(fetchTeam({ limit: 100 }));
+    void dispatch(fetchTeam({ limit: TEAM_DEFAULT_LIMIT }));
     if (crmEnabled) void ensureCrmLoaded();
   }, [crmEnabled, dispatch, ensureCrmLoaded, legacyLoad]);
 

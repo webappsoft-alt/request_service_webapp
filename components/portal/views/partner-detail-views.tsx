@@ -146,7 +146,7 @@ export function VendorDetailView({ id }: { id: string }) {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const { estimates, invoices, requests, provider } = usePortalWorkspace();
-  const { customers } = useCrmDirectory();
+  const { customers } = useCrmDirectory({ customerLookup: false });
   const { events, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
   const crm = useCrmApiData();
@@ -1458,6 +1458,12 @@ function VendorJobsTab({
   }, [dispatch, vendorId]);
 
   const rows = selectVendorsTabRows(tab, vendorId, filterKey, []);
+  // Names for the customers of the rows on screen (looked up by id), else the page's label.
+  const { customers: rowCustomers } = useCrmDirectory({ customerIds: rows.map((row) => row.customerId) });
+  const rowCustomerName = (customerId: string) => {
+    const customer = rowCustomers.find((item) => item.id === customerId);
+    return customer ? crmCustomerName(customer) : customerName(customerId);
+  };
   const listLoading = selectVendorsTabShowLoader(tab, vendorId, filterKey);
 
   return (
@@ -1476,7 +1482,7 @@ function VendorJobsTab({
         invoices,
         events,
         employeeLabel,
-        customerName,
+        customerName: rowCustomerName,
       })}
     />
   );

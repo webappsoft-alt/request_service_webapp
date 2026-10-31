@@ -47,9 +47,10 @@ import { employeeName, type PortalEmployee } from "@/lib/data/portal";
 import { formatDate, visitWallClock } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { DateTimeField } from "@/components/ui/date-time-field";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { useAppSelector } from "@/store/hooks";
 import { selectAuth } from "@/store/authSlice";
-import { fetchTeam } from "@/store/teamSlice";
+import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
+import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-options";
 
 const MEASUREMENT_UNITS = [
   { value: "sq ft", label: "sq ft (area)" },
@@ -108,7 +109,6 @@ function statusLabel(status: string) {
 /** Shared look for every field in the schedule dialog — same height, stroke and fill. */
 const DIALOG_FIELD = "h-10 w-full rounded-lg border-input bg-white px-3 text-sm shadow-none";
 /** Radix Select cannot use "" as an item value. */
-const UNASSIGNED = "__unassigned";
 
 function toLocalInput(value?: string | null) {
   if (!value) return "";
@@ -155,7 +155,6 @@ export function SiteVisitsPanel({
   onCollapsedChange,
 }: SiteVisitsPanelProps) {
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
   const { employees: liveEmployees } = usePortalCrew();
   const [selectedId, setSelectedId] = useState<string>("");
@@ -252,7 +251,20 @@ export function SiteVisitsPanel({
     );
   }, [createdEmployees, employees, liveEmployees]);
 
-  const showTechnicianDropdown = assignableEmployees.length > 0;
+  // Technicians come from the paged, searchable picker (10 at a time), not a bulk team load.
+  const techPaging = usePaginatedCrmOptions("employee", Boolean(auth.token));
+  /** Names of technicians picked from the paged list (saved with the visit). */
+  const [pickedTechNames, setPickedTechNames] = useState<Record<string, string>>({});
+  const techName = (id: string) => {
+    if (!id) return "";
+    const known = assignableEmployees.find((item) => item.id === id);
+    return pickedTechNames[id] || (known ? employeeName(known) : "");
+  };
+  const rememberTechName = (id: string, label?: string) => {
+    if (id && label) setPickedTechNames((prev) => (prev[id] === label ? prev : { ...prev, [id]: label }));
+  };
+  // The picker has its own empty state ("Add technician"), so it shows whenever the API is available.
+  const showTechnicianDropdown = Boolean(auth.token) || assignableEmployees.length > 0;
 
   function openCreateEmployee(target: "visit" | "followUp") {
     setCreateEmployeeTarget(target);
@@ -269,17 +281,14 @@ export function SiteVisitsPanel({
     setCreatedEmployees((prev) =>
       prev.some((item) => String(item.id) === id) ? prev : [...prev, next],
     );
+    techPaging.prependOption({ id, label: employeeName(next) });
+    rememberTechName(id, employeeName(next));
     if (createEmployeeTarget === "followUp") {
       setFollowUpEmployeeId(id);
     } else {
       setEmployeeId(id);
     }
   }
-
-  useEffect(() => {
-    if (!auth.token) return;
-    void dispatch(fetchTeam({ force: true, limit: 100 }));
-  }, [auth.token, dispatch]);
 
   // Drop any previously cached local fake technicians from this panel.
   useEffect(() => {
@@ -380,7 +389,7 @@ export function SiteVisitsPanel({
         assignedEmployeeName: validEmployeeId
           ? employee
             ? employeeName(employee)
-            : selected.assignedEmployeeName || ""
+            : techName(validEmployeeId) || selected.assignedEmployeeName || ""
           : "",
         scheduledAt: nextScheduledAt,
         findings,
@@ -523,7 +532,7 @@ export function SiteVisitsPanel({
         visitTypeLabel: VISIT_TYPE_OPTIONS.find((item) => item.value === followUpType)?.label,
         scheduledAt: new Date(followUpAt).toISOString(),
         assignedEmployeeId: followUpEmployeeId || undefined,
-        assignedEmployeeName: employee ? employeeName(employee) : undefined,
+        assignedEmployeeName: employee ? employeeName(employee) : techName(followUpEmployeeId) || undefined,
         instructions:
           followUpInstructions.trim() || opportunityTitle || "Follow-up site visit",
         status: "scheduled",
@@ -861,23 +870,32 @@ export function SiteVisitsPanel({
                   No technicians yet — create one
                 </button>
               ) : (
-                <Select
-                  value={employeeId || UNASSIGNED}
+                <PaginatedEntitySelect
+                  id="visit-tech"
+                  value={employeeId}
+                  selectedLabel={techName(employeeId) || selected?.assignedEmployeeName || undefined}
+                  // "Unassigned" only to remove the technician assigned now.
+                  options={employeeId ? [{ id: "", label: "Unassigned" }, ...techPaging.options] : techPaging.options}
+                  placeholder="Unassigned"
                   disabled={!canEditCapture || saving}
-                  onValueChange={(value) => setEmployeeId(value === UNASSIGNED ? "" : value)}
-                >
-                  <SelectTrigger id="visit-tech" className={cn(DIALOG_FIELD, "bg-[#fafbfc]")}>
-                    <SelectValue placeholder="Unassigned" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
-                    {assignableEmployees.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {employeeName(item)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  emptyLabel={techPaging.search ? "No team members match." : "No technicians yet. Create one to assign them."}
+                  addLabel="Create technician"
+                  addPlacement="top"
+                  onAdd={() => openCreateEmployee("visit")}
+                  loading={techPaging.loading}
+                  loadingMore={techPaging.loadingMore}
+                  hasMore={techPaging.hasMore}
+                  onLoadMore={techPaging.loadMore}
+                  searchable
+                  searchValue={techPaging.search}
+                  onSearchChange={techPaging.setSearch}
+                  searchPlaceholder="Search team members…"
+                  className={cn(DIALOG_FIELD, "bg-[#fafbfc]")}
+                  onChange={(id, option) => {
+                    setEmployeeId(id);
+                    rememberTechName(id, option?.label);
+                  }}
+                />
               )}
             </div>
             <div className="space-y-1.5">
@@ -1237,22 +1255,31 @@ export function SiteVisitsPanel({
                   No technicians yet — create one
                 </button>
               ) : (
-                <Select
-                  value={followUpEmployeeId || UNASSIGNED}
-                  onValueChange={(value) => setFollowUpEmployeeId(value === UNASSIGNED ? "" : value)}
-                >
-                  <SelectTrigger id="follow-up-tech" className={DIALOG_FIELD}>
-                    <SelectValue placeholder="Unassigned" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
-                    {assignableEmployees.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {employeeName(item)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <PaginatedEntitySelect
+                  id="follow-up-tech"
+                  value={followUpEmployeeId}
+                  selectedLabel={techName(followUpEmployeeId) || undefined}
+                  options={followUpEmployeeId ? [{ id: "", label: "Unassigned" }, ...techPaging.options] : techPaging.options}
+                  placeholder="Unassigned"
+                  disabled={saving}
+                  emptyLabel={techPaging.search ? "No team members match." : "No technicians yet. Create one to assign them."}
+                  addLabel="Create technician"
+                  addPlacement="top"
+                  onAdd={() => openCreateEmployee("followUp")}
+                  loading={techPaging.loading}
+                  loadingMore={techPaging.loadingMore}
+                  hasMore={techPaging.hasMore}
+                  onLoadMore={techPaging.loadMore}
+                  searchable
+                  searchValue={techPaging.search}
+                  onSearchChange={techPaging.setSearch}
+                  searchPlaceholder="Search team members…"
+                  className={DIALOG_FIELD}
+                  onChange={(id, option) => {
+                    setFollowUpEmployeeId(id);
+                    rememberTechName(id, option?.label);
+                  }}
+                />
               )}
             </div>
             <div className="space-y-1.5 sm:col-span-2">

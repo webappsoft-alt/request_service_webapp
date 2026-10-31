@@ -51,8 +51,12 @@ function sortNewestFirst(items: PortalReminder[]) {
   });
 }
 
-export function useReminderLookups() {
-  const { customers, contractors, vendors } = useCrmDirectory();
+/**
+ * Labels / fallback options for reminder & task subjects. Customers are looked up by id only
+ * (`customerIds`: the ones this screen shows); without ids no customer list is fetched.
+ */
+export function useReminderLookups({ customerIds }: { customerIds?: Array<string | null | undefined> } = {}) {
+  const { customers, contractors, vendors } = useCrmDirectory({ customerIds });
   const { employees } = usePortalCrew();
   const { estimates, jobs, invoices, requests, provider } = usePortalWorkspace();
   const records = usePortalRecords();

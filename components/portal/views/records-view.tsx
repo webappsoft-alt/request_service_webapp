@@ -136,7 +136,9 @@ export function EstimatesView() {
   const searchParams = useSearchParams();
   const statusParam = searchParams.get("status") ?? "";
   const { session, provider, requests } = usePortalWorkspace();
-  const { customers } = useCrmDirectory();
+  // Customer names for the rows on screen (looked up by id, not a big customer page).
+  const estimatesRows = useAppSelector((state) => state.estimates?.items);
+  const { customers } = useCrmDirectory({ customerIds: estimatesRows?.map((row) => row.customerId) });
   const records = usePortalRecords();
   const share = useEstimateShare();
   const [actionLoading, setActionLoading] = useState(false);
@@ -857,7 +859,9 @@ export function JobsView() {
   const listFilter = statusParam as "" | Job["status"] | "archived";
   const dispatch = useAppDispatch();
   const { provider, estimates, requests, invoices } = usePortalWorkspace();
-  const { customers } = useCrmDirectory();
+  // Customer names for the rows on screen (looked up by id, not a big customer page).
+  const jobsRows = useAppSelector((state) => state.jobs?.items);
+  const { customers } = useCrmDirectory({ customerIds: jobsRows?.map((row) => row.customerId) });
   const { events, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();
   const [createOpen, setCreateOpen] = useState(false);
@@ -1456,7 +1460,9 @@ export function InvoicesView() {
 
   const { invoices, jobs, estimates, requests, provider } =
     usePortalWorkspace();
-  const { customers } = useCrmDirectory();
+  // Customer names for the rows on screen (looked up by id, not a big customer page).
+  const invoicesRows = useAppSelector((state) => state.invoices?.items);
+  const { customers } = useCrmDirectory({ customerIds: invoicesRows?.map((row) => row.customerId) });
   const records = usePortalRecords();
   const [paying, setPaying] = useState<Invoice | null>(null);
   const [deleting, setDeleting] = useState<Invoice | null>(null);
@@ -1980,7 +1986,9 @@ export function PaymentsView() {
 
   const { payments, invoices, jobs, estimates, requests, provider } =
     usePortalWorkspace();
-  const { customers } = useCrmDirectory();
+  // Customer names for the rows on screen (looked up by id, not a big customer page).
+  const paymentsRows = useAppSelector((state) => state.payments?.items);
+  const { customers } = useCrmDirectory({ customerIds: paymentsRows?.map((row) => row.customerId) });
   const records = usePortalRecords();
   const [archiveTarget, setArchiveTarget] = useState<(typeof payments)[number] | null>(null);
   const [archiving, setArchiving] = useState(false);

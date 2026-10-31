@@ -25,7 +25,6 @@ export function NewEstimateView() {
   const requestId = searchParams.get("request") || "";
   const customerIdParam = searchParams.get("customer") || "";
 
-  const { customers } = useCrmDirectory();
   const [request, setRequest] = useState<PortalRequest | null>(null);
   const [loadingRequest, setLoadingRequest] = useState(Boolean(requestId));
   const [dialogOpen, setDialogOpen] = useState(true);
@@ -58,6 +57,8 @@ export function NewEstimateView() {
     return undefined;
   }, [request?.customerId, customerIdParam]);
 
+  // Only the customer this estimate is for (from the lead or ?customer=), looked up by id.
+  const { customers } = useCrmDirectory({ customerIds: [effectiveCustomerId] });
   const customerObj = useMemo(() => {
     if (!effectiveCustomerId) return null;
     return customers.find((c) => c.id === effectiveCustomerId) || null;

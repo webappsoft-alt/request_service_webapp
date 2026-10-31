@@ -163,7 +163,7 @@ export function AssignEventDialog({
     auth.hydrated &&
     Boolean(auth.token) &&
     (!role || role === "provider" || role === "pro" || role === "admin");
-  const { contractors } = useCrmDirectory();
+  const { contractors } = useCrmDirectory({ customerLookup: false });
   const assigneePaging = usePaginatedCrmOptions(open && useApi ? "assignee" : null, open && useApi);
 
   const [recordKey, setRecordKey] = useState("");

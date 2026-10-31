@@ -135,7 +135,6 @@ function isInsuranceExpired(contractor: PortalContractor) {
 export function ContractorDetailView({ id }: { id: string }) {
   const dispatch = useAppDispatch();
   const router = useRouter();
-  const { customers } = useCrmDirectory();
   const { employees, events, assign, employeeLabel } = usePortalCrew();
   const crm = useCrmApiData();
   const sliceItems = useAppSelector((state) => state.contractors?.items ?? []);
@@ -597,7 +596,7 @@ export function ContractorDetailView({ id }: { id: string }) {
               return <ContractorJobsTab contractorId={contractor.id} />;
             case "estimates":
               return (
-                <ContractorEstimatesTab contractorId={contractor.id} customers={customers} />
+                <ContractorEstimatesTab contractorId={contractor.id} />
               );
             case "tasks":
               return <ContractorTasksTab contractorId={contractor.id} />;
@@ -1579,10 +1578,8 @@ function ContractorJobsTab({ contractorId }: { contractorId: string }) {
 
 function ContractorEstimatesTab({
   contractorId,
-  customers,
 }: {
   contractorId: string;
-  customers: Parameters<typeof estimateCustomerName>[1];
 }) {
   const dispatch = useAppDispatch();
   const filterKey = contractorsTabFilterKey({});
@@ -1593,6 +1590,8 @@ function ContractorEstimatesTab({
   }, [dispatch, contractorId]);
 
   const rows = selectContractorsTabRows(tab, contractorId, filterKey, []);
+  // Names for the customers of the rows on screen (looked up by id).
+  const { customers } = useCrmDirectory({ customerIds: rows.map((row) => row.customerId) });
   const listLoading = selectContractorsTabShowLoader(tab, contractorId, filterKey);
 
   return (

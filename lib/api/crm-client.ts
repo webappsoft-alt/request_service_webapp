@@ -878,6 +878,21 @@ export async function queryCustomers(query: CrmListQuery = {}) {
   return mapCrmList(response, mapPortalCustomerCrm);
 }
 
+/** Up to 50 customers per call, by id (name lookups for records on screen). */
+export const CUSTOMERS_BY_ID_MAX = 50;
+
+/** GET /provider/customers?ids=… — exactly these customers of this Pro. */
+export async function queryCustomersByIds(ids: string[]) {
+  const unique = [...new Set(ids.filter((id) => /^[0-9a-f]{24}$/i.test(id)))].slice(0, CUSTOMERS_BY_ID_MAX);
+  if (!unique.length) return [];
+  const response = await getData(
+    providerCrmApi.customers,
+    { ids: unique.join(",") },
+    { silent: true, force: true },
+  );
+  return mapCrmList(response, mapPortalCustomerCrm).items;
+}
+
 /** A picker row; `registeredUserId` is set for a site account that isn't one of the Pro's customers yet. */
 export type PickerCustomer = PortalCustomerCrm & { registeredUserId?: string };
 

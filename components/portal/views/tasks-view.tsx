@@ -146,7 +146,14 @@ export function TasksView() {
   const { employees: crewEmployees } = usePortalCrew();
   const teamItems = useAppSelector((state) => state.team?.items ?? []);
   const employees = useApi && teamItems.length > 0 ? teamItems : crewEmployees.length > 0 ? crewEmployees : directoryEmployees;
-  const lookups = useReminderLookups();
+  // Customer names for the tasks on screen whose subject is a customer.
+  const taskRows = useAppSelector((state) => state.tasks?.items);
+  const lookups = useReminderLookups({
+    customerIds: taskRows?.map((row) => {
+      const subject = taskSubject(row);
+      return subject.kind === "customer" ? subject.id : undefined;
+    }),
+  });
   const records = usePortalRecords();
   const searchParams = useSearchParams();
   const status = searchParams.get("status") ?? "";
@@ -717,7 +724,14 @@ export function TaskDetailView({ id }: { id: string }) {
     (user?.role === "provider" || auth.role === "provider");
 
   const { tasks, employees } = useCrmDirectory();
-  const lookups = useReminderLookups();
+  // This task's customer only (looked up by id).
+  const detailTask = useAppSelector(
+    (state) => state.tasks?.detailsCache?.[id] || state.tasks?.items?.find((item) => item.id === id),
+  );
+  const detailSubject = detailTask ? taskSubject(detailTask) : null;
+  const lookups = useReminderLookups({
+    customerIds: [detailSubject?.kind === "customer" ? detailSubject.id : detailTask?.customerId],
+  });
   const records = usePortalRecords();
 
   const cachedTask = useAppSelector(

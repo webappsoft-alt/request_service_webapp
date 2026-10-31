@@ -133,7 +133,6 @@ export function NewEstimateCreateView() {
   const user = useAppSelector(selectAuthUser);
   const authProvider = useAppSelector(selectAuthProvider);
   const reduxCustomers = useAppSelector((state) => state.customers?.items || []);
-  const { customers: directoryCustomers } = useCrmDirectory();
 
   const providerCategories = useMemo(() => {
     const ids = Array.isArray(authProvider?.services?.categoryIds)
@@ -162,6 +161,8 @@ export function NewEstimateCreateView() {
   const [customerId, setCustomerId] = useState(customerParam);
   /** The customer this estimate was started for (customer page or lead): always listed first. */
   const [pinnedCustomerId, setPinnedCustomerId] = useState(customerParam);
+  // The picker is paged; this only resolves the selected / pinned customer by id.
+  const { customers: directoryCustomers } = useCrmDirectory({ customerIds: [customerId, pinnedCustomerId] });
   const [customerQuery, setCustomerQuery] = useState("");
   /** Source filter for the picker ("" = all). Fetched on its own, so the Customers page filter is untouched. */
   const [customerOrigin, setCustomerOrigin] = useState<CustomerListFilter | "">("");

@@ -233,7 +233,6 @@ export function TeamMemberView({ id }: { id: string }) {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const { requests } = usePortalWorkspace();
-  const { customers } = useCrmDirectory();
   const { employees, events, assign, removeEmployee, employeeById, employeeLabel } = usePortalCrew();
   const crm = useCrmApiData();
   const sliceItems = useAppSelector((state) => state.team?.items ?? []);
@@ -622,7 +621,6 @@ export function TeamMemberView({ id }: { id: string }) {
               return (
                 <EmployeeEstimatesTab
                   employeeId={employee.id}
-                  customers={customers}
                   requests={requests}
                 />
               );
@@ -1494,11 +1492,9 @@ const employeeAttachmentsCache = new Map<
 
 function EmployeeEstimatesTab({
   employeeId,
-  customers,
   requests,
 }: {
   employeeId: string;
-  customers: Parameters<typeof estimateCustomerName>[1];
   requests: Parameters<typeof estimateCustomerName>[2];
 }) {
   const dispatch = useAppDispatch();
@@ -1511,6 +1507,8 @@ function EmployeeEstimatesTab({
   }, [dispatch, employeeId]);
 
   const rows = selectTeamTabRows(tab, employeeId, filterKey, []);
+  // Names for the customers of the rows on screen (looked up by id).
+  const { customers } = useCrmDirectory({ customerIds: rows.map((row) => row.customerId) });
   const listLoading = selectTeamTabShowLoader(tab, employeeId, filterKey);
 
   return (

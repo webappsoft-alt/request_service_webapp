@@ -54,6 +54,8 @@ async function fetchKindPage(
         items: result.items.map((item) => ({
           id: item.id,
           label: crmCustomerName(item),
+          // The whole row, so a pick can use it (e.g. prefill the address) without another lookup.
+          customer: item,
         })),
         page: result.page,
         totalPages: result.totalPages,

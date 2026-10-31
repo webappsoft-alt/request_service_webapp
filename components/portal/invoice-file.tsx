@@ -927,7 +927,6 @@ export function InvoiceSummaryTab({
 }
 
 export function InvoiceSettingsTab({ invoice, job }: { invoice: Invoice; job?: Job }) {
-  const { customers } = useCrmDirectory();
   const crm = useCrmApiData();
   const useApi = crm.enabled;
   const customerPaging = usePaginatedCrmOptions(useApi ? "customer" : null, useApi);
@@ -941,6 +940,8 @@ export function InvoiceSettingsTab({ invoice, job }: { invoice: Invoice; job?: J
     dueAt: invoice.dueAt?.slice(0, 10) ?? "",
     status: invoice.status,
   }));
+  // The customer picker is paged; this only resolves the invoice / picked customer's name.
+  const { customers } = useCrmDirectory({ customerIds: [invoice.customerId, draft.customerId] });
 
   const customerSelectOptions = useMemo(
     () =>

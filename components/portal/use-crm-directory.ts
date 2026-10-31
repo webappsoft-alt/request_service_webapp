@@ -21,7 +21,8 @@ import {
   deleteReminder as deleteReminderApi,
   deleteTask as deleteTaskApi,
   deleteVendor as deleteVendorApi,
-  queryCustomers,
+  queryCustomersByIds,
+  CUSTOMERS_BY_ID_MAX,
   updateContractor as updateContractorApi,
   updateReminderStatus as updateReminderStatusApi,
   updateTaskStatus as updateTaskStatusApi,
@@ -48,29 +49,32 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 const EVENT = "rs-crm-directory";
 
 /**
- * Lightweight customer lookup used when a page (Jobs, Invoices, Schedule…) is opened
- * directly and neither the CRM snapshot nor the Customers Redux slice has loaded yet.
- * Kept out of Redux so it never disturbs the Customers page pagination.
+ * Customers looked up by id for the records a page shows (names, the selected customer), when
+ * neither the CRM snapshot nor the Customers Redux slice has them. Only the ids asked for are
+ * fetched (≤50 per call), never a big page. Kept out of Redux so it never disturbs the Customers
+ * page pagination; shared by every page for the session.
  */
-const LOOKUP_LIMIT = 100;
 const LOOKUP_EVENT = "rs-crm-directory-lookup";
-let lookupCustomers: PortalCustomerCrm[] | null = null;
-let lookupInFlight: Promise<void> | null = null;
+const lookupById = new Map<string, PortalCustomerCrm>();
+/** Ids asked for (fetched, in flight, or not found), so each is requested once. */
+const lookupRequested = new Set<string>();
 
-function ensureCustomerLookup() {
-  if (lookupCustomers || lookupInFlight) return lookupInFlight ?? Promise.resolve();
-  lookupInFlight = queryCustomers({ page: 1, limit: LOOKUP_LIMIT, silent: true })
-    .then((result) => {
-      lookupCustomers = result.items;
-      window.dispatchEvent(new Event(LOOKUP_EVENT));
-    })
-    .catch(() => {
-      // Leave the cache empty so a later mount can retry.
-    })
-    .finally(() => {
-      lookupInFlight = null;
-    });
-  return lookupInFlight;
+function ensureCustomersById(ids: string[]) {
+  const missing = [...new Set(ids)].filter((id) => id && !lookupRequested.has(id));
+  if (!missing.length) return;
+  for (let start = 0; start < missing.length; start += CUSTOMERS_BY_ID_MAX) {
+    const chunk = missing.slice(start, start + CUSTOMERS_BY_ID_MAX);
+    chunk.forEach((id) => lookupRequested.add(id));
+    void queryCustomersByIds(chunk)
+      .then((items) => {
+        items.forEach((item) => lookupById.set(item.id, item));
+        window.dispatchEvent(new Event(LOOKUP_EVENT));
+      })
+      .catch(() => {
+        // Let a later mount retry these.
+        chunk.forEach((id) => lookupRequested.delete(id));
+      });
+  }
 }
 
 type DirectoryStore = {
@@ -147,11 +151,15 @@ function subscribe(onStoreChange: () => void) {
 }
 
 /**
- * @param options.customerLookup false on pages that never read `customers` while live (the
- *   Customers / Contractors / Vendors tabs load their own paginated lists), so opening them
- *   doesn't also fetch the 100-customer name lookup.
+ * @param options.customerIds customers this page shows (record owners, the selected customer):
+ *   any not already loaded are fetched by id and included in `customers`. Without ids no
+ *   customer list is fetched; customer pickers use the paged, searchable picker instead.
+ * @param options.customerLookup false turns the by-id lookup off (pages that never read `customers`).
  */
-export function useCrmDirectory({ customerLookup = true }: { customerLookup?: boolean } = {}) {
+export function useCrmDirectory({
+  customerLookup = true,
+  customerIds,
+}: { customerLookup?: boolean; customerIds?: Array<string | null | undefined> } = {}) {
   const dispatch = useAppDispatch();
   const reduxCustomers = useAppSelector((state) => state.customers?.items ?? []);
   const reduxLoading = useAppSelector((state) => state.customers?.loading ?? false);
@@ -192,27 +200,48 @@ export function useCrmDirectory({ customerLookup = true }: { customerLookup?: bo
     [provider, suppressSeedData],
   );
 
-  const hasLoadedCustomers =
-    (crm.customers?.length ?? 0) > 0 || (reduxCustomers?.length ?? 0) > 0;
-  const [lookup, setLookup] = useState<PortalCustomerCrm[]>(() => lookupCustomers ?? []);
+  // Stable key for the ids this page asked about (callers pass a fresh array each render).
+  const wantedKey = useMemo(
+    () => [...new Set((customerIds ?? []).map((id) => String(id || "").trim()).filter(Boolean))].sort().join(","),
+    [customerIds],
+  );
+  const [lookupVersion, setLookupVersion] = useState(0);
   useEffect(() => {
-    if (!customerLookup || !crm.enabled || hasLoadedCustomers) return;
-    const sync = () => setLookup(lookupCustomers ?? []);
+    if (!customerLookup || !crm.enabled) return;
+    const sync = () => setLookupVersion((value) => value + 1);
     window.addEventListener(LOOKUP_EVENT, sync);
-    void ensureCustomerLookup().then(sync);
     return () => window.removeEventListener(LOOKUP_EVENT, sync);
-  }, [customerLookup, crm.enabled, hasLoadedCustomers]);
+  }, [customerLookup, crm.enabled]);
 
-  const customers = useMemo(() => {
+  const baseCustomers = useMemo(() => {
     if (crm.customers && crm.customers.length > 0) return crm.customers;
     if (reduxCustomers && reduxCustomers.length > 0) return reduxCustomers;
-    if (crm.enabled && lookup.length > 0) return lookup;
     const local = store.customers.filter((item) => !store.deleted.includes(`customer:${item.id}`));
     if (local.length > 0) return local;
     if (apiReady && crm.customers) return crm.customers;
     if (suppressSeedData) return local;
     return [...seedCustomers, ...local];
-  }, [apiReady, crm.customers, crm.enabled, lookup, reduxCustomers, seedCustomers, store.customers, store.deleted, suppressSeedData]);
+  }, [apiReady, crm.customers, reduxCustomers, seedCustomers, store.customers, store.deleted, suppressSeedData]);
+
+  useEffect(() => {
+    if (!customerLookup || !crm.enabled || !wantedKey) return;
+    const known = new Set(baseCustomers.map((item) => item.id));
+    ensureCustomersById(wantedKey.split(",").filter((id) => !known.has(id)));
+  }, [customerLookup, crm.enabled, wantedKey, baseCustomers]);
+
+  // What the page had before, plus the customers looked up by id for it.
+  const customers = useMemo(() => {
+    if (!crm.enabled || !wantedKey) return baseCustomers;
+    const known = new Set(baseCustomers.map((item) => item.id));
+    const extra = wantedKey
+      .split(",")
+      .filter((id) => !known.has(id))
+      .map((id) => lookupById.get(id))
+      .filter((item): item is PortalCustomerCrm => Boolean(item));
+    return extra.length ? [...baseCustomers, ...extra] : baseCustomers;
+    // lookupVersion: re-read the module cache after a lookup lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseCustomers, crm.enabled, wantedKey, lookupVersion]);
 
   const loading = crm.enabled && customers.length === 0 && (reduxLoading || !crm.ready);
   const contractors = useMemo(

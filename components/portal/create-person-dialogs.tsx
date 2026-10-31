@@ -966,10 +966,12 @@ export function CreateReminderDialog({
     auth.hydrated &&
     Boolean(auth.token) &&
     (user?.role === "provider" || auth.role === "provider");
-  const { provider } = useCrmDirectory();
+  const { provider } = useCrmDirectory({ customerLookup: false });
   const { employees: crewEmployees } = usePortalCrew();
   const crm = useCrmApiData();
-  const lookups = useReminderLookups();
+  const lookups = useReminderLookups({
+    customerIds: [customerId, reminder?.customerId, subjectKind === "customer" ? subjectId : undefined],
+  });
 
   const resolveKind = (sk?: ReminderSubjectKind, r?: PortalReminder | null): ReminderSubjectKind => {
     if (r?.subjectKind && (REMINDER_SUBJECT_KINDS as readonly string[]).includes(r.subjectKind)) {
@@ -1387,10 +1389,12 @@ export function CreateTaskDialog({
     auth.hydrated &&
     Boolean(auth.token) &&
     (user?.role === "provider" || auth.role === "provider");
-  const { addTask, provider, tasks } = useCrmDirectory();
+  const { addTask, provider, tasks } = useCrmDirectory({ customerLookup: false });
   const { employees: crewEmployees } = usePortalCrew();
   const crm = useCrmApiData();
-  const lookups = useReminderLookups();
+  const lookups = useReminderLookups({
+    customerIds: [task?.customerId, subjectKind === "customer" ? subjectId : undefined],
+  });
 
   const resolveKind = (sk?: ReminderSubjectKind, t?: PortalTask | null): ReminderSubjectKind => {
     if (t?.subjectKind && (CRM_TASK_SUBJECT_KINDS as readonly string[]).includes(t.subjectKind)) return t.subjectKind;

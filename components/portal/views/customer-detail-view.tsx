@@ -156,7 +156,8 @@ const TABS = [
 export function CustomerDetailView({ id }: { id: string }) {
   const dispatch = useAppDispatch();
   const { estimates, jobs, invoices, payments, requests, provider } = usePortalWorkspace();
-  const { customers, reminders, employees, tasks, notes, updateCustomer } = useCrmDirectory();
+  // Everything on this page belongs to this one customer: look up only them.
+  const { customers, reminders, employees, tasks, notes, updateCustomer } = useCrmDirectory({ customerIds: [id] });
   const crm = useCrmApiData();
   const { events, employeeLabel } = usePortalCrew();
   const records = usePortalRecords();

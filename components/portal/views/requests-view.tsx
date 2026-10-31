@@ -133,7 +133,8 @@ export function RequestsView() {
   const origin: LeadOrigin | "" = isLeadOrigin(originParam) ? originParam : "";
   const { requests, estimates, jobs } = usePortalWorkspace();
   const crm = useCrmApiData();
-  const { customers } = useCrmDirectory();
+  // Names for leads saved without one: look up just the customers on screen.
+  const { customers } = useCrmDirectory({ customerIds: reduxRequests.items?.map((row) => row.customerId) });
   const records = usePortalRecords();
   const [open, setOpen] = useState(false);
   const [searchInput, setSearchInput] = useState(reduxRequests.search || "");

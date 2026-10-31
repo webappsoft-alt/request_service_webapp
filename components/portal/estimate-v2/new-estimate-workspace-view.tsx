@@ -81,7 +81,7 @@ import {
   opportunityStatusTone,
 } from "@/lib/data/estimate-v2-status";
 import {
-  getEstimateV2Opportunity,
+  getEstimateV2OpportunityBundle,
   getOpportunityByEstimateId,
   updateEstimateV2Opportunity,
   assignEstimateV2Crew,
@@ -106,6 +106,7 @@ import { formatDate, formatMoney, visitWallClock } from "@/lib/format";
 import type { Estimate, EstimateChangeRequest, EstimateCustomerUpdate, Invoice } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { NotesPanel } from "@/components/portal/notes-panel";
+import { RenderWhenVisible } from "@/components/shared/render-when-visible";
 import {
   ProjectStagesDialog,
   ProjectStagesPrompt,
@@ -659,6 +660,12 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     return seen;
   }, [lines]);
   const [taxRatePercent, setTaxRatePercent] = useState(0);
+  /**
+   * The tax rate loads in the background (GET /tax-rate) so it never holds up the page.
+   * Saves wait on this promise; print / preview stay disabled until `taxRateReady`.
+   */
+  const taxRatePromiseRef = useRef<Promise<number>>(Promise.resolve(0));
+  const [taxRateReady, setTaxRateReady] = useState(false);
   const [followUpAt, setFollowUpAt] = useState("");
   const [followUpNotes, setFollowUpNotes] = useState("");
   const [prepFindings, setPrepFindings] = useState("");
@@ -699,7 +706,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     }
     const target = sheetBaseRef.current;
     const sheet = unsavedSheetRef.current;
-    const { opportunity: opp, taxRatePercent: rate } = autoSaveCtx.current;
+    const { opportunity: opp } = autoSaveCtx.current;
     if (!target || !sheet || !opp || opp.id !== target.id) return;
     unsavedSheetRef.current = null;
     const estimateChanged = estimateSheetSignature(sheet) !== estimateSheetSignature(target.saved);
@@ -718,6 +725,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       // A blank sheet never creates an estimate on its own.
       const worthCreating = Boolean(current?.id) || filledSheetLines(sheet.lines).length > 0;
       if (estimateChanged && worthCreating && canAutoSaveToServer(current)) {
+        const rate = await taxRatePromiseRef.current;
         const saved = await persistEstimateSheet({ opportunity: opp, current, sheet, taxRatePercent: rate });
         autoSaveCtx.current = { ...autoSaveCtx.current, estimate: saved };
         return { saved, created: !current?.id };
@@ -811,9 +819,15 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       .catch(() => setTemplateCatalog([]));
   }, []);
 
+  // Only the template dialogs use the catalog: load it once the estimate is on screen, or right
+  // away when the page opens straight into the template choice (?start=1).
+  const catalogRequested = useRef(false);
   useEffect(() => {
+    if (catalogRequested.current) return;
+    if (loading && new URLSearchParams(window.location.search).get("start") !== "1") return;
+    catalogRequested.current = true;
     refreshTemplateCatalog();
-  }, [refreshTemplateCatalog]);
+  }, [loading, refreshTemplateCatalog]);
 
   const rememberTemplate = useCallback(
     (patch: Partial<TemplateMemory>) => {
@@ -833,10 +847,14 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     let handingOver = false;
     try {
       let data: EstimateV2Opportunity;
+      /** Estimate detail sent along with the opportunity (undefined on an older API). */
+      let bundled: { estimate?: Estimate } = {};
       // A save started just before leaving the page must land before we read it back.
       await pendingSheetSaves.get(opportunityId);
       try {
-        data = await getEstimateV2Opportunity(opportunityId, { silent: true });
+        const bundle = await getEstimateV2OpportunityBundle(opportunityId, { silent: true });
+        data = bundle.opportunity;
+        bundled = bundle;
       } catch (lookupError) {
         // Only a missing opportunity falls through to the classic estimate; other failures show as errors.
         if ((lookupError as { response?: { status?: number } } | null)?.response?.status !== 404) throw lookupError;
@@ -900,8 +918,16 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           };
         });
 
-      // Tax rate only needs the property state: fetch it alongside the estimate, not after it.
-      const ratePromise = fetchTaxRatePercent(data.propertyAddress?.state);
+      // Tax rate only needs the property state: load it in the background, the page doesn't wait.
+      const ratePromise: Promise<number> = fetchTaxRatePercent(data.propertyAddress?.state).then((rate) => {
+        if (taxRatePromiseRef.current === ratePromise) {
+          setTaxRatePercent(rate);
+          autoSaveCtx.current = { ...autoSaveCtx.current, taxRatePercent: rate };
+          setTaxRateReady(true);
+        }
+        return rate;
+      });
+      taxRatePromiseRef.current = ratePromise;
       const linked = data.estimates?.[0] || null;
       let loadedScope: string;
       let loadedTerms = "Proposal valid for 30 calendar days from issue date.";
@@ -909,7 +935,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       let loadedLines: JobCostLine[];
       let freshEstimate: Estimate | null = null;
       if (linked?.id) {
-        freshEstimate = (await getEstimate(linked.id)) || linked;
+        freshEstimate =
+          (bundled.estimate?.id === linked.id ? bundled.estimate : await getEstimate(linked.id)) || linked;
         setEstimate(freshEstimate);
         loadedScope = stripChangeRequestLinesFromNotes(
           freshEstimate.notes || data.description || data.prepFindings || "",
@@ -973,10 +1000,6 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       sheetBaseRef.current = editable ? { id: data.id, base, saved: serverSheet } : null;
       autoSaveCtx.current = { ...autoSaveCtx.current, estimate: freshEstimate };
 
-      const rate = await ratePromise;
-      setTaxRatePercent(rate);
-      autoSaveCtx.current = { ...autoSaveCtx.current, taxRatePercent: rate };
-
       // New estimate wizard → "Create estimate now" lands here with ?start=1: ask Manual vs Template.
       if (!silent && !startParamHandled.current && new URLSearchParams(window.location.search).get("start") === "1") {
         startParamHandled.current = true;
@@ -1029,7 +1052,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   }, [visits]);
 
   // Assign technician / Assign contractor: header buttons + crew cards (same as on a job).
-  const { contractors } = useCrmDirectory();
+  const { contractors } = useCrmDirectory({ customerLookup: false });
   const [crewMode, setCrewMode] = useState<EstimateCrewMode | null>(null);
   const [removingCrew, setRemovingCrew] = useState<EstimateCrewMode | null>(null);
   // Accepted estimates keep Assign technician / contractor until they become a job (then the job has the crew).
@@ -1581,7 +1604,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         opportunity,
         current: autoSaveCtx.current.estimate || estimate,
         sheet,
-        taxRatePercent,
+        taxRatePercent: await taxRatePromiseRef.current,
       });
       trackSheetSave(opportunity.id, task);
       const next = await task;
@@ -1639,6 +1662,11 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
   /** Preview & send: opens straight away from the sheet. Saving / finalizing waits for "Send for approval". */
   function openSendDialog() {
+    // The preview shows tax: wait for the rate (it loads in the background, normally well before a click).
+    if (!taxRateReady) {
+      toast.message("Calculating tax — try again in a moment.");
+      return;
+    }
     if (estimate?.id) {
       setSendEstimate(previewEstimateFromSheet(estimate));
       setSendOpen(true);
@@ -2101,7 +2129,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             variant="outline"
             size="sm"
             className="h-8 gap-1.5"
-            disabled={!opportunity || Boolean(printJob)}
+            disabled={!opportunity || Boolean(printJob) || !taxRateReady}
             title="Print or save as PDF"
             onClick={printEstimate}
           >
@@ -2728,12 +2756,12 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                           </div>
                         </div>
                         <div className="flex items-center justify-between gap-4">
-                          <span className="text-slate-600 dark:text-muted-foreground">Tax ({taxRatePercent}%)</span>
-                          <span className="font-medium tabular-nums text-slate-900 dark:text-foreground">{formatMoney(taxAmount)}</span>
+                          <span className="text-slate-600 dark:text-muted-foreground">Tax ({taxRateReady ? taxRatePercent : "…"}%)</span>
+                          <span className="font-medium tabular-nums text-slate-900 dark:text-foreground">{taxRateReady ? formatMoney(taxAmount) : "…"}</span>
                         </div>
                         <div className="flex items-center justify-between gap-4 rounded-lg bg-primary/[0.07] px-3 py-2.5 text-base font-semibold text-slate-900 dark:bg-primary/15 dark:text-foreground">
                           <span>Total</span>
-                          <span className="text-lg tabular-nums text-primary dark:text-foreground">{formatMoney(grandTotal)}</span>
+                          <span className="text-lg tabular-nums text-primary dark:text-foreground">{taxRateReady ? formatMoney(grandTotal) : "…"}</span>
                         </div>
                       </div>
                     </div>
@@ -2816,7 +2844,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                           Office notes and updates from technicians / contractors on this estimate. Notes marked
                           &quot;Shared with customer&quot; show on the customer&apos;s estimate page.
                         </p>
-                        <NotesPanel kind="estimate" id={estimate.id} empty="No notes on this estimate yet." />
+                        <RenderWhenVisible>
+                          <NotesPanel kind="estimate" id={estimate.id} empty="No notes on this estimate yet." />
+                        </RenderWhenVisible>
                       </div>
                     </>
                   ) : null}

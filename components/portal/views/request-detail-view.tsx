@@ -305,7 +305,8 @@ export function RequestDetailView({ id }: { id: string }) {
 
   const { requests, estimates, jobs, invoices, provider } = usePortalWorkspace();
   const crm = useCrmApiData();
-  const { customers, reminders, tasks, contractors, setReminderStatus, setTaskStatus, remove } = useCrmDirectory();
+  // This lead loads its own customer (apiCustomer / customerCache); no list needed.
+  const { customers, reminders, tasks, contractors, setReminderStatus, setTaskStatus, remove } = useCrmDirectory({ customerLookup: false });
   const { events, employees: crewEmployees, employeeLabel } = usePortalCrew();
   const teamItems = useAppSelector((state) => state.team?.items ?? []);
   const allEmployees = useMemo(() => {

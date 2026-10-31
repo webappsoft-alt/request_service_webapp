@@ -87,7 +87,7 @@ import {
   upsertJobItem,
   updateJobRecord,
 } from "@/store/jobsSlice";
-import { fetchTeam } from "@/store/teamSlice";
+import { fetchTeam, TEAM_DEFAULT_LIMIT } from "@/store/teamSlice";
 import { upsertInvoiceItem } from "@/store/invoicesSlice";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import { normalizeUsStateCode } from "@/lib/data/us-states";
@@ -853,7 +853,7 @@ export function JobSettingsTab({
   ) => void;
 }) {
   const dispatch = useAppDispatch();
-  const { customers, contractors } = useCrmDirectory();
+  const { contractors } = useCrmDirectory({ customerLookup: false });
   const crm = useCrmApiData();
   const useApi = crm.enabled;
   const customerPaging = usePaginatedCrmOptions(useApi ? "customer" : null, useApi);
@@ -873,7 +873,7 @@ export function JobSettingsTab({
 
   useEffect(() => {
     if (!useApi) return;
-    void dispatch(fetchTeam({ force: true, limit: 100, page: 1, role: "" }));
+    void dispatch(fetchTeam({ force: true, limit: TEAM_DEFAULT_LIMIT, page: 1, role: "" }));
   }, [dispatch, useApi]);
 
   function resolveEmployeeId(): string {
@@ -929,6 +929,8 @@ export function JobSettingsTab({
   }
 
   const [draft, setDraft] = useState<JobSettingsDraft>(defaultsFromJob);
+  // The customer picker is paged; this only resolves the job / picked customer's name.
+  const { customers } = useCrmDirectory({ customerIds: [job?.customerId, draft.customerId] });
   const [saving, setSaving] = useState(false);
 
   // Sync draft when the API job changes — avoid useEffect + unstable crew refs (infinite loop).

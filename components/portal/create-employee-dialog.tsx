@@ -30,7 +30,7 @@ import { PersonAddressFields } from "@/components/shared/person-address-fields";
 import { ExpertisePicker, tradeFromExpertise } from "@/components/portal/expertise-picker";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth } from "@/store/authSlice";
-import { createTeamMember, fetchTeam } from "@/store/teamSlice";
+import { createTeamMember, fetchTeam, TEAM_DEFAULT_LIMIT } from "@/store/teamSlice";
 
 /** Matches the API rule for technician usernames. */
 export const TECHNICIAN_USERNAME_PATTERN = /^[a-z0-9._-]{3,30}$/;
@@ -138,7 +138,7 @@ export function CreateEmployeeDialog({
       if (!created?.id) {
         throw new Error("Technician was created but the server response was incomplete.");
       }
-      await dispatch(fetchTeam({ force: true, limit: 100 }));
+      await dispatch(fetchTeam({ force: true, limit: TEAM_DEFAULT_LIMIT }));
       toast.success(`${created.firstName} ${created.lastName} added.`);
       onCreated?.(created);
       reset();

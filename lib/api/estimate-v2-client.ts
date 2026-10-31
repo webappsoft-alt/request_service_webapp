@@ -7,7 +7,7 @@ import {
   putData,
 } from "@/components/api/apiFuntions";
 import { providerCrmApi } from "@/components/api/ApiRoutesFile";
-import { mapEstimate } from "@/lib/api/crm-mappers";
+import { mapCrmEntity, mapEstimate } from "@/lib/api/crm-mappers";
 import type { Estimate } from "@/lib/types";
 
 export type OpportunityStatus =
@@ -268,6 +268,24 @@ export async function getEstimateV2Opportunity(
     silent: options?.silent,
   });
   return normalizeOpportunity(unwrapData<EstimateV2Opportunity>(response));
+}
+
+/**
+ * Opportunity plus its newest estimate's detail in one request. `estimate` is undefined when
+ * the server didn't send it (older API) — callers then load it the usual way.
+ */
+export async function getEstimateV2OpportunityBundle(id: string, options?: { silent?: boolean }) {
+  const response = await getData(
+    providerCrmApi.estimateV2Opportunity(id),
+    { include: "estimate" },
+    { force: true, silent: options?.silent },
+  );
+  const raw = unwrapData<EstimateV2Opportunity & { estimateDetail?: unknown }>(response);
+  const { estimateDetail, ...rest } = raw;
+  return {
+    opportunity: normalizeOpportunity(rest as EstimateV2Opportunity),
+    estimate: estimateDetail ? mapCrmEntity({ data: estimateDetail }, mapEstimate) || undefined : undefined,
+  };
 }
 
 export async function createEstimateV2Opportunity(input: {

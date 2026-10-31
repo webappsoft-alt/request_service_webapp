@@ -31,7 +31,7 @@ import {
   fetchEstimates,
 } from "@/store/estimatesSlice";
 import { createCustomerJob, updateCustomerJob } from "@/store/customersSlice";
-import { fetchTeam } from "@/store/teamSlice";
+import { fetchTeam, TEAM_DEFAULT_LIMIT } from "@/store/teamSlice";
 import {
   createEstimate as createEstimateApi,
   createEstimateActivity,
@@ -83,7 +83,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { CRM_API_EVENT } from "@/components/portal/crm-data-provider";
-import { crmCustomerName } from "@/lib/data/crm-people";
+import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import {
   employeeName,
   JOB_STATUSES,
@@ -199,11 +199,12 @@ export function CreateEstimateDialog({
     (user?.role === "provider" || auth.role === "provider");
   const customerLocation = useAppSelector((state) => state.location);
   const { session, provider, estimates } = usePortalWorkspace();
-  const { customers } = useCrmDirectory();
+  // Customers this dialog opens with (looked up by id); the picker itself is paged.
+  const { customers: knownCustomers } = useCrmDirectory({ customerIds: [customerId, estimate?.customerId] });
   const { employees } = usePortalCrew();
   const records = usePortalRecords();
   const all = records.mergeEstimates(estimates);
-  const first = customers[0];
+  const first = knownCustomers[0];
   const isEdit = Boolean(estimate?.id);
 
   // New estimates go through estimate-v2 — do not create classic estimates here.
@@ -224,6 +225,8 @@ export function CreateEstimateDialog({
   const [selectedCustomer, setSelectedCustomer] = useState(
     customerId ?? first?.id ?? "",
   );
+  // ...and the customer picked since.
+  const { customers } = useCrmDirectory({ customerIds: [customerId, estimate?.customerId, selectedCustomer] });
   const [customerLabel, setCustomerLabel] = useState("");
   const customer =
     customers.find((item) => item.id === selectedCustomer) ?? first;
@@ -391,7 +394,7 @@ export function CreateEstimateDialog({
       if (requestAddress.zip) setZip(requestAddress.zip);
     }
     if (!useApi && employees.length === 0) {
-      void dispatch(fetchTeam({ role: "technician", force: true, limit: 100 }));
+      void dispatch(fetchTeam({ role: "technician", force: true, limit: TEAM_DEFAULT_LIMIT }));
     }
   }, [
     boundCustomerId,
@@ -472,7 +475,7 @@ export function CreateEstimateDialog({
       }
       if (!cancelled && !useApi && employees.length === 0) {
         void dispatch(
-          fetchTeam({ role: "technician", force: true, limit: 100 }),
+          fetchTeam({ role: "technician", force: true, limit: TEAM_DEFAULT_LIMIT }),
         );
       }
     })();
@@ -487,7 +490,7 @@ export function CreateEstimateDialog({
   useEffect(() => {
     if (!open) return;
     if (tab === "visit" && !useApi && employees.length === 0) {
-      void dispatch(fetchTeam({ role: "technician", force: true, limit: 100 }));
+      void dispatch(fetchTeam({ role: "technician", force: true, limit: TEAM_DEFAULT_LIMIT }));
     }
   }, [open, tab, useApi, employees.length, dispatch]);
 
@@ -545,14 +548,15 @@ export function CreateEstimateDialog({
     isEdit,
   ]);
 
-  function pickCustomer(id: string, option?: { id: string; label: string }) {
+  function pickCustomer(id: string, option?: { id: string; label: string; customer?: PortalCustomerCrm }) {
     setSelectedCustomer(id);
     if (option?.label) setCustomerLabel(option.label);
     else {
       const match = customers.find((item) => item.id === id);
       if (match) setCustomerLabel(crmCustomerName(match));
     }
-    const next = customers.find((item) => item.id === id);
+    // A paged picker option carries the whole customer.
+    const next = customers.find((item) => item.id === id) ?? option?.customer;
     const nextAddress = next?.addresses[0];
     if (
       nextAddress &&
@@ -1293,12 +1297,15 @@ export function CreateJobDialog({
     (user?.role === "provider" || auth.role === "provider");
   const customerLocation = useAppSelector((state) => state.location);
   const { session, provider, estimates, jobs } = usePortalWorkspace();
-  const { customers } = useCrmDirectory();
+  // Customers this dialog opens with (looked up by id); the picker itself is paged.
+  const { customers: knownCustomers } = useCrmDirectory({
+    customerIds: [customerId, estimate?.customerId, job?.customerId],
+  });
   const { employees } = usePortalCrew();
   const records = usePortalRecords();
   const allEstimates = records.mergeEstimates(estimates);
   const allJobs = records.mergeJobs(jobs);
-  const first = customers[0];
+  const first = knownCustomers[0];
   const isEdit = Boolean(job?.id);
   const [tab, setTab] = useState<JobTab>("customer");
   const [sourceId, setSourceId] = useState(estimate?.id ?? "");
@@ -1313,6 +1320,10 @@ export function CreateJobDialog({
   const [selectedCustomer, setSelectedCustomer] = useState(
     customerId ?? estimate?.customerId ?? first?.id ?? "",
   );
+  // ...and the customer picked since.
+  const { customers } = useCrmDirectory({
+    customerIds: [customerId, estimate?.customerId, job?.customerId, selectedCustomer],
+  });
   const [customerLabel, setCustomerLabel] = useState("");
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const customer =
@@ -1453,7 +1464,7 @@ export function CreateJobDialog({
     // Prefill from estimate only when creating (not editing).
     if (!job?.id && estimate?.id) void pickSource(estimate.id);
     if (!useApi && employees.length === 0) {
-      void dispatch(fetchTeam({ role: "technician", force: true, limit: 100 }));
+      void dispatch(fetchTeam({ role: "technician", force: true, limit: TEAM_DEFAULT_LIMIT }));
     }
   }, [estimate, open, boundCustomerId, customers, job?.id, useApi, employees.length, dispatch]);
 
@@ -2150,11 +2161,13 @@ export function CreateLeadDialog({
     (user?.role === "provider" || auth.role === "provider");
   const customerLocation = useAppSelector((state) => state.location);
   const { provider, requests } = usePortalWorkspace();
-  const { customers } = useCrmDirectory();
+  // No customer list: the picker is paged; only the picked customer is looked up by id.
+  const { customers: knownCustomers } = useCrmDirectory({ customerLookup: false });
   const records = usePortalRecords();
   const all = records.mergeRequests(requests);
-  const first = customers[0];
+  const first = knownCustomers[0];
   const [customerId, setCustomerId] = useState(first?.id ?? "");
+  const { customers } = useCrmDirectory({ customerIds: [customerId] });
   const [customerLabel, setCustomerLabel] = useState("");
   const [serviceName, setServiceName] = useState("");
   const [details, setDetails] = useState("");

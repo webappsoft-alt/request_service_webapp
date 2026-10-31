@@ -161,7 +161,6 @@ export function EstimateSettingsTab({
   compact?: boolean;
   onSave?: (updated: Estimate) => void;
 }) {
-  const { customers } = useCrmDirectory();
   const crm = useCrmApiData();
   const asJob = estimateAsJob(estimate);
   const file = useJobFile(asJob, estimate, undefined, "");
@@ -181,6 +180,8 @@ export function EstimateSettingsTab({
   }), [estimate, service]);
 
   const [draft, setDraft] = useState<EstimateSettingsDraft>(fallback);
+  // Names for the estimate's / chosen customer only (no customer list).
+  const { customers } = useCrmDirectory({ customerIds: [estimate.customerId, draft.customerId] });
   const selected = customers.find((item) => item.id === draft.customerId) ?? customers.find((item) => item.id === estimate.customerId);
   const [saving, setSaving] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);

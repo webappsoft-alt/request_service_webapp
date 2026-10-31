@@ -24,7 +24,7 @@ import { patchTaskStatus } from "@/store/tasksSlice";
 export function OpenTaskBanner({ kind, id }: { kind: ReminderSubjectKind; id: string }) {
   const dispatch = useAppDispatch();
   const crm = useCrmApiData();
-  const { tasks } = useCrmDirectory();
+  const { tasks } = useCrmDirectory({ customerLookup: false });
   const [pendingId, setPendingId] = useState<string | null>(null);
   const open = openTasksFor(tasks, kind, id);
   if (!open.length) return null;

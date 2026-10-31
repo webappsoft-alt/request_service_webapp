@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type UIEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Loader2 } from "lucide-react";
 import { subscribeRealtime } from "@/components/realtime/realtime-provider";
+import { useSocket } from "@/components/socket/SocketProvider";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -31,6 +32,8 @@ import {
 
 /** Re-sync when the tab comes back after this long (events can be missed while asleep). */
 const RESYNC_AFTER_MS = 30_000;
+/** First load when the live connection hasn't come up by then. */
+const FIRST_LOAD_FALLBACK_MS = 3_000;
 
 /** True when this chat notification is for the conversation open on screen right now. */
 export function isViewingNotificationChat(item: AppNotification) {
@@ -108,10 +111,18 @@ export function NotificationBell({
     loadedAtRef.current = feed.loadedAt;
   }, [feed.loadedAt]);
 
-  // Badge count on first paint (not only once the dropdown is opened).
+  // Badge count on first paint (not only once the dropdown is opened). While the socket is
+  // still connecting, its connect re-sync (SOCKET_RECONNECTED below) is that first load, so the
+  // list isn't fetched twice; the timer covers a socket that doesn't connect.
+  const { isConnected } = useSocket();
   useEffect(() => {
-    void dispatch(loadNotificationFeed());
-  }, [dispatch]);
+    if (isConnected) {
+      void dispatch(loadNotificationFeed());
+      return;
+    }
+    const timer = setTimeout(() => void dispatch(loadNotificationFeed()), FIRST_LOAD_FALLBACK_MS);
+    return () => clearTimeout(timer);
+  }, [dispatch, isConnected]);
 
   useEffect(() => {
     return subscribeRealtime((detail) => {

@@ -105,7 +105,7 @@ function useProviderApi() {
 export function ContractorsView() {
   const dispatch = useAppDispatch();
   const useApi = useProviderApi();
-  const { contractors: directoryRows, remove } = useCrmDirectory();
+  const { contractors: directoryRows, remove } = useCrmDirectory({ customerLookup: false });
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<PortalContractor | null>(null);
 
@@ -324,7 +324,7 @@ export { VendorDetailView } from "@/components/portal/views/partner-detail-views
 export function VendorsView() {
   const dispatch = useAppDispatch();
   const useApi = useProviderApi();
-  const { vendors: directoryRows, remove } = useCrmDirectory();
+  const { vendors: directoryRows, remove } = useCrmDirectory({ customerLookup: false });
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<PortalVendor | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PortalVendor | null>(null);

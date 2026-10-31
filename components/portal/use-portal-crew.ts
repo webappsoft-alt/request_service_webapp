@@ -89,7 +89,7 @@ export function usePortalCrew() {
   const reduxTeam = useAppSelector((state) => state.team?.items ?? []);
   const reduxLoading = useAppSelector((state) => state.team?.loading ?? false);
   const workspace = usePortalWorkspace();
-  const { tasks, contractors } = useCrmDirectory();
+  const { tasks, contractors } = useCrmDirectory({ customerLookup: false });
   const crm = useCrmApiData();
   const key = storageKey(workspace.session?.email);
   const store = useSyncExternalStore(

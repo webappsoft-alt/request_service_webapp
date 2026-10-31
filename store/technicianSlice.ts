@@ -317,6 +317,14 @@ const technicianSlice = createSlice({
   name: "technician",
   initialState,
   reducers: {
+    /** Socket `technician:badge-counts` (sent on connect / on request): the sidebar section badges. */
+    techBadgesReceived(state, action: PayloadAction<Partial<TechBadges>>) {
+      const next = action.payload;
+      for (const key of ["jobs", "estimates", "schedule", "payments"] as const) {
+        if (next[key] !== undefined) state.badges[key] = Math.max(0, Number(next[key]) || 0);
+      }
+      state.badges.loaded = true;
+    },
     /** Socket NEW_NOTIFICATION. */
     techNotificationReceived(state, action: PayloadAction<AppNotification>) {
       const item = action.payload;
@@ -498,7 +506,7 @@ const technicianSlice = createSlice({
   },
 });
 
-export const { techNotificationReceived, techRefreshRequested } = technicianSlice.actions;
+export const { techBadgesReceived, techNotificationReceived, techRefreshRequested } = technicianSlice.actions;
 
 /** Sidebar badge for a section (new since last opened — independent of the bell). */
 export function selectTechSectionBadge(state: RootLike, section: TechSection) {

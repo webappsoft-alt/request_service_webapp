@@ -182,9 +182,21 @@ export type RealtimeEvents = {
     kinds?: string[];
   };
   /** Provider sidebar badge counts — pushed over the shared socket (no REST). */
+  /** Technician portal sidebar: section badges + unread team chat (on connect / on request). */
+  "technician:badge-counts": {
+    badges?: { jobs?: number; estimates?: number; schedule?: number; payments?: number };
+    chatUnread?: number | null;
+  };
+  /** Contractor portal sidebar: section badges + unread team chat (on connect / on request). */
+  "contractor:badge-counts": {
+    badges?: { jobs?: number; changeRequests?: number; payouts?: number };
+    chatUnread?: number | null;
+  };
   "provider:inbox-counts": {
     /** Contractor submissions awaiting the pro's review (Pending reviews badge). */
     contractorReviews?: { completions?: number; changeOrders?: number; total?: number };
+    /** Unread technician / contractor chat (part of the Messages badge). */
+    teamChatUnread?: number | null;
     newLeads?: number;
     unreadChats?: number;
     pendingOrders?: number;
@@ -413,6 +425,19 @@ export function emitChatMarkRead(threadId: string) {
 }
 
 /** Request provider sidebar badge counts over the shared socket (no REST). */
+/** Ask for the technician / contractor sidebar badge counts (answered with `<role>:badge-counts`). */
+export function requestFieldBadgeCounts(role: "technician" | "contractor") {
+  if (!sharedSocket) return;
+  const event = `${role}:badge-counts:get`;
+  if (sharedSocket.connected) {
+    sharedSocket.emit(event);
+    return;
+  }
+  sharedSocket.once("connect", () => {
+    sharedSocket?.emit(event);
+  });
+}
+
 export function requestProviderInboxCounts() {
   if (!sharedSocket) return;
   if (sharedSocket.connected) {

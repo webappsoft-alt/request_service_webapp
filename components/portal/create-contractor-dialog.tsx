@@ -136,7 +136,7 @@ function ContractorForm({
   const user = useAppSelector(selectAuthUser);
   const useApi =
     auth.hydrated && Boolean(auth.token) && (user?.role === "provider" || auth.role === "provider");
-  const { addContractor, updateContractor, provider, contractors } = useCrmDirectory();
+  const { addContractor, updateContractor, provider, contractors } = useCrmDirectory({ customerLookup: false });
   const isEdit = Boolean(contractor);
   const hasAccess = Boolean(contractor?.hasPortalAccess);
 

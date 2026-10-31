@@ -342,6 +342,14 @@ const contractorPortalSlice = createSlice({
   name: "contractorPortal",
   initialState,
   reducers: {
+    /** Socket `contractor:badge-counts` (sent on connect / on request): the sidebar section badges. */
+    contractorBadgesReceived(state, action: PayloadAction<Partial<ContractorBadges>>) {
+      const next = action.payload;
+      for (const key of ["jobs", "changeRequests", "payouts"] as const) {
+        if (next[key] !== undefined) state.badges[key] = Math.max(0, Number(next[key]) || 0);
+      }
+      state.badges.loaded = true;
+    },
     /** Socket NEW_NOTIFICATION. */
     contractorNotificationReceived(state, action: PayloadAction<AppNotification>) {
       const item = action.payload;
@@ -557,7 +565,7 @@ const contractorPortalSlice = createSlice({
   },
 });
 
-export const { contractorNotificationReceived, contractorRefreshRequested } = contractorPortalSlice.actions;
+export const { contractorBadgesReceived, contractorNotificationReceived, contractorRefreshRequested } = contractorPortalSlice.actions;
 
 /** Sidebar badge for a section (new since last opened — independent of the bell). */
 export function selectContractorSectionBadge(state: RootLike, section: ContractorSection) {

@@ -2,25 +2,31 @@
 
 import { useEffect } from "react";
 import { subscribeRealtime } from "@/components/realtime/realtime-provider";
+import { onSocketEvent, requestFieldBadgeCounts } from "@/components/socket/socket-api";
 import { normalizeSocketNotification } from "@/lib/api/notifications-client";
 import { useAppDispatch } from "@/store/hooks";
 import {
   contractorNotificationReceived,
+  contractorBadgesReceived,
   contractorRefreshRequested,
-  fetchContractorBadges,
 } from "@/store/contractorPortalSlice";
 
 /**
  * Pipes socket events into Redux for the contractor portal:
  * - NEW_NOTIFICATION   → sidebar badge counts (the bell keeps its own feed)
  * - contractor:refresh → bump list versions (jobs / changeRequests / payouts / dashboard)
- * Badges are fetched once here, not per page.
+ * - contractor:badge-counts → sidebar section badges (socket on connect / on request, no REST)
  */
 export function ContractorRealtimeBridge() {
   const dispatch = useAppDispatch();
 
+  // Sidebar badges: the server sends them on connect; ask too, in case that arrived before this mounted.
   useEffect(() => {
-    void dispatch(fetchContractorBadges());
+    const off = onSocketEvent("contractor:badge-counts", (payload) => {
+      if (payload?.badges) dispatch(contractorBadgesReceived(payload.badges));
+    });
+    requestFieldBadgeCounts("contractor");
+    return off;
   }, [dispatch]);
 
   useEffect(() => {
@@ -42,8 +48,7 @@ export function ContractorRealtimeBridge() {
         return;
       }
       if (type === "SOCKET_RECONNECTED") {
-        // Catch up on anything missed while offline.
-        void dispatch(fetchContractorBadges());
+        // Catch up on anything missed while offline (badges arrive with the new connection).
         dispatch(contractorRefreshRequested(["dashboard", "jobs", "changeRequests", "payouts", "schedule"]));
       }
     });

@@ -51,6 +51,25 @@ function toOptions(items: PortalEmployee[]): EmployeeOption[] {
  * slice: the first visit shows a spinner, later visits show the saved copy at once while the
  * same call refreshes it in the background. Filter changes fetch only the part that changed.
  */
+type BundleParams = Parameters<typeof getTimesheetBundle>[0];
+let bundleInFlight: { key: string; promise: ReturnType<typeof getTimesheetBundle> } | null = null;
+
+/**
+ * The same opening load while one is still running reuses it (React's dev mode runs effects
+ * twice on mount, and a quick leave-and-return would otherwise fetch the bundle again).
+ */
+function loadBundleOnce(params: BundleParams) {
+  const key = JSON.stringify(params);
+  if (bundleInFlight?.key === key) return bundleInFlight.promise;
+  const promise = getTimesheetBundle(params);
+  bundleInFlight = { key, promise };
+  const clear = () => {
+    if (bundleInFlight?.promise === promise) bundleInFlight = null;
+  };
+  promise.then(clear, clear);
+  return promise;
+}
+
 export function TimesheetsView() {
   const dispatch = useAppDispatch();
   const page = useAppSelector((state) => state.timeTracking.timesheets);
@@ -67,7 +86,7 @@ export function TimesheetsView() {
     const contractor = rangeBounds("week");
 
     dispatch(timesheetBundleStarted());
-    getTimesheetBundle({
+    loadBundleOnce({
       from: listQuery.from,
       to: listQuery.to,
       kinds: listQuery.kinds,

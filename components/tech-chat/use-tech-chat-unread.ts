@@ -6,8 +6,10 @@ import { listTechChats, type TechChatSide, type TechChatThread } from "@/lib/api
 
 /**
  * Live unread counts for technician ↔ provider chat, shared by every badge on
- * the page (sidebar, header, chat buttons). One fetch per side, then the
- * socket keeps it current (`techchat:unread` totals, per-thread `techchat:message`).
+ * the page (sidebar, header, chat buttons). Totals come by socket: on connect with the
+ * sidebar badge counts (`provider:inbox-counts` / `<role>:badge-counts`), then
+ * `techchat:unread`. Per-thread counts (chat buttons) load the unread threads once, then
+ * `techchat:message` keeps them current.
  */
 
 type Store = {
@@ -61,6 +63,15 @@ function bindSocket() {
     const side: TechChatSide = isTechnicianPortal() ? "technician" : "provider";
     setTechChatUnreadTotal(side, Number(payload?.total) || 0);
   });
+  // Sidebar totals ride on the badge-count events (sent on connect / on request), not REST.
+  onSocketEvent("provider:inbox-counts", (payload) => {
+    if (payload?.teamChatUnread != null) setTechChatUnreadTotal("provider", Number(payload.teamChatUnread) || 0);
+  });
+  const fieldCounts = (payload: { chatUnread?: number | null } | undefined) => {
+    if (payload?.chatUnread != null) setTechChatUnreadTotal("technician", Number(payload.chatUnread) || 0);
+  };
+  onSocketEvent("technician:badge-counts", fieldCounts);
+  onSocketEvent("contractor:badge-counts", fieldCounts);
   onSocketEvent("techchat:message", (payload) => {
     if (!payload?.thread) return;
     rememberTechChatThread(isTechnicianPortal() ? "technician" : "provider", payload.thread);
@@ -87,7 +98,9 @@ async function load(side: TechChatSide) {
   if (store.loaded) return;
   store.loaded = true;
   try {
-    const { threads, unread } = await listTechChats(side, { limit: 100 });
+    // Only threads with unread messages change a badge (a thread not loaded reads as 0, the same
+    // as a read one), so ask for just those; the total comes back separately.
+    const { threads, unread } = await listTechChats(side, { limit: 100, unread: true });
     threads.forEach((thread) => rememberTechChatThread(side, thread));
     setTechChatUnreadTotal(side, unread);
   } catch {
@@ -109,10 +122,13 @@ const subscribers = { technician: subscribe("technician"), provider: subscribe("
  * the thread about one work record (`context`, e.g. contextKey("job", id)).
  */
 export function useTechChatUnread(side: TechChatSide, threadId?: string | null, context?: string | null) {
+  // The total (sidebar) comes by socket. Per-thread counts need the thread rows, so they're
+  // loaded only where a badge for one thread / work record is shown (chat buttons).
+  const perThread = Boolean(threadId || context);
   useEffect(() => {
     bindSocket();
-    void load(side);
-  }, [side]);
+    if (perThread) void load(side);
+  }, [side, perThread]);
   return useSyncExternalStore(
     subscribers[side],
     () => {

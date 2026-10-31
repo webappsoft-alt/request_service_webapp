@@ -103,7 +103,8 @@ export function CreateCustomerDialog({
   /** Fired after a successful create/update — not when the dialog is dismissed. */
   onSaved?: (customer: PortalCustomerCrm) => void;
 }) {
-  const { addCustomer, updateCustomer, provider } = useCrmDirectory();
+  // Mounted closed on list pages: only load the customer lookup once the dialog is in use.
+  const { addCustomer, updateCustomer, provider } = useCrmDirectory({ customerLookup: open });
   const isEdit = Boolean(customer);
   const [saving, setSaving] = useState(false);
   const [entityKind, setEntityKind] = useState<CrmEntityKind>("individual");
@@ -553,7 +554,7 @@ export function CreateVendorDialog({
     auth.hydrated &&
     Boolean(auth.token) &&
     (user?.role === "provider" || auth.role === "provider");
-  const { addVendor, updateVendor, provider, vendors } = useCrmDirectory();
+  const { addVendor, updateVendor, provider, vendors } = useCrmDirectory({ customerLookup: false });
   const detail = useAppSelector((state) => state.vendors?.detail ?? null);
   const isEdit = Boolean(vendor);
   const [name, setName] = useState("");

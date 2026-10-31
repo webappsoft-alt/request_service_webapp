@@ -146,7 +146,12 @@ function subscribe(onStoreChange: () => void) {
   };
 }
 
-export function useCrmDirectory() {
+/**
+ * @param options.customerLookup false on pages that never read `customers` while live (the
+ *   Customers / Contractors / Vendors tabs load their own paginated lists), so opening them
+ *   doesn't also fetch the 100-customer name lookup.
+ */
+export function useCrmDirectory({ customerLookup = true }: { customerLookup?: boolean } = {}) {
   const dispatch = useAppDispatch();
   const reduxCustomers = useAppSelector((state) => state.customers?.items ?? []);
   const reduxLoading = useAppSelector((state) => state.customers?.loading ?? false);
@@ -191,12 +196,12 @@ export function useCrmDirectory() {
     (crm.customers?.length ?? 0) > 0 || (reduxCustomers?.length ?? 0) > 0;
   const [lookup, setLookup] = useState<PortalCustomerCrm[]>(() => lookupCustomers ?? []);
   useEffect(() => {
-    if (!crm.enabled || hasLoadedCustomers) return;
+    if (!customerLookup || !crm.enabled || hasLoadedCustomers) return;
     const sync = () => setLookup(lookupCustomers ?? []);
     window.addEventListener(LOOKUP_EVENT, sync);
     void ensureCustomerLookup().then(sync);
     return () => window.removeEventListener(LOOKUP_EVENT, sync);
-  }, [crm.enabled, hasLoadedCustomers]);
+  }, [customerLookup, crm.enabled, hasLoadedCustomers]);
 
   const customers = useMemo(() => {
     if (crm.customers && crm.customers.length > 0) return crm.customers;
@@ -308,7 +313,8 @@ export function useCrmDirectory() {
         if (!created?.id) {
           throw new Error("Customer was created but the server response could not be read.");
         }
-        await dispatch(fetchCustomers({ force: true, limit: 100 }));
+        // Reload at the list's own page size (100 here filled the Customers table with 100 rows).
+        await dispatch(fetchCustomers({ force: true }));
         if (crm.ready) {
           await crm.refresh({ silent: true });
         }
@@ -333,7 +339,8 @@ export function useCrmDirectory() {
         if (!updated?.id) {
           throw new Error("Customer was updated but the server response could not be read.");
         }
-        await dispatch(fetchCustomers({ force: true, limit: 100 }));
+        // Reload at the list's own page size (100 here filled the Customers table with 100 rows).
+        await dispatch(fetchCustomers({ force: true }));
         if (crm.ready) {
           await crm.refresh({ silent: true });
         }

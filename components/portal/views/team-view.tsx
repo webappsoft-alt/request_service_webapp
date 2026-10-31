@@ -494,7 +494,8 @@ function EmployeeFormDialog({
         }
       } else if (useApi) {
         const created = await dispatch(createTeamMember(input)).unwrap();
-        await dispatch(fetchTeam({ force: true }));
+        // Same page size as the list (a bare `force` loads 100 for pickers).
+        await dispatch(fetchTeam({ force: true, limit: TEAM_DEFAULT_LIMIT }));
         toast.success(`${created.firstName} ${created.lastName} added. Assign them from Schedule.`);
       } else {
         toast.error("Sign in as a provider to create employees on the server.");

@@ -47,7 +47,8 @@ export function CustomersView() {
   const dispatch = useAppDispatch();
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
-  const { customers, remove } = useCrmDirectory();
+  // Live, this page lists its own paginated customers; `customers` only feeds offline mode.
+  const { customers, remove } = useCrmDirectory({ customerLookup: false });
   const records = usePortalRecords();
   const directoryRows = records.keep("customer", customers);
   const pending = useCrmRecordPending();

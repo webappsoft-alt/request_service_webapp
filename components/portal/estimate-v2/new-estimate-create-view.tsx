@@ -546,9 +546,13 @@ export function NewEstimateCreateView() {
         source: linkedRequestId ? "lead" : "manual",
         requestId: linkedRequestId || undefined,
         internalNotes: internalNotes.trim(),
+        prepChoice,
       });
 
-      await updateEstimateV2Opportunity(opportunity.id, { prepChoice });
+      // Older APIs ignore prepChoice on create: set it the separate way then.
+      if (opportunity.prepChoice !== prepChoice) {
+        await updateEstimateV2Opportunity(opportunity.id, { prepChoice });
+      }
 
       if (prepChoice === "schedule_assessment") {
         const customerDescription = description.trim();
@@ -561,9 +565,6 @@ export function NewEstimateCreateView() {
           customerRequirements: customerDescription,
           findings: officeNotes || customerDescription,
         });
-        toast.success("Estimate created. Schedule the site assessment next.");
-      } else {
-        toast.success("Estimate created. Continue in the workspace.");
       }
 
       // Create now → the workspace asks Manual vs Ready-made template.

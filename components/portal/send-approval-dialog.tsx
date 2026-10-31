@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { getAuthToken } from "@/components/api/apiFuntions";
-import { shareEstimate } from "@/lib/api/crm-client";
+import { finalizeEstimate, shareEstimate, type ShareEstimateInput } from "@/lib/api/crm-client";
 import { estimateCanShare } from "@/lib/data/portal";
 import type { PortalCustomerCrm } from "@/lib/data/crm-people";
 import type { Estimate } from "@/lib/types";
@@ -170,12 +170,25 @@ export function SendApprovalDialog({
               try {
                 const target = prepare ? await prepare() : estimate;
                 if (!target?.id) return;
-                const shared = await shareEstimate(target.id, {
+                // One request: finalize (if still a draft) + share; the email goes out after the answer.
+                const input: ShareEstimateInput = {
                   companySignedBy: signed.companySignedBy,
                   companySignedAt: signed.companySignedAt,
                   companySignatureDataUrl: signed.companySignatureDataUrl,
                   customerEmail: customer?.email,
-                });
+                  finalize: true,
+                  backgroundEmail: true,
+                };
+                let shared;
+                try {
+                  shared = await shareEstimate(target.id, input);
+                } catch (shareError) {
+                  // An older API can't finalize inside the share: finalize, then share again.
+                  const status = (shareError as { response?: { status?: number } } | null)?.response?.status;
+                  if (status !== 400 || !["draft", "inspected"].includes(String(target.status))) throw shareError;
+                  await finalizeEstimate(target.id, target);
+                  shared = await shareEstimate(target.id, input);
+                }
                 const token = String(shared.shareToken || "").trim();
                 if (!token) {
                   throw new Error(
@@ -214,7 +227,13 @@ export function SendApprovalDialog({
                     : mode === "resend"
                       ? "sent again"
                       : "sent";
-                if (shared.emailSent) {
+                if (shared.emailQueued) {
+                  toast.success(
+                    shared.emailTo
+                      ? `Estimate ${sentVerb} to ${shared.emailTo}.`
+                      : `Estimate ${sentVerb}.`,
+                  );
+                } else if (shared.emailSent) {
                   toast.success(
                     shared.emailTo
                       ? `Estimate ${sentVerb} to ${shared.emailTo}.`

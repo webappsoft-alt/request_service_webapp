@@ -173,6 +173,8 @@ export type CrmEstimateShareResult = {
   emailTo?: string | null;
   emailSkippedReason?: string | null;
   emailError?: string | null;
+  /** The email goes out right after this response (requested with `backgroundEmail`). */
+  emailQueued?: boolean;
 };
 
 const DEFAULT_LIST_LIMIT = 20;
@@ -1797,6 +1799,10 @@ export type ShareEstimateInput = {
   skipEmail?: boolean;
   /** Used when the estimate snapshot is missing an address. */
   customerEmail?: string;
+  /** Finalize a draft in the same request (older APIs ignore it). */
+  finalize?: boolean;
+  /** Answer right away and email the customer after (`emailQueued` on the result). */
+  backgroundEmail?: boolean;
 };
 
 export async function shareEstimate(id: string, input?: ShareEstimateInput) {
@@ -1817,6 +1823,8 @@ export async function shareEstimate(id: string, input?: ShareEstimateInput) {
   if (input?.skipEmail) body.skipEmail = true;
   const customerEmail = String(input?.customerEmail || "").trim();
   if (customerEmail) body.customerEmail = customerEmail;
+  if (input?.finalize) body.finalize = true;
+  if (input?.backgroundEmail) body.backgroundEmail = true;
   const response = await postData(
     providerCrmApi.estimateShare(id),
     Object.keys(body).length ? body : undefined,
@@ -1859,6 +1867,7 @@ export async function shareEstimate(id: string, input?: ShareEstimateInput) {
       ? String(payload.emailSkippedReason)
       : null,
     emailError: payload.emailError ? String(payload.emailError) : null,
+    emailQueued: Boolean(payload.emailQueued),
   } satisfies CrmEstimateShareResult;
 }
 

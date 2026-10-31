@@ -666,6 +666,12 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
    */
   const taxRatePromiseRef = useRef<Promise<number>>(Promise.resolve(0));
   const [taxRateReady, setTaxRateReady] = useState(false);
+  /** State the loaded rate belongs to, and whether it has arrived (read inside load). */
+  const taxRateStateRef = useRef("");
+  const taxRateReadyRef = useRef(false);
+  useEffect(() => {
+    taxRateReadyRef.current = taxRateReady;
+  }, [taxRateReady]);
   const [followUpAt, setFollowUpAt] = useState("");
   const [followUpNotes, setFollowUpNotes] = useState("");
   const [prepFindings, setPrepFindings] = useState("");
@@ -919,7 +925,13 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         });
 
       // Tax rate only needs the property state: load it in the background, the page doesn't wait.
-      const ratePromise: Promise<number> = fetchTaxRatePercent(data.propertyAddress?.state).then((rate) => {
+      // A quiet reload (after a save / send) keeps the rate already loaded for the same state.
+      const rateState = String(data.propertyAddress?.state || "").trim().toUpperCase();
+      const reuseRate = silent && taxRateStateRef.current === rateState && taxRateReadyRef.current;
+      taxRateStateRef.current = rateState;
+      const ratePromise: Promise<number> = (
+        reuseRate ? taxRatePromiseRef.current : fetchTaxRatePercent(data.propertyAddress?.state)
+      ).then((rate) => {
         if (taxRatePromiseRef.current === ratePromise) {
           setTaxRatePercent(rate);
           autoSaveCtx.current = { ...autoSaveCtx.current, taxRatePercent: rate };
@@ -1003,7 +1015,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       // New estimate wizard → "Create estimate now" lands here with ?start=1: ask Manual vs Template.
       if (!silent && !startParamHandled.current && new URLSearchParams(window.location.search).get("start") === "1") {
         startParamHandled.current = true;
-        router.replace(`/pro/dashboard/new-estimate/${data.id}`, { scroll: false });
+        window.history.replaceState(window.history.state, "", `/pro/dashboard/new-estimate/${data.id}`);
         if (!isEstimateLocked(freshEstimate)) {
           setStartOnTemplates(false);
           setStartOpen(true);
@@ -1357,9 +1369,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   async function ensureEstimate() {
     if (!opportunity) return null;
     if (estimate?.id) return estimate;
-    const created = await saveEstimateDraft({ silent: true });
-    if (created?.id) toast.success(`${created.number || "Estimate"} created.`);
-    return created;
+    return saveEstimateDraft({ silent: true });
   }
 
   const templateCategory = findTemplateCategory(templateCatalog || [], opportunity?.categoryName);
@@ -1421,9 +1431,6 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       setOpportunity((current) => (current ? { ...current, subcategoryName: template.subcategoryName } : current));
       void updateEstimateV2Opportunity(opportunity.id, { subcategoryName: template.subcategoryName }).catch(() => {});
     }
-    toast.success(
-      `Loaded the ${template.name} template — ${template.items.length} ${fillsPrepWorkItems ? "work items" : "line items"}.`,
-    );
     if (fillsPrepWorkItems) {
       window.setTimeout(() => prepInfoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
     } else if (!options?.quiet) {
@@ -1600,6 +1607,23 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       };
       // Wait for a background save so the draft estimate is never created twice.
       await pendingSheetSaves.get(opportunity.id);
+      const base = sheetBaseRef.current;
+      const known = autoSaveCtx.current.estimate;
+      if (
+        known?.id &&
+        base?.id === opportunity.id &&
+        estimateSheetSignature(sheet) === estimateSheetSignature(base.saved)
+      ) {
+        // Nothing new since the last save (usually the auto-save just sent it).
+        setEstimate(known);
+        clearSheetDraft();
+        setAutoSaveState("saved");
+        if (!options?.silent) {
+          toast.success(known.status === "draft" ? "Estimate draft saved." : "Estimate saved.");
+        }
+        if (options?.reload !== false) await load({ silent: true });
+        return known;
+      }
       const task = persistEstimateSheet({
         opportunity,
         current: autoSaveCtx.current.estimate || estimate,
@@ -1690,27 +1714,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     }
     const saved = await saveEstimateDraft({ silent: true, reload: false });
     if (!saved?.id) return null;
-    let current: Estimate = saved;
-    if (
-      current.status === "draft" ||
-      current.status === "site_visit" ||
-      current.status === "inspected"
-    ) {
-      const finalized = await finalizeEstimate(current.id, current);
-      const refreshed = finalized || (await getEstimate(current.id));
-      current = refreshed || { ...current, status: "finalized" };
-      const expected = opportunityStatusForEstimateStatus(current.status);
-      if (expected && opportunity && opportunity.status !== expected) {
-        try {
-          await updateEstimateV2Opportunity(opportunity.id, { status: expected });
-          setOpportunity({ ...opportunity, status: expected });
-        } catch {
-          /* non-blocking */
-        }
-      }
-    }
+    // A draft is finalized by the share request itself (finalize: true) — no separate update.
     // Keep live workspace sections/images even if an older API omitted them.
-    const forSend = withWorkspaceLineMeta(current, lines);
+    const forSend = withWorkspaceLineMeta(saved, lines);
     setEstimate(forSend);
     setAutoCreatedEstimateId(null);
     return forSend;
@@ -1722,11 +1728,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     const built = await saveEstimateDraft({ silent: true });
     if (!built?.id) return;
     setAutoCreatedEstimateId(null);
-    toast.success(
-      wasNew
-        ? `${built.number || "Estimate"} created.`
-        : `${built.number || "Estimate"} is built — review the line items, then Preview & send.`,
-    );
+    toast.success(`${built.number || "Estimate"} ${wasNew ? "created" : "built"}.`);
     offerSaveTemplate(() => askStagesThen(undefined, built));
   }
 
@@ -2914,14 +2916,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                 shareToken: result.token || estimate.shareToken,
               });
             }
-            try {
-              await updateEstimateV2Opportunity(opportunity.id, {
-                status: "estimate_sent",
-              });
-              setOpportunity({ ...opportunity, status: "estimate_sent" });
-            } catch {
-              /* backend share also syncs; non-blocking */
-            }
+            // The share request already moved the opportunity to "estimate sent".
+            setOpportunity({ ...opportunity, status: "estimate_sent" });
             await load({ silent: true });
           }}
         />

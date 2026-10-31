@@ -299,6 +299,8 @@ export async function createEstimateV2Opportunity(input: {
   source?: string;
   requestId?: string;
   internalNotes?: string;
+  /** Set on create (newer API); check `prepChoice` on the result — older APIs ignore it. */
+  prepChoice?: PrepChoice;
 }) {
   const response = await postData(providerCrmApi.estimateV2Opportunities, input);
   return normalizeOpportunity(unwrapData<EstimateV2Opportunity>(response));

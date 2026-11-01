@@ -2,7 +2,7 @@ import { mapFieldNote, mapFieldNotes, type FieldNote } from "@/lib/field-notes";
 import type { DeviceLocation } from "@/lib/geolocation";
 import { contractorPortalApi, providerCrmApi, technicianApi } from "@/components/api/ApiRoutesFile";
 import { deleteData, getData, patchData, postData, putData } from "@/components/api/sliceHttp";
-import { mapProjectStages, type ProjectStage, type StageProgressInput } from "@/lib/project-stages";
+import { mapStageBundle, withStageLocation, type StageBundle, type StageProgressInput } from "@/lib/project-stages";
 import {
   mapLocationReport,
   mapTimeEntry,
@@ -932,12 +932,26 @@ export async function addContractorJobNote(
 }
 
 /** Project stages of an assigned job. */
-export async function listContractorJobStages(jobId: string): Promise<ProjectStage[]> {
-  return mapProjectStages(asRecord(dataOf(await getData(contractorPortalApi.jobStages(jobId), undefined, quiet))).stages);
+export async function listContractorJobStages(jobId: string): Promise<StageBundle> {
+  return mapStageBundle(dataOf(await getData(contractorPortalApi.jobStages(jobId), undefined, quiet)));
+}
+
+function contractorStageNoteEndpoint(jobId: string, noteId: string) {
+  return contractorPortalApi.jobStages(jobId).replace(/\/stages$/, `/stage-notes/${noteId}`);
+}
+
+/** Edit one of the contractor's own stage notes; returns the stages and notes. */
+export async function editContractorStageNote(jobId: string, noteId: string, content: string): Promise<StageBundle> {
+  return mapStageBundle(dataOf(await patchData(contractorStageNoteEndpoint(jobId, noteId), { content }, { silent: true })));
+}
+
+/** Delete one of the contractor's own stage notes; returns the stages and notes. */
+export async function deleteContractorStageNote(jobId: string, noteId: string): Promise<StageBundle> {
+  return mapStageBundle(dataOf(await deleteData(contractorStageNoteEndpoint(jobId, noteId), { silent: true })));
 }
 
 /** Start / complete a stage and/or note a delay; returns the updated stages. */
-export async function updateContractorJobStage(jobId: string, stageId: string, input: StageProgressInput): Promise<ProjectStage[]> {
+export async function updateContractorJobStage(jobId: string, stageId: string, input: StageProgressInput): Promise<StageBundle> {
   const endpoint = `${contractorPortalApi.jobStages(jobId)}/${stageId}`;
-  return mapProjectStages(asRecord(dataOf(await patchData(endpoint, input, { silent: true }))).stages);
+  return mapStageBundle(dataOf(await patchData(endpoint, await withStageLocation(input), { silent: true })));
 }

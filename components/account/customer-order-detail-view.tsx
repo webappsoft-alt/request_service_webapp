@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CustomerProjectProgress } from "@/components/estimate/customer-project-progress";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
@@ -664,6 +665,13 @@ export function CustomerOrderDetailView({
               </ol>
             </div>
           </section>
+
+          {/* PROJECT STAGES — the estimate's stages and the crew's shared updates (pro jobs) */}
+          <CustomerProjectProgress
+            stages={activeOrder.projectStages ?? []}
+            updates={activeOrder.projectUpdates ?? []}
+            className="max-w-none p-5 sm:p-6"
+          />
 
           {/* MAIN 2-COLUMN GRID */}
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">

@@ -28,7 +28,14 @@ import { formatHours } from "@/lib/time-tracking";
 import { technicianPaths } from "@/lib/technician-paths";
 import { FieldNotesPanel } from "@/components/field-notes/field-notes-panel";
 import { StageProgressPanel } from "@/components/field-notes/stage-progress-panel";
-import { addTechnicianNote, listTechnicianNotes, listTechnicianStages, updateTechnicianStage } from "@/lib/api/technician-client";
+import {
+  addTechnicianNote,
+  deleteTechnicianStageNote,
+  editTechnicianStageNote,
+  listTechnicianNotes,
+  listTechnicianStages,
+  updateTechnicianStage,
+} from "@/lib/api/technician-client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   TECH_PAGE_SIZE,
@@ -355,6 +362,8 @@ export function TechnicianEstimateDetailView({ id }: { id: string }) {
                 recordKey={estimate.id}
                 load={() => listTechnicianStages("estimate", estimate.id)}
                 update={(stageId, input) => updateTechnicianStage("estimate", estimate.id, stageId, input)}
+                editNote={(noteId, content) => editTechnicianStageNote("estimate", estimate.id, noteId, content)}
+                deleteNote={(noteId) => deleteTechnicianStageNote("estimate", estimate.id, noteId)}
               />
               <div className="grid gap-3 lg:grid-cols-3">
                 <DetailCard title="Customer">

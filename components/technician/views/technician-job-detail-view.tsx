@@ -39,7 +39,14 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchTechJob } from "@/store/technicianSlice";
 import { FieldNotesPanel } from "@/components/field-notes/field-notes-panel";
 import { StageProgressPanel } from "@/components/field-notes/stage-progress-panel";
-import { addTechnicianNote, listTechnicianNotes, listTechnicianStages, updateTechnicianStage } from "@/lib/api/technician-client";
+import {
+  addTechnicianNote,
+  deleteTechnicianStageNote,
+  editTechnicianStageNote,
+  listTechnicianNotes,
+  listTechnicianStages,
+  updateTechnicianStage,
+} from "@/lib/api/technician-client";
 
 const CLOSED_STATUSES = ["cancelled", "paid", "invoiced"];
 
@@ -320,6 +327,8 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
                 recordKey={job.id}
                 load={() => listTechnicianStages("job", job.id)}
                 update={(stageId, input) => updateTechnicianStage("job", job.id, stageId, input)}
+                editNote={(noteId, content) => editTechnicianStageNote("job", job.id, noteId, content)}
+                deleteNote={(noteId) => deleteTechnicianStageNote("job", job.id, noteId)}
               />
               <div className="grid gap-3 lg:grid-cols-3">
                 <DetailCard title="Customer">

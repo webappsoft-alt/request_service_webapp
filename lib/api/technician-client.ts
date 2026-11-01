@@ -2,8 +2,8 @@ import { mapFieldNote, mapFieldNotes, type FieldNote } from "@/lib/field-notes";
 import { mapLocationReport, type LocationReport } from "@/lib/time-tracking";
 import type { DeviceLocation } from "@/lib/geolocation";
 import { technicianApi, providerCrmApi } from "@/components/api/ApiRoutesFile";
-import { getData, patchData, postData, putData } from "@/components/api/sliceHttp";
-import { mapProjectStages, type ProjectStage, type StageProgressInput } from "@/lib/project-stages";
+import { deleteData, getData, patchData, postData, putData } from "@/components/api/sliceHttp";
+import { mapStageBundle, withStageLocation, type StageBundle, type StageProgressInput } from "@/lib/project-stages";
 import {
   browserTimeZone,
   mapTimeEntry,
@@ -929,9 +929,29 @@ export async function addTechnicianNote(
 }
 
 /** Project stages of an assigned job / estimate. */
-export async function listTechnicianStages(kind: "job" | "estimate", id: string): Promise<ProjectStage[]> {
+export async function listTechnicianStages(kind: "job" | "estimate", id: string): Promise<StageBundle> {
   const endpoint = kind === "job" ? technicianApi.jobStages(id) : technicianApi.estimateStages(id);
-  return mapProjectStages(asRecord(dataOf(await getData(endpoint, undefined, quiet))).stages);
+  return mapStageBundle(dataOf(await getData(endpoint, undefined, quiet)));
+}
+
+function technicianStageNoteEndpoint(kind: "job" | "estimate", id: string, noteId: string) {
+  const stages = kind === "job" ? technicianApi.jobStages(id) : technicianApi.estimateStages(id);
+  return stages.replace(/\/stages$/, `/stage-notes/${noteId}`);
+}
+
+/** Edit one of the technician's own stage notes; returns the stages and notes. */
+export async function editTechnicianStageNote(
+  kind: "job" | "estimate",
+  id: string,
+  noteId: string,
+  content: string,
+): Promise<StageBundle> {
+  return mapStageBundle(dataOf(await patchData(technicianStageNoteEndpoint(kind, id, noteId), { content }, { silent: true })));
+}
+
+/** Delete one of the technician's own stage notes; returns the stages and notes. */
+export async function deleteTechnicianStageNote(kind: "job" | "estimate", id: string, noteId: string): Promise<StageBundle> {
+  return mapStageBundle(dataOf(await deleteData(technicianStageNoteEndpoint(kind, id, noteId), { silent: true })));
 }
 
 /** Start / complete a stage and/or note a delay; returns the updated stages. */
@@ -940,7 +960,7 @@ export async function updateTechnicianStage(
   id: string,
   stageId: string,
   input: StageProgressInput,
-): Promise<ProjectStage[]> {
+): Promise<StageBundle> {
   const endpoint = `${kind === "job" ? technicianApi.jobStages(id) : technicianApi.estimateStages(id)}/${stageId}`;
-  return mapProjectStages(asRecord(dataOf(await patchData(endpoint, input, { silent: true }))).stages);
+  return mapStageBundle(dataOf(await patchData(endpoint, await withStageLocation(input), { silent: true })));
 }

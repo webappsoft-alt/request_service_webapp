@@ -20,6 +20,8 @@ import type {
   CompletionDetails,
 } from "@/lib/types/order-booking";
 import type { PendingFixedOrder } from "@/lib/booking/pending-fixed-order";
+import { mapProjectUpdates } from "@/lib/field-notes";
+import { mapProjectStages } from "@/lib/project-stages";
 
 export const CUSTOMER_ORDERS_PAGE_LIMIT = 10;
 
@@ -652,6 +654,8 @@ function parseOrderDetail(response: unknown): CustomerOrderDetail {
       : undefined,
     createdAt: typeof data.createdAt === "string" ? data.createdAt : undefined,
     updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : undefined,
+    projectStages: Array.isArray(data.stages) ? mapProjectStages(data.stages) : undefined,
+    projectUpdates: Array.isArray(data.projectUpdates) ? mapProjectUpdates(data.projectUpdates) : undefined,
   };
 }
 

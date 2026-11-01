@@ -30,6 +30,8 @@ import { StageProgressPanel } from "@/components/field-notes/stage-progress-pane
 import {
   addContractorJobNote,
   listContractorJobNotes,
+  deleteContractorStageNote,
+  editContractorStageNote,
   listContractorJobStages,
   updateContractorJobStage,
 } from "@/lib/api/contractor-portal-client";
@@ -172,6 +174,8 @@ export function ContractorJobDetailView({ id }: { id: string }) {
             recordKey={job.id}
             load={() => listContractorJobStages(job.id)}
             update={(stageId, input) => updateContractorJobStage(job.id, stageId, input)}
+            editNote={(noteId, content) => editContractorStageNote(job.id, noteId, content)}
+            deleteNote={(noteId) => deleteContractorStageNote(job.id, noteId)}
           />
 
           <DetailCard title="Requirements">

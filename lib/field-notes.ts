@@ -75,6 +75,20 @@ export function mapProjectUpdates(raw: unknown): ProjectUpdate[] {
     .filter((update): update is ProjectUpdate => Boolean(update));
 }
 
+/** A note written on a project stage; `mine` = the viewer wrote it (may edit / delete). */
+export type StageNote = ProjectUpdate & { mine: boolean; edited: boolean };
+
+export function mapStageNotes(raw: unknown): StageNote[] {
+  const rows = Array.isArray(raw) ? raw : [];
+  const updates = mapProjectUpdates(rows.map((item) => ({ ...asRecord(item), on: "job" })));
+  const extra = new Map(rows.map((item) => [String(asRecord(item).id || ""), asRecord(item)]));
+  return updates.map((update) => ({
+    ...update,
+    mine: extra.get(update.id)?.mine === true,
+    edited: extra.get(update.id)?.edited === true,
+  }));
+}
+
 export function noteRoleLabel(role: FieldNote["authorRole"]) {
   return role === "technician" ? "Technician" : role === "contractor" ? "Contractor" : "Office";
 }

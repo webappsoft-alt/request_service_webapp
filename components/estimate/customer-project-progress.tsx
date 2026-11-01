@@ -24,7 +24,15 @@ function formatWhen(value: string) {
  * The customer's view of the work: project stages (time, dates, progress) and the updates the
  * provider / crew shared. Hidden when there's neither.
  */
-export function CustomerProjectProgress({ stages, updates }: { stages: ProjectStage[]; updates: ProjectUpdate[] }) {
+export function CustomerProjectProgress({
+  stages,
+  updates,
+  className,
+}: {
+  stages: ProjectStage[];
+  updates: ProjectUpdate[];
+  className?: string;
+}) {
   if (!stages.length && !updates.length) return null;
   const progress = stageProgress(stages);
   // Notes the crew wrote on a stage show under it; the rest stay in "Project updates".
@@ -32,7 +40,7 @@ export function CustomerProjectProgress({ stages, updates }: { stages: ProjectSt
   const notesFor = (stageId: string) => updates.filter((update) => update.stageId === stageId);
   const general = updates.filter((update) => !update.stageId || !stageIds.has(update.stageId));
   return (
-    <section className="mx-auto w-full max-w-[8.5in] space-y-4 rounded-xl border border-border bg-card p-4 shadow-xs print:hidden">
+    <section className={cn("mx-auto w-full max-w-[8.5in] space-y-4 rounded-xl border border-border bg-card p-4 shadow-xs print:hidden", className)}>
       {stages.length ? (
         <div>
           <div className="flex flex-wrap items-baseline justify-between gap-2">

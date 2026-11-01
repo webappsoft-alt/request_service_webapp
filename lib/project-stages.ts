@@ -1,3 +1,5 @@
+import { mapStageNotes, type StageNote } from "@/lib/field-notes";
+import { tryDeviceLocation, type DeviceLocation } from "@/lib/geolocation";
 /**
  * Stages of a larger project (e.g. Removal → Installation → Cleanup), each with its own
  * duration and progress. Shared by the provider estimate page and the customer estimate page.
@@ -7,6 +9,16 @@ export type ProjectStageStatus = "pending" | "in_progress" | "completed";
 
 /** A field update on one stage: new progress and/or a note (e.g. why it is late). */
 export type StageProgressInput = { status?: ProjectStageStatus; note?: string };
+
+/**
+ * A status change needs the worker on site (or clocked in on the job), so it carries the device
+ * position when the device gives one; notes alone don't.
+ */
+export async function withStageLocation(input: StageProgressInput): Promise<StageProgressInput & Partial<DeviceLocation>> {
+  if (!input.status) return input;
+  const location = await tryDeviceLocation();
+  return location ? { ...input, ...location } : input;
+}
 
 /** What a stage shows: its progress, or Late once its last day passed before it was completed. */
 export type StageDisplayStatus = ProjectStageStatus | "late";
@@ -68,6 +80,14 @@ export function mapProjectStages(raw: unknown): ProjectStage[] {
 }
 
 /** Total time across stages. */
+/** Stages plus the notes written on them (field portals and the office job page). */
+export type StageBundle = { stages: ProjectStage[]; notes: StageNote[] };
+
+export function mapStageBundle(raw: unknown): StageBundle {
+  const data = asRecord(raw);
+  return { stages: mapProjectStages(data.stages), notes: mapStageNotes(data.notes) };
+}
+
 export function stageTotals(stages: Pick<ProjectStage, "durationDays" | "durationHours">[]) {
   return stages.reduce(
     (sum, stage) => ({ days: sum.days + (stage.durationDays || 0), hours: sum.hours + (stage.durationHours || 0) }),

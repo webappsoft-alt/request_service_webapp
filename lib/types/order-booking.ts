@@ -1,3 +1,5 @@
+import type { ProjectUpdate } from "@/lib/field-notes";
+import type { ProjectStage } from "@/lib/project-stages";
 /** Fixed Service order / booking types — aligned with FIXED_SERVICE_ORDER_LIFECYCLE_INTEGRATION_GUIDE.md */
 
 export type OrderStatus =
@@ -245,6 +247,9 @@ export interface CustomerOrdersListResult {
 /** Detail shape from `GET /api/orders/:id` (populated fields when API returns them). */
 export interface CustomerOrderDetail {
   id: string;
+  /** Pro jobs: the estimate's project stages and the updates shared with the customer. */
+  projectStages?: ProjectStage[];
+  projectUpdates?: ProjectUpdate[];
   orderNumber: string;
   status: OrderStatus | string;
   orderType?: "fixed_service" | "pro_service";

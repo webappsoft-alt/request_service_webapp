@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
+import { CustomerProjectProgress } from "@/components/estimate/customer-project-progress";
+import { subscribeRealtime } from "@/components/realtime/realtime-provider";
+import type { StageBundle } from "@/lib/project-stages";
 import Link from "next/link";
 import {
   CalendarDays,
@@ -70,6 +73,7 @@ import {
 import { Input } from "@/components/ui/input";
 import {
   getEstimate,
+  getEstimateStages,
   updateEstimate as updateEstimateApi,
   updateEstimateAttachments,
   updateInvoiceAttachments,
@@ -292,6 +296,34 @@ export function JobSummaryTab({
     preferApi: noun === "job" || Boolean(estimate),
   });
   const { requests } = usePortalWorkspace();
+  // Project stages live on the estimate the job came from; read them with the notes the crew
+  // wrote on each stage (one small request). Refreshes when a stage / note changes.
+  const stageEstimateId = noun === "job" ? job.estimateId : undefined;
+  const [stageBundle, setStageBundle] = useState<{ id: string; bundle: StageBundle } | null>(null);
+  useEffect(() => {
+    if (!stageEstimateId) return;
+    let cancelled = false;
+    const refresh = () => {
+      void getEstimateStages(stageEstimateId)
+        .then((bundle) => {
+          if (!cancelled) setStageBundle({ id: stageEstimateId, bundle });
+        })
+        .catch(() => {
+          /* the summary still shows without stages */
+        });
+    };
+    refresh();
+    const unsubscribe = subscribeRealtime((detail) => {
+      if (String(detail.type || "") === "ESTIMATE_UPDATED") refresh();
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [stageEstimateId]);
+  const shownBundle = stageBundle?.id === stageEstimateId ? stageBundle?.bundle : undefined;
+  const jobStages = noun === "job" ? (shownBundle?.stages ?? estimate?.stages ?? []) : [];
+  const jobStageNotes = noun === "job" ? (shownBundle?.notes ?? []) : [];
   const [taxRatePercent, setTaxRatePercent] = useState(0);
   const addressState =
     estimate?.propertyAddress?.state ||
@@ -726,6 +758,9 @@ export function JobSummaryTab({
         </section>
       </div>
 
+      {jobStages.length ? (
+        <CustomerProjectProgress stages={jobStages} updates={jobStageNotes} className="max-w-none rounded-md border-input" />
+      ) : null}
 
       <ActivityDialog
         open={open}

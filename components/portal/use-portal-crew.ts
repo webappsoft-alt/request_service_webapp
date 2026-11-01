@@ -185,9 +185,13 @@ export function usePortalCrew() {
       // Auth-gated like job create/edit — do not wait for full CRM snapshot ready.
       if (canCallApi) {
         const fallbackWindow = minutesForWindow(assignment.timeWindow);
+        // The record's own calendar row — never one of its project-stage rows ("JOB-333 · Repair"),
+        // which keep their own dates.
+        const isOwnRow = (item: PortalCalendarEvent) =>
+          item.kind === assignment.kind && item.recordId === assignment.recordId && !item.stageId;
         const sourceEvent =
-          events.find((item) => item.kind === assignment.kind && item.recordId === assignment.recordId) ??
-          workspace.calendarEvents.find((item) => item.kind === assignment.kind && item.recordId === assignment.recordId) ??
+          events.find(isOwnRow) ??
+          workspace.calendarEvents.find(isOwnRow) ??
           (() => {
             switch (assignment.kind) {
               case "job": {
@@ -381,19 +385,25 @@ export function usePortalCrew() {
         }
 
         const existingSchedule =
-          events.find(
-            (item) =>
-              item.kind === assignment.kind &&
-              item.recordId === assignment.recordId &&
-              !isSyntheticCalendarId(item.id),
-          ) ??
-          workspace.calendarEvents.find(
-            (item) =>
-              item.kind === assignment.kind &&
-              item.recordId === assignment.recordId &&
-              !isSyntheticCalendarId(item.id),
-          );
+          events.find((item) => isOwnRow(item) && !isSyntheticCalendarId(item.id)) ??
+          workspace.calendarEvents.find((item) => isOwnRow(item) && !isSyntheticCalendarId(item.id));
         let existingId = existingSchedule?.id;
+        // Stage rows of this record, by id (a staged job has these instead of one row of its own).
+        const stageRows = new Map<string, PortalCalendarEvent>();
+        const collectStageRows = (rows: PortalCalendarEvent[]) => {
+          for (const item of rows) {
+            if (
+              item.kind === assignment.kind &&
+              item.recordId === assignment.recordId &&
+              item.stageId &&
+              !isSyntheticCalendarId(item.id)
+            ) {
+              stageRows.set(item.id, item);
+            }
+          }
+        };
+        collectStageRows(events);
+        collectStageRows(workspace.calendarEvents);
         if (!existingId && assignment.recordId) {
           try {
             const rows = await querySchedule({
@@ -402,12 +412,8 @@ export function usePortalCrew() {
               force: true,
               silent: true,
             });
-            existingId = rows.find(
-              (item) =>
-                item.kind === assignment.kind &&
-                item.recordId === assignment.recordId &&
-                !isSyntheticCalendarId(item.id),
-            )?.id;
+            existingId = rows.find((item) => isOwnRow(item) && !isSyntheticCalendarId(item.id))?.id;
+            collectStageRows(rows);
           } catch {
             existingId = undefined;
           }
@@ -432,6 +438,18 @@ export function usePortalCrew() {
         } as const;
 
         let savedEvent: PortalCalendarEvent | null = null;
+        if (!existingId && stageRows.size && !linkOnly) {
+          // A staged project: each stage keeps its own days on the calendar; only the crew changes.
+          const crew = {
+            employeeId: contractor ? null : assignment.employeeId,
+            contractorId: contractor ? assignment.employeeId : null,
+          };
+          for (const row of stageRows.values()) {
+            const saved = await updateScheduleApi(row.id, crew);
+            savedEvent = savedEvent ?? saved;
+          }
+          return savedEvent;
+        }
         if (existingId && !isSyntheticCalendarId(existingId)) {
           savedEvent = await updateScheduleApi(existingId, payload);
         } else {

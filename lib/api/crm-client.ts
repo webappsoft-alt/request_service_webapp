@@ -1,4 +1,4 @@
-import { mapProjectStages, type ProjectStage, type ProjectStageStatus } from "@/lib/project-stages";
+import { mapProjectStages, mapStageBundle, type ProjectStage, type ProjectStageStatus, type StageBundle } from "@/lib/project-stages";
 import { providerCrmApi, publicApi } from "@/components/api/ApiRoutesFile";
 import type {
   CustomerDetailPayload,
@@ -4126,6 +4126,12 @@ export { resolveCrmObjectId, isLocalInvoicePortalKey };
 function stagesOf(response: unknown) {
   const data = (response as { data?: { stages?: unknown } } | null)?.data;
   return data?.stages;
+}
+
+/** An estimate's project stages with the notes the crew wrote on them (office job page). */
+export async function getEstimateStages(estimateId: string): Promise<StageBundle> {
+  const response = await getData(providerCrmApi.estimateStages(estimateId), undefined, { silent: true, force: true });
+  return mapStageBundle((response as { data?: unknown } | null)?.data);
 }
 
 /** Save an estimate's project stages (order = array order). */

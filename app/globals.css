@@ -2163,3 +2163,12 @@ body.rs-cal-dragging [data-cal-overlay] {
   transform-origin: center;
   animation: geo-ping 1.8s ease-out infinite;
 }
+
+/* for-pros-v1 showcase: time left on the auto-advancing tab. */
+@keyframes showcase-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.showcase-progress {
+  animation: showcase-progress linear forwards;
+}

@@ -21,7 +21,12 @@ const heroStats = [
   { value: "20+", label: "Tools in the pro portal" },
 ];
 
-export function ProHero() {
+export function ProHero({
+  withScreenshot = true,
+}: {
+  /** false: no floating dashboard capture under the hero (for-pros-v1 shows a tabbed showcase instead). */
+  withScreenshot?: boolean;
+} = {}) {
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
@@ -32,7 +37,13 @@ export function ProHero() {
 
   return (
     <section className="relative isolate">
-      <div className="relative w-full overflow-hidden pt-12 pb-32 sm:pt-16 sm:pb-40 lg:pt-20 lg:pb-44">
+      <div
+        className={
+          withScreenshot
+            ? "relative w-full overflow-hidden pt-12 pb-32 sm:pt-16 sm:pb-40 lg:pt-20 lg:pb-44"
+            : "relative w-full overflow-hidden pt-12 pb-16 sm:pt-16 sm:pb-20 lg:pt-24 lg:pb-28"
+        }
+      >
         <Image
           src={HERO_PRO_IMAGE}
           alt=""
@@ -117,18 +128,20 @@ export function ProHero() {
         </Container>
       </div>
 
-      <Container className="relative z-10 -mt-24 mb-16 sm:-mt-28 sm:mb-20 lg:-mt-32 lg:mb-24">
-        <div className="mx-auto w-full max-w-4xl">
-          <ProScreenshot
-            name="dashboard-main"
-            alt="Request Service pro dashboard showing today's overview, lead pipeline, incoming requests, and revenue"
-            mobileName="m-dashboard-main"
-            mobileAlt="The same dashboard on a phone"
-            priority
-            sizes="(min-width: 1280px) 56rem, 100vw"
-          />
-        </div>
-      </Container>
+      {withScreenshot ? (
+        <Container className="relative z-10 -mt-24 mb-16 sm:-mt-28 sm:mb-20 lg:-mt-32 lg:mb-24">
+          <div className="mx-auto w-full max-w-4xl">
+            <ProScreenshot
+              name="dashboard-main"
+              alt="Request Service pro dashboard showing today's overview, lead pipeline, incoming requests, and revenue"
+              mobileName="m-dashboard-main"
+              mobileAlt="The same dashboard on a phone"
+              priority
+              sizes="(min-width: 1280px) 56rem, 100vw"
+            />
+          </div>
+        </Container>
+      ) : null}
     </section>
   );
 }

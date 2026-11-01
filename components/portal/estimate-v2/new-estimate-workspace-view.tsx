@@ -2071,10 +2071,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           <button
             type="button"
             onClick={() => setMapOpen(true)}
-            className="inline-flex items-center gap-1 font-medium text-primary hover:text-primary/80 cursor-pointer"
+            className="inline-flex items-start gap-1 text-left font-medium text-primary hover:text-primary/80 cursor-pointer"
             title="Click to view on map"
           >
-            <MapPin className="size-3.5 shrink-0 text-primary" />
+            <MapPin className="mt-[3px] size-3.5 shrink-0 text-primary" />
             <span>{propertyLine(opportunity)}</span>
           </button>
           <button

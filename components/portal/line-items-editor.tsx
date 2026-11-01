@@ -143,7 +143,20 @@ export function LineItemsEditor({
 
   return (
     <div className={cn("w-full overflow-x-auto rounded-lg border border-[#94a3b8] bg-card", className)}>
-      <Table className="w-full min-w-0 table-fixed">
+      {/* Fixed columns need room: on narrow screens the table scrolls sideways instead of
+          squeezing Description to nothing. */}
+      <Table
+        className={cn(
+          "w-full table-fixed",
+          wideDescription
+            ? showPricing
+              ? "min-w-[36rem]"
+              : "min-w-[27rem]"
+            : showPricing
+              ? "min-w-[50rem]"
+              : "min-w-[35rem]",
+        )}
+      >
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead className="h-8 min-w-0 bg-[#f7f8fa] px-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">

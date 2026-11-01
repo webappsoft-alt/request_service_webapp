@@ -46,7 +46,12 @@ const STEPS = [
  * Home page banner for the AI Kitchen & Bath Redesigner. Renders nothing until the admin
  * switches the feature on (the catalog then reports `enabled: true`).
  */
-export function RedesignerSection() {
+export function RedesignerSection({
+  variant = "default",
+}: {
+  /** "showcase": full-width dark split-screen (home-v1 prototype). Same data and switch. */
+  variant?: "default" | "showcase";
+} = {}) {
   const dispatch = useAppDispatch();
   const catalog = useAppSelector(selectRedesignCatalog);
   const router = useRouter();
@@ -74,6 +79,88 @@ export function RedesignerSection() {
   const swatches = (catalog.finishes || [])
     .filter((finish) => finish.kind === "color" && finish.color)
     .slice(0, 12);
+
+  if (variant === "showcase") {
+    return (
+      <section className="relative overflow-hidden bg-[#071a33] text-white">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -left-40 top-1/3 size-[40rem] rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.16),transparent_65%)]"
+        />
+        <div className="relative grid lg:grid-cols-2">
+          <div className="flex flex-col justify-center gap-7 px-[10vw] py-16 md:py-24 lg:pr-16 lg:pl-[max(10vw,calc((100vw-90rem)/2))]">
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-sky-200">
+              <Sparkles className="size-3.5" aria-hidden="true" />
+              AI designer · Free
+            </span>
+            <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-[2.9rem] md:leading-[1.08]">
+              {catalog.section?.title}
+            </h2>
+            <p className="max-w-lg text-sm leading-7 text-white/70 md:text-base">{catalog.section?.subtitle}</p>
+            <ol className="flex flex-col gap-3 border-l border-white/15 pl-5">
+              {STEPS.map((step, index) => (
+                <li key={step.label} className="flex items-baseline gap-3 text-sm">
+                  <span className="font-mono text-xs text-sky-300">{String(index + 1).padStart(2, "0")}</span>
+                  <span className="font-medium text-white/90">{step.label}</span>
+                </li>
+              ))}
+            </ol>
+            <div className="flex flex-wrap items-center gap-4">
+              <Button size="xl" type="button" onClick={openDesigner} className="bg-white text-[#071a33] hover:bg-white/90">
+                Try the AI designer
+                <ArrowRight data-icon="inline-end" />
+              </Button>
+              <span className="text-xs text-white/60">Your layout stays — only the look changes.</span>
+            </div>
+          </div>
+
+          <div className="relative min-h-[22rem] lg:min-h-[38rem]">
+            {showcase ? (
+              <>
+                <BeforeAfterSlider
+                  before={showcase.before}
+                  after={showcase.after}
+                  alt={showcase.style ? `${showcase.style} AI redesign` : "AI redesign"}
+                  className="absolute inset-0 h-full w-full"
+                />
+                <p className="pointer-events-none absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/55 px-3 py-1 text-xs text-white backdrop-blur-sm">
+                  <MoveHorizontal className="size-3.5" aria-hidden="true" />
+                  Drag to compare{showcase.style ? ` · ${showcase.style}` : ""}
+                </p>
+              </>
+            ) : previews.length ? (
+              <div className="absolute inset-0 grid grid-cols-2">
+                {previews.map((style) => (
+                  <button
+                    key={style.id}
+                    type="button"
+                    onClick={openDesigner}
+                    aria-label={`Try the ${style.name} style`}
+                    className="group relative cursor-pointer overflow-hidden"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- admin-uploaded style preview */}
+                    <img
+                      src={style.image}
+                      alt={`${style.name} ${style.roomType}`}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                      loading="lazy"
+                    />
+                    <span className="absolute bottom-3 left-3 rounded-full bg-black/55 px-2.5 py-0.5 text-xs font-medium text-white backdrop-blur-sm">
+                      {style.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Sparkles className="size-12 text-sky-300" aria-hidden="true" />
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <Section density="tight">

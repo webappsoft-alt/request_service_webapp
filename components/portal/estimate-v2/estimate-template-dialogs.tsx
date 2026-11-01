@@ -84,8 +84,8 @@ export function TemplatePreviewTable({
         className,
       )}
     >
-      <div className="max-h-[22rem] overflow-y-auto">
-        <table className="w-full table-fixed text-sm">
+      <div className="max-h-[22rem] overflow-auto">
+        <table className="w-full min-w-[28rem] table-fixed text-sm">
           {/* Fixed px widths (inline so they always win): Description takes everything else. */}
           <colgroup>
             <col style={{ width: "auto" }} />

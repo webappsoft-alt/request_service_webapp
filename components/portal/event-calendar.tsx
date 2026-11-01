@@ -723,7 +723,7 @@ export function EventCalendar({
 
   return (
     <div className="space-y-0 relative">
-      <div className="-mx-4 flex flex-wrap items-center gap-2 border-y border-border-soft bg-secondary px-4 py-2">
+      <div className="-mx-3 flex flex-wrap items-center gap-2 border-y border-border-soft bg-secondary px-3 py-2 sm:-mx-4 sm:px-4">
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" className="size-8 border-border-soft bg-card" aria-label="Previous" onClick={() => shiftView(-1)}>
             <ChevronLeft />
@@ -1292,7 +1292,9 @@ function TimeGrid({
   onClickCard?: (e: React.MouseEvent, event: PortalCalendarEvent) => void;
   onContextMenuCard?: (e: React.MouseEvent, event: PortalCalendarEvent) => void;
 }) {
-  const columns = days.length === 1 ? "grid-cols-[72px_minmax(0,1fr)]" : "grid-cols-[72px_repeat(7,minmax(0,1fr))]";
+  // Week: 7 day columns need room — on phones the grid scrolls sideways instead of crushing the cards.
+  const columns =
+    days.length === 1 ? "grid-cols-[72px_minmax(0,1fr)]" : "min-w-[46rem] grid-cols-[72px_repeat(7,minmax(0,1fr))]";
   const height = SLOTS.length * SLOT_PX;
   const [hover, setHover] = useState<{ iso: string; slot: number } | null>(null);
 
@@ -1313,7 +1315,7 @@ function TimeGrid({
   }, [events, days]);
 
   return (
-    <div className="border border-border-soft bg-card">
+    <div className="overflow-x-auto border border-border-soft bg-card">
       <div className={cn("grid border-b border-border-soft bg-[#f7f8fa]", columns)}>
         <div />
         {days.map((iso) => (
@@ -1636,7 +1638,7 @@ function TimedBar({
           {event.date ? (
             <span className="truncate">{formatDate(event.date)}</span>
           ) : <span />}
-          <span className="shrink-0">
+          <span className="min-w-0 truncate">
             {isDueEvent && dueDateDisplay
               ? `Due: ${formatDate(dueDateDisplay)}`
               : `${formatClock(times.start)} – ${formatClock(end)}`}
@@ -1853,7 +1855,7 @@ function CalendarChip({
                 : formatDate(event.date)}
             </span>
           ) : <span />}
-          <span className="shrink-0">
+          <span className="min-w-0 truncate">
             {isDueEvent && dueDateDisplay ? (
               <span className="text-amber-200">Due: {formatDate(dueDateDisplay)}</span>
             ) : (
@@ -1906,7 +1908,7 @@ export function EventCalendarSkeleton({ className }: { className?: string }) {
   return (
     <div className={cn("space-y-0", className)} aria-busy="true">
       {/* Top Toolbar — always stays visible with buttons intact */}
-      <div className="-mx-4 flex flex-wrap items-center gap-2 border-y border-border-soft bg-secondary px-4 py-2">
+      <div className="-mx-3 flex flex-wrap items-center gap-2 border-y border-border-soft bg-secondary px-3 py-2 sm:-mx-4 sm:px-4">
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" className="size-8 border-border-soft bg-card" disabled>
             <ChevronLeft />

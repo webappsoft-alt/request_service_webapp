@@ -738,7 +738,7 @@ export function CustomerOrderDetailView({
                         Itemized service tasks & materials ({items.length})
                       </h3>
                       <div className="overflow-x-auto rounded-lg border border-input bg-card">
-                        <table className="w-full table-fixed text-left text-sm">
+                        <table className="w-full min-w-[30rem] table-fixed text-left text-sm">
                           <thead className="border-b border-input bg-muted/40 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                             <tr>
                               <th className="w-8 px-2 py-3 text-center">#</th>

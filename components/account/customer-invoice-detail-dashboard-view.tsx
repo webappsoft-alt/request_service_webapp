@@ -393,7 +393,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full table-fixed text-left text-sm">
+              <table className="w-full min-w-[30rem] table-fixed text-left text-sm">
                 <thead className="border-b border-input bg-muted/40 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
                   <tr>
                     <th className="min-w-0 px-4 py-3 sm:px-5">Description</th>

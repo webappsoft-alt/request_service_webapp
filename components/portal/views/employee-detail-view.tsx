@@ -1081,8 +1081,9 @@ export function EmployeeAvailabilityTab({
           </Button>
         </div>
       )}
-      <div className="overflow-hidden rounded-md border border-border-soft">
-        <table className="w-full text-sm">
+      {/* Day / working / shift times need ~26rem: scroll sideways on phones instead of cutting times off. */}
+      <div className="overflow-x-auto rounded-md border border-border-soft">
+        <table className="w-full min-w-[26rem] text-sm">
           <thead className="bg-secondary text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
             <tr>
               <th className="px-3 py-2 text-left font-semibold">Day</th>

@@ -377,7 +377,7 @@ export function DashboardActionCenter({
           {visibleActions.length ? (
             <ul
               className={cn(
-                "grid max-h-[24rem] gap-2 overflow-y-auto p-3",
+                "grid max-h-[24rem] grid-cols-1 gap-2 overflow-y-auto p-3",
                 !both && "lg:grid-cols-2",
               )}
             >
@@ -410,7 +410,7 @@ export function DashboardActionCenter({
         >
           <ul
             className={cn(
-              "grid max-h-[26.5rem] gap-2 overflow-y-auto p-3",
+              "grid max-h-[26.5rem] grid-cols-1 gap-2 overflow-y-auto p-3",
               !both && "lg:grid-cols-2",
             )}
           >

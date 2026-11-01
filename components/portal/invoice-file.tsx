@@ -826,7 +826,7 @@ export function InvoiceSummaryTab({
           </p>
         </div>
         <div className="overflow-x-auto">
-          <Table className="w-full table-fixed">
+          <Table className="w-full min-w-[30rem] table-fixed">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="h-8 min-w-0 bg-[#f7f8fa] px-2.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">

@@ -52,7 +52,7 @@ function PanelSkeleton() {
   return (
     <div className="flex flex-col gap-4">
       <Skeleton className="h-24 w-full rounded-xl" />
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex flex-col gap-4">
           <Skeleton className="h-64 w-full rounded-xl" />
           <Skeleton className="h-80 w-full rounded-xl" />
@@ -196,7 +196,7 @@ export function AiCallingSettingsPanel({ adapter, className }: AiCallingSettings
         </div>
       </Card>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex min-w-0 flex-col gap-4">
           {/* Phone line */}
           <Card className={cardClass}>
@@ -368,7 +368,7 @@ export function AiCallingSettingsPanel({ adapter, className }: AiCallingSettings
         </div>
 
         {/* Recent calls, test call, how it works */}
-        <div className="flex flex-col gap-4 lg:sticky lg:top-20">
+        <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-20">
           <Card className={cardClass}>
             <CardHeader className="border-b border-border-soft">
               <CardTitle className="flex items-center gap-2">

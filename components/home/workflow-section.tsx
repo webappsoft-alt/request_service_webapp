@@ -100,11 +100,17 @@ function stepLabel(step: number) {
   return String(step).padStart(2, "0");
 }
 
-export function WorkflowSection() {
+/**
+ * @param lift Draws the soft wave lifting out of the band above; turn off when the section follows a hard-edged band.
+ * @param edgeFade Fades the right edge of the card track into the background as a "more cards" hint.
+ */
+export function WorkflowSection({ lift = true, edgeFade = true }: { lift?: boolean; edgeFade?: boolean } = {}) {
   const labelId = useId();
   const [active, setActive] = useState(0);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [viewportRem, setViewportRem] = useState<number | null>(null);
   const touchX = useRef<number | null>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const current = WORKFLOW_STEPS[active] ?? WORKFLOW_STEPS[0];
 
   useEffect(() => {
@@ -133,30 +139,52 @@ export function WorkflowSection() {
     return () => window.removeEventListener("keydown", onKey);
   }, [next, prev]);
 
+  // Without the edge fade, a partially visible trailing card reads as a bug: measure the
+  // viewport so cards that don't fully fit are hidden instead of clipped.
+  useEffect(() => {
+    if (edgeFade) return;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const rootFont = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const measure = () => setViewportRem(viewport.clientWidth / rootFont);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [edgeFade]);
+
   const stride = SLOT_REM + GAP_REM;
   // Active stays in the leading slot; previous card peeks on the left.
   const trackOffsetRem =
     active === 0 ? 0 : -(active * stride) + PREV_PEEK_REM;
+  const peek = active === 0 ? 0 : PREV_PEEK_REM;
+  const isClipped = (index: number) =>
+    !edgeFade &&
+    viewportRem !== null &&
+    index > active &&
+    peek + (index - active) * stride + SLOT_REM > viewportRem + 0.1;
 
   return (
-    <Section className="relative bg-white">
+    <Section density={lift ? "default" : "tight"} className="relative bg-white">
       {/* Soft lift from the assurance / trust band above */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 z-0"
-      >
-        <svg
-          className="absolute inset-x-0 -top-10 h-10 w-full text-white dark:text-card"
-          viewBox="0 0 1440 40"
-          preserveAspectRatio="none"
+      {lift ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 z-0"
         >
-          <path
-            fill="currentColor"
-            d="M0 40C240 8 480 0 720 0s480 8 720 40V40H0Z"
-          />
-        </svg>
-        <div className="absolute inset-x-0 top-0 h-20 bg-[linear-gradient(180deg,rgba(0,63,125,0.05),transparent)]" />
-      </div>
+          <svg
+            className="absolute inset-x-0 -top-10 h-10 w-full text-white dark:text-card"
+            viewBox="0 0 1440 40"
+            preserveAspectRatio="none"
+          >
+            <path
+              fill="currentColor"
+              d="M0 40C240 8 480 0 720 0s480 8 720 40V40H0Z"
+            />
+          </svg>
+          <div className="absolute inset-x-0 top-0 h-20 bg-[linear-gradient(180deg,rgba(0,63,125,0.05),transparent)]" />
+        </div>
+      ) : null}
 
       <Container className="relative z-[1] grid items-stretch gap-10 pt-2 lg:grid-cols-[minmax(17rem,22rem)_minmax(0,1fr)] lg:gap-12 xl:gap-16">
         {/* Left narrative rail */}
@@ -264,6 +292,7 @@ export function WorkflowSection() {
         <div className="relative flex min-w-0 flex-col">
           {/* Fixed-height swipe viewport so CTA buttons never jump */}
           <div
+            ref={viewportRef}
             className="relative h-[22.75rem] overflow-x-clip"
             aria-labelledby={labelId}
             onTouchStart={(event) => {
@@ -277,7 +306,9 @@ export function WorkflowSection() {
               touchX.current = null;
             }}
           >
-            <div className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-16 bg-linear-to-l from-white to-transparent lg:block" />
+            {edgeFade ? (
+              <div className="pointer-events-none absolute inset-y-0 right-0 z-10 hidden w-16 bg-linear-to-l from-white to-transparent lg:block" />
+            ) : null}
 
             <ul
               className="flex h-full items-end gap-3.5 will-change-transform"
@@ -290,6 +321,7 @@ export function WorkflowSection() {
             >
               {WORKFLOW_STEPS.map((step, index) => {
                 const isActive = index === active;
+                const clipped = isClipped(index);
                 return (
                   <li
                     key={step.step}
@@ -302,7 +334,9 @@ export function WorkflowSection() {
                         isActive
                           ? "z-10 h-[22.75rem] w-[16.5rem] shadow-[0_14px_36px_rgba(15,23,42,0.16)]"
                           : "z-0 h-[20rem] w-[15rem] opacity-55 shadow-[0_6px_18px_rgba(15,23,42,0.07)] grayscale-[35%] hover:opacity-80",
+                        clipped && "pointer-events-none opacity-0 hover:opacity-0",
                       )}
+                      aria-hidden={clipped || undefined}
                       aria-current={isActive ? "step" : undefined}
                     >
                       <button

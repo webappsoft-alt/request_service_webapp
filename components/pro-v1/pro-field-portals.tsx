@@ -81,8 +81,8 @@ export function ProTechnicianPortal() {
   const { ref, seconds } = useElapsed(8 * 60 + 42);
 
   return (
-    <Section id="technicians" className="relative scroll-mt-24 bg-background">
-      <Container className="relative grid items-center gap-14 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-14">
+    <Section id="technicians" className="relative scroll-mt-24 bg-muted/50">
+      <Container className="relative grid items-center gap-12 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-14">
         {/* Copy */}
         <div className="flex min-w-0 flex-col gap-8">
           <div className="flex flex-col gap-4">
@@ -300,12 +300,9 @@ const CONTRACTOR_FEATURES = [
  */
 export function ProContractorPortal() {
   return (
-    <section
-      id="contractors"
-      className="relative scroll-mt-24 bg-muted/50"
-    >
+    <Section id="contractors" className="relative scroll-mt-24 bg-background">
 
-      <Container className="relative grid items-center gap-14 py-20 md:py-28 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-14">
+      <Container className="relative grid items-center gap-12 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-14">
         {/* Portal preview (left on desktop) */}
         <div className="relative order-2 min-w-0 sm:pr-10 sm:pb-24 lg:order-1">
           <ContractorDashboardPreview />
@@ -353,7 +350,7 @@ export function ProContractorPortal() {
           </Button>
         </div>
       </Container>
-    </section>
+    </Section>
   );
 }
 
@@ -363,6 +360,7 @@ function ContractorDashboardPreview() {
     <div
       role="img"
       aria-label="Contractor portal dashboard: assigned, completed, earned and pending-review cards, the next jobs, and recent office feedback"
+      data-light
       className="flex overflow-hidden rounded-[1.25rem] border border-border bg-[#f3f5f8] text-left text-slate-900 shadow-[0_30px_70px_-40px_rgba(15,23,42,0.25)]"
     >
       {/* Sidebar */}
@@ -473,6 +471,7 @@ function ContractorLoginCard() {
   return (
     <div
       aria-hidden="true"
+      data-light
       className="absolute right-0 bottom-0 hidden w-60 rotate-2 rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.35)] sm:block"
     >
       <p className="text-[8px] font-semibold tracking-[0.18em] text-[#0f7b68] uppercase">Contractor sign in</p>

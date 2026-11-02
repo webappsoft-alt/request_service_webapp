@@ -1,16 +1,12 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  Bell,
   Briefcase,
-  Building2,
   CalendarDays,
   Columns3,
   Handshake,
-  Inbox,
   LayoutDashboard,
   MapPinned,
-  MessageCircle,
   Timer,
   UserRound,
   Users,
@@ -28,20 +24,15 @@ const PRO_NAV = [
   {
     group: "People",
     items: [
-      { icon: Users, label: "Customers" },
       { icon: UserRound, label: "Employees" },
       { icon: Handshake, label: "Contractors" },
-      { icon: Building2, label: "Vendors" },
       { icon: Timer, label: "Timesheets" },
       { icon: MapPinned, label: "Employee tracking" },
-      { icon: Bell, label: "Reminders" },
     ],
   },
   {
     group: "Work",
     items: [
-      { icon: Inbox, label: "Leads" },
-      { icon: MessageCircle, label: "Messages" },
       { icon: Briefcase, label: "Jobs" },
       { icon: CalendarDays, label: "Schedules" },
     ],
@@ -68,6 +59,7 @@ function ProPortalFrame({
     <div
       role="img"
       aria-label={label}
+      data-light
       className="flex overflow-hidden rounded-[1.25rem] border border-border bg-muted/60 text-left shadow-[0_30px_70px_-40px_rgba(15,23,42,0.25)]"
     >
       <aside className="hidden w-44 shrink-0 flex-col bg-primary text-primary-foreground md:flex">
@@ -127,10 +119,10 @@ const STATUS_TONES = {
 /* ─────────────────────────── Team, timesheets & tracking ─────────────────────────── */
 
 const TEAM_POINTS = [
-  { icon: UserRound, title: "Employees & roles", body: "Owner, dispatcher, estimator, office, and technician logins — each sees only what the role allows." },
-  { icon: Timer, title: "Timesheets", body: "Clocked hours for every technician, week by week. Review sessions, compare crews, and pay what's owed." },
-  { icon: MapPinned, title: "Employee tracking", body: "Where employees and subcontractors are, and the route they took — recorded only while they're clocked in." },
-  { icon: Wallet, title: "Pay from the timesheet", body: "Hours times their rate, minus what's already paid. Mark it paid and it shows in their portal." },
+  { icon: UserRound, title: "Employees & roles", body: "Office and technician logins — each sees only what the role allows." },
+  { icon: Timer, title: "Timesheets", body: "Every clocked hour, week by week, with each session to review." },
+  { icon: MapPinned, title: "Employee tracking", body: "Live location and daily route — recorded only while clocked in." },
+  { icon: Wallet, title: "Pay from the timesheet", body: "Hours times rate, minus what's paid. Mark it paid in one click." },
 ] as const;
 
 const PINS = [
@@ -152,45 +144,48 @@ const WEEK = [
 export function ProTeamTimeSection() {
   return (
     <Section id="team" className="relative scroll-mt-24 bg-muted/50">
-      <Container className="relative grid items-center gap-14 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-14">
-        <div className="flex min-w-0 flex-col gap-8">
-          <div className="flex flex-col gap-4">
+      <Container className="relative flex flex-col gap-10">
+        {/* Heading row */}
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-end lg:gap-14">
+          <div className="flex flex-col gap-3">
             <p className="inline-flex w-fit items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
               <Users className="size-3.5" aria-hidden="true" />
               Employees · Timesheets · Tracking
             </p>
-            <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-[2.75rem] md:leading-[1.1]">
+            <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-[2.5rem] md:leading-[1.1]">
               Know who&apos;s where — and pay what&apos;s owed.
             </h2>
-            <p className="max-w-lg text-sm leading-7 text-muted-foreground md:text-base">
-              Your people, their hours, and where they are right now, under People in the same portal as your jobs. No
-              calling around, no paper timecards.
-            </p>
           </div>
+          <div className="flex flex-col gap-4">
+            <p className="text-sm leading-7 text-muted-foreground md:text-base">
+              Your people, their hours, and where they are right now — in the same portal as your jobs. No calling around,
+              no paper timecards.
+            </p>
+            <Link
+              href={proPaths.register}
+              className="inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-primary underline-offset-4 hover:underline"
+            >
+              Add your team free
+              <ArrowRight className="size-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </div>
 
-          <ul className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
+        <div className="grid items-center gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-10">
+          <ul className="grid gap-3 sm:grid-cols-2">
             {TEAM_POINTS.map((item) => {
               const Icon = item.icon;
               return (
-                <li key={item.title} className="flex flex-col gap-2">
-                  <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <Icon className="size-4.5" aria-hidden="true" />
+                <li key={item.title} className="flex flex-col gap-2 rounded-2xl border border-border bg-background p-4">
+                  <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Icon className="size-4" aria-hidden="true" />
                   </span>
-                  <h3 className="text-[15px] font-semibold tracking-tight">{item.title}</h3>
-                  <p className="text-sm leading-6 text-muted-foreground">{item.body}</p>
+                  <h3 className="text-sm font-semibold tracking-tight">{item.title}</h3>
+                  <p className="text-[13px] leading-5 text-muted-foreground">{item.body}</p>
                 </li>
               );
             })}
           </ul>
-
-          <Link
-            href={proPaths.register}
-            className="inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-primary underline-offset-4 hover:underline"
-          >
-            Add your team free
-            <ArrowRight className="size-4" aria-hidden="true" />
-          </Link>
-        </div>
 
         <div className="min-w-0">
           <ProPortalFrame
@@ -200,7 +195,7 @@ export function ProTeamTimeSection() {
             label="Employee tracking map with two technicians clocked in and a subcontractor on site, a route line, and this week's timesheet with hours and pay status"
           >
             {/* Map */}
-            <div className="relative h-52 overflow-hidden rounded-xl border border-slate-200 bg-[#eef2f6] sm:h-60">
+            <div className="relative h-44 overflow-hidden rounded-xl border border-slate-200 bg-[#eef2f6] sm:h-48">
               <svg viewBox="0 0 400 220" preserveAspectRatio="none" className="absolute inset-0 size-full" aria-hidden="true">
                 <rect x="250" y="20" width="90" height="55" rx="6" fill="#dcefe1" />
                 <rect x="30" y="140" width="70" height="50" rx="6" fill="#dcefe1" />
@@ -284,6 +279,7 @@ export function ProTeamTimeSection() {
               </table>
             </div>
           </ProPortalFrame>
+        </div>
         </div>
       </Container>
     </Section>

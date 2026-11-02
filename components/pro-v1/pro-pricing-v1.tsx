@@ -139,7 +139,7 @@ export function ProPricingV1() {
   const mobileIndex = Math.min(picked ?? popularIndex, Math.max(plans.length - 1, 0));
 
   return (
-    <Section id="plans" className="scroll-mt-24 bg-muted/50">
+    <Section id="plans" className="scroll-mt-24 bg-background">
       <Container className="flex flex-col gap-10">
         <div className="mx-auto flex max-w-2xl flex-col items-center gap-4 text-center">
           <p className="eyebrow text-primary">Pricing</p>

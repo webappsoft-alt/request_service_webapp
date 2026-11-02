@@ -177,8 +177,9 @@ export function ProPipelineSection() {
           <div ref={boardRef} className="min-w-0">
             <div
               role="img"
+              data-light
               aria-label={`Pipeline board: Daniel Reyes's card is in ${stage.column} — ${stage.event}`}
-              className="overflow-hidden rounded-[1.5rem] border border-border bg-muted/40 p-3 shadow-[0_30px_70px_-40px_rgba(15,23,42,0.25)] sm:p-4"
+              className="overflow-hidden rounded-[1.5rem] border border-border bg-muted/30 p-3 shadow-[0_30px_70px_-40px_rgba(15,23,42,0.25)] sm:p-4"
             >
               <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-400 dark:border-white/10 dark:bg-white/5">
                 <Search className="size-3.5" aria-hidden="true" />

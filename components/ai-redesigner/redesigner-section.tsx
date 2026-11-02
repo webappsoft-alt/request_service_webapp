@@ -48,9 +48,12 @@ const STEPS = [
  */
 export function RedesignerSection({
   variant = "default",
+  tone = "dark",
 }: {
-  /** "showcase": full-width dark split-screen (home-v1 prototype). Same data and switch. */
+  /** "showcase": full-width split-screen (home-v1 prototype). Same data and switch. */
   variant?: "default" | "showcase";
+  /** Showcase copy panel palette. "light" follows the page's light tokens (home-v3). */
+  tone?: "dark" | "light";
 } = {}) {
   const dispatch = useAppDispatch();
   const catalog = useAppSelector(selectRedesignCatalog);
@@ -81,36 +84,84 @@ export function RedesignerSection({
     .slice(0, 12);
 
   if (variant === "showcase") {
+    const light = tone === "light";
     return (
-      <section className="relative overflow-hidden bg-[#071a33] text-white">
+      <section
+        className={
+          light
+            ? "relative overflow-hidden border-y border-border-card/60 bg-[linear-gradient(135deg,#f7fafd_0%,#eaf2fb_100%)] text-foreground"
+            : "relative overflow-hidden bg-[#071a33] text-white"
+        }
+      >
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -left-40 top-1/3 size-[40rem] rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.16),transparent_65%)]"
+          className={
+            light
+              ? "pointer-events-none absolute -left-40 top-1/3 size-[40rem] rounded-full bg-[radial-gradient(circle,rgba(0,63,125,0.10),transparent_65%)]"
+              : "pointer-events-none absolute -left-40 top-1/3 size-[40rem] rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.16),transparent_65%)]"
+          }
         />
         <div className="relative grid lg:grid-cols-2">
           <div className="flex flex-col justify-center gap-7 px-[10vw] py-16 md:py-24 lg:pr-16 lg:pl-[max(10vw,calc((100vw-90rem)/2))]">
-            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-sky-200">
+            <span
+              className={
+                light
+                  ? "inline-flex w-fit items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary"
+                  : "inline-flex w-fit items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-sky-200"
+              }
+            >
               <Sparkles className="size-3.5" aria-hidden="true" />
               AI designer · Free
             </span>
             <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-[2.9rem] md:leading-[1.08]">
               {catalog.section?.title}
             </h2>
-            <p className="max-w-lg text-sm leading-7 text-white/70 md:text-base">{catalog.section?.subtitle}</p>
-            <ol className="flex flex-col gap-3 border-l border-white/15 pl-5">
-              {STEPS.map((step, index) => (
-                <li key={step.label} className="flex items-baseline gap-3 text-sm">
-                  <span className="font-mono text-xs text-sky-300">{String(index + 1).padStart(2, "0")}</span>
-                  <span className="font-medium text-white/90">{step.label}</span>
-                </li>
-              ))}
-            </ol>
+            <p className={light ? "max-w-lg text-sm leading-7 text-muted-foreground md:text-base" : "max-w-lg text-sm leading-7 text-white/70 md:text-base"}>
+              {catalog.section?.subtitle}
+            </p>
+            {light ? (
+              <ol className="grid grid-cols-2 gap-3 sm:max-w-md">
+                {STEPS.map((step, index) => {
+                  const Icon = step.icon;
+                  return (
+                    <li
+                      key={step.label}
+                      className="flex items-center gap-3 rounded-xl border border-border-card bg-background/80 px-3 py-2.5 text-sm shadow-[0_8px_20px_-16px_rgba(15,23,42,0.35)] backdrop-blur-sm"
+                    >
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                        <Icon className="size-4" aria-hidden="true" />
+                      </span>
+                      <span className="flex flex-col leading-tight">
+                        <span className="font-mono text-[10px] tracking-wider text-primary">{String(index + 1).padStart(2, "0")}</span>
+                        <span className="font-medium">{step.label}</span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              <ol className="flex flex-col gap-3 border-l border-white/15 pl-5">
+                {STEPS.map((step, index) => (
+                  <li key={step.label} className="flex items-baseline gap-3 text-sm">
+                    <span className="font-mono text-xs text-sky-300">{String(index + 1).padStart(2, "0")}</span>
+                    <span className="font-medium text-white/90">{step.label}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
             <div className="flex flex-wrap items-center gap-4">
-              <Button size="xl" type="button" onClick={openDesigner} className="bg-white text-[#071a33] hover:bg-white/90">
+              <Button
+                size="xl"
+                type="button"
+                onClick={openDesigner}
+                className={light ? undefined : "bg-white text-[#071a33] hover:bg-white/90"}
+              >
                 Try the AI designer
                 <ArrowRight data-icon="inline-end" />
               </Button>
-              <span className="text-xs text-white/60">Your layout stays — only the look changes.</span>
+              <span className={light ? "text-xs text-muted-foreground" : "text-xs text-white/60"}>
+                Your layout stays — only the look changes.
+              </span>
             </div>
           </div>
 
@@ -153,7 +204,7 @@ export function RedesignerSection({
               </div>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center">
-                <Sparkles className="size-12 text-sky-300" aria-hidden="true" />
+                <Sparkles className={light ? "size-12 text-primary" : "size-12 text-sky-300"} aria-hidden="true" />
               </div>
             )}
           </div>

@@ -479,7 +479,7 @@ export function CustomerOrderDetailView({
         }
         description={`Booked service with ${provider?.companyName || "Service Professional"}. Open any section for schedule, scope, and direct communications.`}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap lg:justify-end [&>*]:shrink-0">
             <Button asChild variant="outline" size="sm">
               <Link href={customerPaths.orders}>
                 <ArrowLeft className="size-3.5" />

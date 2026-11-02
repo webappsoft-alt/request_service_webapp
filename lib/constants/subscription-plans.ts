@@ -27,6 +27,10 @@ export type ProSubscriptionPlan = {
   description: string;
   /** Included inbound AI voice minutes per month; 0 = AI receptionist not included. */
   callingMinutes: number;
+  /** Technician / employee logins: 0 = owner only, -1 = unlimited, else up to that many. */
+  crewSeats: number;
+  /** Subcontractor portal (assigned jobs, change requests, payouts). */
+  subcontractorPortal: boolean;
   features: ProPlanFeature[];
   badge?: string;
   highlighted?: boolean;
@@ -52,6 +56,12 @@ export type ApiSubscriptionPlan = {
   aiVoiceMinutes?: number;
   customFeatures?: { label?: string; included?: boolean }[];
   includedFeatures?: string[];
+  modules?: {
+    hasTechnicianCrewLogins?: boolean;
+    /** 0 = none, -1 = unlimited. */
+    technicianSeatsLimit?: number;
+    hasSubcontractorAccess?: boolean;
+  };
 };
 
 /** Static until the provider's live subscription is wired in. */
@@ -81,6 +91,8 @@ export function mapApiSubscriptionPlan(row: ApiSubscriptionPlan): ProSubscriptio
     annualTotal,
     description: row.shortMarketingPitch || "",
     callingMinutes: row.aiVoiceEnabled ? Math.max(0, Number(row.aiVoiceMinutes) || 0) : 0,
+    crewSeats: row.modules?.hasTechnicianCrewLogins === false ? 0 : Number(row.modules?.technicianSeatsLimit) || 0,
+    subcontractorPortal: Boolean(row.modules?.hasSubcontractorAccess),
     features,
     badge: row.badge || (row.isPopular ? "Most Popular" : undefined),
     highlighted: Boolean(row.isPopular),

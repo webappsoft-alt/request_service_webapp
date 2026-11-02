@@ -192,7 +192,7 @@ export function CustomerChangeOrderDetailView({
       description={`Additional work on Job ${item.jobNumber || "—"} — priced, approved, and paid separately from the original job.`}
       badge={<StatusPill label={statusLabel(item.status)} tone={statusTone(item.status)} />}
       actions={
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap lg:justify-end [&>*]:shrink-0">
           {item.jobId ? (
             <Button size="sm" variant="outline" className="h-8" asChild>
               <Link href={customerPaths.order(item.jobId)}>

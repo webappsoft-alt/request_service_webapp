@@ -328,6 +328,8 @@ export type PortalCalendarEvent = {
   enriched?: boolean;
   /** A project-stage entry (one per stage of a multi-day estimate / job). */
   stageId?: string;
+  /** Status of the linked job itself (e.g. "in_progress", "completed"), shown as a badge on job cards. */
+  recordStatus?: string;
 };
 
 const MULTI_SCHEDULE_KINDS = new Set<PortalEventKind>(["estimate", "visit"]);

@@ -6,36 +6,33 @@ import {
   Building2,
   CalendarCheck,
   CreditCard,
-  HardHat,
   LayoutDashboard,
   MapPinned,
-  Smartphone,
   Truck,
   UserRound,
-  Users,
 } from "lucide-react";
 import { Container, Section } from "@/components/layout/container";
 import { proPaths } from "@/lib/pro-paths";
 
-/** Everything else in the portal (same areas as the live page's desk tabs), as a plain index. */
+/**
+ * Everything else in the portal, as a plain index. Technicians, contractors, the pipeline, and
+ * employees / timesheets / tracking have their own sections above, so they're not repeated here.
+ */
 const AREAS = [
-  { icon: LayoutDashboard, title: "Dashboard", body: "What needs attention today — overdue invoices, unassigned work, and the lead pipeline." },
+  { icon: LayoutDashboard, title: "Dashboard", body: "What needs attention today — overdue invoices, unassigned work, and sales." },
+  { icon: Truck, title: "Vendors", body: "Suppliers and purchase orders, tracked against the jobs they're for." },
   { icon: UserRound, title: "Customers", body: "Contact details, the service address, amount owing, and every past estimate and job." },
-  { icon: Users, title: "Employees", body: "Technicians, estimators, dispatchers, and office staff — assign work without a text thread." },
-  { icon: HardHat, title: "Contractors", body: "Partners on file with trade, rate, and insurance, handed jobs from the same board." },
-  { icon: Truck, title: "Vendors", body: "Your supply houses, the parts you buy, stock on hand, and purchase orders." },
   { icon: BellRing, title: "Reminders & tasks", body: "Owners, due dates, and priority — overdue items stay on the dashboard until cleared." },
   { icon: CalendarCheck, title: "Online booking", body: "Publish fixed-price services; homeowners book a slot inside your working hours." },
   { icon: CreditCard, title: "Payments", body: "Card, check, cash, or transfer — each logged on its invoice until the job is settled." },
   { icon: Building2, title: "Business profile", body: "Licenses, hours, categories, gallery, and portfolio — it feeds your public page." },
   { icon: MapPinned, title: "Service areas", body: "Requests route to you only when the address is inside your coverage." },
   { icon: BarChart3, title: "Reports", body: "Collected, outstanding, estimate conversion, and monthly volume at month end." },
-  { icon: Smartphone, title: "On your phone", body: "Technicians open today's jobs, update status from the driveway, and message the customer." },
 ] as const;
 
 export function ProPortalIndex() {
   return (
-    <Section className="bg-muted/50">
+    <Section className="bg-background">
       <Container className="grid gap-12 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.6fr)] lg:gap-20">
         <div className="flex flex-col gap-4 lg:sticky lg:top-28 lg:self-start">
           <p className="eyebrow text-primary">Also in the portal</p>

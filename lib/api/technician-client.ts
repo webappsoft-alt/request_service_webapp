@@ -99,6 +99,14 @@ export type TechJobDetail = {
     activities?: Array<Record<string, unknown>>;
     attachments?: string[];
     customerSnapshot?: Record<string, unknown>;
+    /** Latest "Mark complete" submission by this technician (null = never submitted). */
+    completion?: {
+      id: string;
+      status: string;
+      reviewNote: string;
+      submittedAt: string;
+      reviewedAt: string | null;
+    } | null;
   };
   schedule: TechScheduleRow[];
   timeEntries: TimeEntry[];
@@ -107,6 +115,8 @@ export type TechJobDetail = {
   payments: { summary: LedgerSummary; history: TechnicianPaymentRecord[] };
   /** This technician's change order requests on the job (raw; see mapChangeRequest). */
   changeRequests: unknown[];
+  /** This technician's completion submissions, newest first (raw; see mapChangeRequest). */
+  completions: unknown[];
 };
 
 export type TechEstimateRow = {
@@ -424,6 +434,7 @@ export async function getTechnicianJob(id: string): Promise<TechJobDetail> {
     } as TechJobDetail["job"],
     schedule: (Array.isArray(data.schedule) ? data.schedule : []).map(mapSchedule),
     changeRequests: Array.isArray(data.changeRequests) ? data.changeRequests : [],
+    completions: Array.isArray(data.completions) ? data.completions : [],
     timeEntries: mapEntries(data.timeEntries),
     timeSummary: mapTimeSummary(data.timeSummary),
     activeEntry: mapTimeEntry(data.activeEntry),

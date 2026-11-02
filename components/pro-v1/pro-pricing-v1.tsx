@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Check, Minus, PhoneCall } from "lucide-react";
+import { ArrowRight, Check, HardHat, Hash, Minus, PhoneCall, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Container, Section } from "@/components/layout/container";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,6 +31,22 @@ function planCta(plan: ProSubscriptionPlan, isProvider: boolean) {
   if (isProvider) return { href: proDashboard("/subscription"), label: plan.ctaLabel };
   const query = plan.slug ? `?plan=${encodeURIComponent(plan.slug)}` : "";
   return { href: `${proPaths.register}${query}`, label: plan.monthlyPrice === 0 ? "Start for free" : `Start with ${plan.name}` };
+}
+
+/** AI minutes, the AI number, crew logins, and the subcontractor portal for one plan. */
+function planLimits(plan: ProSubscriptionPlan) {
+  const ai = plan.callingMinutes > 0;
+  return [
+    { icon: PhoneCall, label: "AI voice minutes", value: ai ? `${plan.callingMinutes.toLocaleString("en-US")} / mo` : "—", on: ai },
+    { icon: Hash, label: "AI business number", value: ai ? "Included" : "—", on: ai },
+    {
+      icon: Users,
+      label: "Crew logins",
+      value: plan.crewSeats < 0 ? "Unlimited" : plan.crewSeats > 0 ? `Up to ${plan.crewSeats}` : "Owner only",
+      on: plan.crewSeats !== 0,
+    },
+    { icon: HardHat, label: "Subcontractor portal", value: plan.subcontractorPortal ? "Included" : "—", on: plan.subcontractorPortal },
+  ];
 }
 
 function PlanColumn({ plan, cycle, isProvider }: { plan: ProSubscriptionPlan; cycle: ProPlanBillingCycle; isProvider: boolean }) {
@@ -73,15 +89,21 @@ function PlanColumn({ plan, cycle, isProvider }: { plan: ProSubscriptionPlan; cy
         <Link href={cta.href}>{cta.label}</Link>
       </Button>
 
-      <p
-        className={cn(
-          "mt-6 flex items-center gap-2 text-sm font-medium",
-          plan.callingMinutes > 0 ? "text-primary" : "text-muted-foreground",
-        )}
-      >
-        <PhoneCall className="size-4 shrink-0" aria-hidden="true" />
-        {plan.callingMinutes > 0 ? `${plan.callingMinutes} AI Voice minutes / mo` : "No AI Voice minutes"}
-      </p>
+      {/* At a glance: the limits that separate the plans, from the plan's own settings */}
+      <dl className="mt-6 grid gap-2.5 rounded-xl border border-border bg-muted/40 p-3.5 text-sm">
+        {planLimits(plan).map((row) => {
+          const Icon = row.icon;
+          return (
+            <div key={row.label} className="flex items-center justify-between gap-3">
+              <dt className="flex items-center gap-2 text-muted-foreground">
+                <Icon className="size-4 shrink-0" aria-hidden="true" />
+                {row.label}
+              </dt>
+              <dd className={cn("text-right font-semibold tabular-nums", !row.on && "font-normal text-muted-foreground")}>{row.value}</dd>
+            </div>
+          );
+        })}
+      </dl>
 
       <ul className="mt-4 flex flex-col gap-3 border-t border-border pt-5 text-sm">
         {plan.features.map((feature) => (
@@ -117,7 +139,7 @@ export function ProPricingV1() {
   const mobileIndex = Math.min(picked ?? popularIndex, Math.max(plans.length - 1, 0));
 
   return (
-    <Section id="plans" className="scroll-mt-24 bg-background">
+    <Section id="plans" className="scroll-mt-24 bg-muted/50">
       <Container className="flex flex-col gap-10">
         <div className="mx-auto flex max-w-2xl flex-col items-center gap-4 text-center">
           <p className="eyebrow text-primary">Pricing</p>

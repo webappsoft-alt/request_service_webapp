@@ -13,6 +13,10 @@ export type PortalInboxCounts = {
   jobUpdates: number;
   scheduleUpdates: number;
   orderUpdates: number;
+  /** Invoices sent to customers, unread. */
+  invoiceUpdates: number;
+  /** Customer payments on invoices, unread. */
+  paymentUpdates: number;
 };
 
 const KEYS: Array<keyof PortalInboxCounts> = [
@@ -24,6 +28,8 @@ const KEYS: Array<keyof PortalInboxCounts> = [
   "jobUpdates",
   "scheduleUpdates",
   "orderUpdates",
+  "invoiceUpdates",
+  "paymentUpdates",
 ];
 
 const counts: PortalInboxCounts = {
@@ -35,6 +41,8 @@ const counts: PortalInboxCounts = {
   jobUpdates: 0,
   scheduleUpdates: 0,
   orderUpdates: 0,
+  invoiceUpdates: 0,
+  paymentUpdates: 0,
 };
 
 const listeners = new Set<() => void>();

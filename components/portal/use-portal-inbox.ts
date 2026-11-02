@@ -53,6 +53,8 @@ function countsFromPayload(payload: unknown): Partial<PortalInboxCounts> | null 
           jobUpdates: Number(sections.jobs) || 0,
           scheduleUpdates: Number(sections.schedule) || 0,
           orderUpdates: Number(sections.orders) || 0,
+          invoiceUpdates: Number(sections.invoices) || 0,
+          paymentUpdates: Number(sections.payments) || 0,
         }
       : {}),
   };
@@ -277,6 +279,8 @@ export function usePortalInbox() {
     jobUpdates: counts.jobUpdates || 0,
     scheduleUpdates: counts.scheduleUpdates || 0,
     orderUpdates: counts.orderUpdates || 0,
+    invoiceUpdates: counts.invoiceUpdates || 0,
+    paymentUpdates: counts.paymentUpdates || 0,
     total: newLeadCount + unreadChats + pendingOrders + pendingEstimates,
     items,
   };

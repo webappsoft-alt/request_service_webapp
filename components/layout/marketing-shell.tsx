@@ -25,6 +25,8 @@ const BOT_EXCLUDED_PREFIXES = [
 ];
 
 function isBotRoute(pathname: string) {
+  // Pro landing pages and their previews (/for-pros, /for-pros-v1, …) are for pros, not customers.
+  if (pathname.startsWith("/for-pros")) return false;
   return !BOT_EXCLUDED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );

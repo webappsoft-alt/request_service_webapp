@@ -366,6 +366,7 @@ export const technicianApi = {
   estimateStages: (id: string) => `technician/estimates/${id}/stages`,
   /** POST: technician asks the office for a change order (reviewed on the job's Requests tab). */
   jobChangeRequests: (id: string) => `technician/jobs/${id}/change-requests`,
+  jobCompletion: (id: string) => `technician/jobs/${id}/completion`,
   jobChangeOrderAccept: (id: string, orderId: string) => `technician/jobs/${id}/change-orders/${orderId}/accept`,
   estimates: "technician/estimates",
   estimate: (id: string) => `technician/estimates/${id}`,

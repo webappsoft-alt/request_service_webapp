@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
+  Bot,
   CalendarCheck,
   Check,
   FileText,
   Loader2,
+  Phone,
   PhoneForwarded,
   PhoneIncoming,
   ShieldCheck,
@@ -47,17 +49,19 @@ const HIGHLIGHTS = [
   },
 ] as const;
 
-/** The intake fields captured during the sample call, in order. */
+const GREETING = "Thanks for calling Summit Home Services — how can I help?";
+
+/** The intake fields captured during the sample call, in order, with the line that captured each. */
 const FIELDS = [
-  { label: "Caller", value: "Daniel Reyes · (303) 555-0187" },
-  { label: "Job", value: "Water heater — no hot water" },
-  { label: "Address", value: "1180 Elm St, Denver 80220" },
-  { label: "Coverage", value: "Plumbing · inside your service area" },
-  { label: "Visit", value: "Thu · 9:00 – 11:00 AM" },
+  { label: "Caller", value: "Daniel Reyes · (303) 555-0187", who: "caller", said: "Hi, this is Daniel Reyes." },
+  { label: "Job", value: "Water heater — no hot water", who: "caller", said: "Our water heater quit — no hot water since last night." },
+  { label: "Address", value: "1180 Elm St, Denver 80220", who: "caller", said: "We're at 1180 Elm St in Denver." },
+  { label: "Coverage", value: "Plumbing · inside your area", who: "ai", said: "Good news — that's inside our plumbing service area." },
+  { label: "Visit", value: "Thu · 9:00 – 11:00 AM", who: "ai", said: "A technician can come Thursday, 9 to 11. Shall I book it?" },
 ] as const;
 
 /** Steps: 0 ringing → 1..5 fields captured → 6 syncing → 7 booked (then hold and loop). */
-const STEP_MS = 1500;
+const STEP_MS = 1700;
 const SYNC_MS = 1600;
 const HOLD_MS = 4200;
 const BOOKED = FIELDS.length + 2;
@@ -74,10 +78,15 @@ const TONES = {
   amber: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
 } as const;
 
+function clock(seconds: number) {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 /**
- * Pro landing (for-pros-v1): "AI Business Receptionist" — feature rows on the left, a portal-style
- * receptionist preview on the right where a live call's details fill in and sync to the calendar
- * as a booked visit. Loops while on screen; static final state with reduced motion. Illustrative.
+ * Pro landing (for-pros-v1): "AI Business Receptionist" — feature rows on the left; on the right a
+ * glass console with the dedicated number, a live call screen with its transcript, the lead card
+ * filling in beside it until the visit is booked, and today's call log. Loops while on screen;
+ * static final state with reduced motion. Illustrative.
  */
 export function ProAiReceptionist() {
   const [step, setStep] = useState(0);
@@ -108,19 +117,21 @@ export function ProAiReceptionist() {
   const captured = Math.min(step, FIELDS.length);
   const syncing = step === BOOKED - 1;
   const booked = step === BOOKED;
+  const ringing = step === 0;
   const onCall = step > 0 && step < BOOKED - 1;
+  const ended = syncing || booked;
+
+  // Greeting, then the line behind each captured field; the call screen shows the latest three.
+  const lines = step > 0 ? [{ who: "ai", said: GREETING }, ...FIELDS.slice(0, captured)] : [];
+  const visibleLines = lines.slice(-3);
 
   return (
-    <section className="relative overflow-hidden bg-[#071a33] text-white">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-48 -bottom-48 size-[44rem] rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.14),transparent_65%)]"
-      />
-      <Container className="relative grid gap-14 py-20 md:py-28 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-16">
+    <section className="relative bg-background">
+      <Container className="relative grid gap-14 py-20 md:py-28 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-14">
         {/* Copy + highlights */}
         <div className="flex min-w-0 flex-col gap-10">
           <div className="flex flex-col gap-5">
-            <p className="inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-sky-200">
+            <p className="inline-flex w-fit items-center gap-2 rounded-full bg-primary/8 px-3 py-1 text-xs font-semibold text-primary">
               <span className="relative flex size-2" aria-hidden="true">
                 <span className="absolute inset-0 animate-ping rounded-full bg-emerald-400/60" />
                 <span className="relative size-2 rounded-full bg-emerald-400" />
@@ -130,7 +141,7 @@ export function ProAiReceptionist() {
             <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-[2.85rem] md:leading-[1.08]">
               Never miss a lead. Your 24/7 AI business phone receptionist.
             </h2>
-            <p className="max-w-xl text-sm leading-7 text-white/70 md:text-base">
+            <p className="max-w-xl text-sm leading-7 text-muted-foreground md:text-base">
               Every Pro gets a dedicated business number. The AI answers in your company&apos;s name, qualifies the
               homeowner, collects the project details, and books the site visit straight onto your calendar — while
               you&apos;re on the job.
@@ -141,11 +152,11 @@ export function ProAiReceptionist() {
             {HIGHLIGHTS.map((item) => {
               const Icon = item.icon;
               return (
-                <li key={item.title} className="flex gap-4 border-t border-white/10 py-4 first:border-t-0 first:pt-0">
-                  <Icon className="mt-0.5 size-5 shrink-0 text-sky-300" aria-hidden="true" />
+                <li key={item.title} className="flex gap-4 border-t border-border py-4 first:border-t-0 first:pt-0">
+                  <Icon className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
                   <div className="flex min-w-0 flex-col gap-1">
                     <h3 className="text-[15px] font-semibold">{item.title}</h3>
-                    <p className="text-sm leading-6 text-white/65">{item.body}</p>
+                    <p className="text-sm leading-6 text-muted-foreground">{item.body}</p>
                   </div>
                 </li>
               );
@@ -153,151 +164,227 @@ export function ProAiReceptionist() {
           </ul>
 
           <div className="flex flex-wrap items-center gap-4">
-            <Button size="lg" className="bg-white text-[#071a33] hover:bg-white/90" asChild>
+            <Button size="lg" asChild>
               <Link href={proPaths.register}>
                 Get your AI number
                 <ArrowRight data-icon="inline-end" />
               </Link>
             </Button>
-            <Link href="#plans" className="text-sm font-medium text-sky-200 underline-offset-4 hover:underline">
+            <Link href="#plans" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
               See plans with AI minutes
             </Link>
           </div>
         </div>
 
-        {/* Portal-style receptionist preview */}
-        <div ref={panelRef} className="min-w-0 lg:pt-6">
-          <div className="overflow-hidden rounded-[1.75rem] bg-background text-foreground shadow-[0_50px_100px_-40px_rgba(0,0,0,0.7)] ring-1 ring-white/10">
-            {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">AI Receptionist</p>
-                <p className="font-mono text-xs text-muted-foreground">(303) 555-0142 · Summit Home Services</p>
+        {/* Receptionist console */}
+        <div ref={panelRef} className="min-w-0 lg:pt-4">
+          <div className="rounded-[1.75rem] border border-border bg-muted/40 p-2.5 shadow-[0_30px_70px_-40px_rgba(15,23,42,0.25)] sm:p-3">
+            {/* Dedicated number */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-2.5 pt-1.5 pb-3.5">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Phone className="size-4.5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[11px] tracking-[0.14em] text-muted-foreground uppercase">Your AI business line</p>
+                  <p className="truncate font-mono text-sm font-semibold tabular-nums">(303) 555-0142</p>
+                </div>
               </div>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-                <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                <span className="size-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
                 Answering · 24/7
               </span>
             </div>
 
-            {/* Today strip */}
-            <dl className="grid grid-cols-3 divide-x divide-border border-b border-border bg-muted/40 text-center">
-              {[
-                ["Calls today", booked ? "8" : "7"],
-                ["Visits booked", booked ? "4" : "3"],
-                ["Missed", "0"],
-              ].map(([label, value]) => (
-                <div key={label} className="flex flex-col gap-0.5 px-2 py-3">
-                  <dt className="order-2 text-[11px] text-muted-foreground">{label}</dt>
-                  <dd className="order-1 text-lg font-semibold tabular-nums transition-all duration-500">{value}</dd>
-                </div>
-              ))}
-            </dl>
-
-            {/* Live call */}
-            <div className="flex flex-col gap-4 px-5 py-5 sm:px-6" aria-live="polite">
-              <div className="flex items-center justify-between gap-3">
-                <p className="flex min-w-0 items-center gap-2 text-sm font-semibold">
-                  <PhoneIncoming className={cn("size-4 shrink-0", onCall || step === 0 ? "text-emerald-600" : "text-muted-foreground")} aria-hidden="true" />
-                  <span className="truncate">{step === 0 ? "Incoming call…" : booked ? "Call ended · 3m 12s" : "Live call · capturing details"}</span>
-                </p>
-                {onCall ? (
-                  <span aria-hidden="true" className="flex h-4 items-end gap-[3px]">
-                    {[0, 1, 2, 3, 4].map((bar) => (
-                      <span key={bar} className="rs-wave w-[3px] rounded-full bg-emerald-500" style={{ animationDelay: `${bar * 120}ms` }} />
-                    ))}
+            <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3" aria-live="polite">
+              {/* Call screen */}
+              <div className="flex min-h-88 min-w-0 flex-col rounded-2xl border border-border bg-background p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                <div className="flex flex-col items-center gap-2.5 pt-2 text-center">
+                  <span className="relative flex size-14 items-center justify-center">
+                    {!ended ? (
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "absolute inset-0 rounded-full",
+                          ringing ? "animate-ping bg-primary/20" : "animate-pulse bg-emerald-500/15",
+                        )}
+                      />
+                    ) : null}
+                    <span
+                      className={cn(
+                        "relative flex size-14 items-center justify-center rounded-full text-base font-semibold transition-colors duration-500",
+                        ended ? "bg-muted text-muted-foreground" : "bg-primary text-primary-foreground",
+                      )}
+                    >
+                      {step > 0 ? "DR" : <PhoneIncoming className="size-5" aria-hidden="true" />}
+                    </span>
                   </span>
-                ) : null}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{step > 0 ? "Daniel Reyes" : "Incoming call"}</p>
+                    <p className="font-mono text-[11px] text-muted-foreground tabular-nums">(303) 555-0187 · Denver, CO</p>
+                  </div>
+                  <div className="flex h-5 items-center gap-2 text-[11px] font-medium">
+                    {onCall ? (
+                      <>
+                        <span aria-hidden="true" className="flex h-3.5 items-end gap-0.75">
+                          {[0, 1, 2, 3, 4].map((bar) => (
+                            <span key={bar} className="rs-wave w-0.75 rounded-full bg-emerald-500" style={{ animationDelay: `${bar * 120}ms` }} />
+                          ))}
+                        </span>
+                        <span className="text-emerald-700 tabular-nums dark:text-emerald-300">AI on the line · {clock(8 + captured * 36)}</span>
+                      </>
+                    ) : ringing ? (
+                      <span className="text-primary">Ringing…</span>
+                    ) : (
+                      <span className="text-muted-foreground">Call ended · 3:12</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Transcript */}
+                <ol className="mt-4 flex flex-1 flex-col justify-end gap-2">
+                  {visibleLines.map((line) => (
+                    <li
+                      key={line.said}
+                      className={cn(
+                        "animate-in fade-in slide-in-from-bottom-1 max-w-[88%] rounded-2xl px-3 py-2 text-xs leading-snug duration-300",
+                        line.who === "ai"
+                          ? "self-start rounded-bl-md bg-muted text-foreground"
+                          : "self-end rounded-br-md bg-primary text-primary-foreground",
+                      )}
+                    >
+                      {line.who === "ai" ? (
+                        <span className="mb-0.5 flex items-center gap-1 text-[10px] font-semibold text-primary">
+                          <Bot className="size-3" aria-hidden="true" /> AI receptionist
+                        </span>
+                      ) : null}
+                      {line.said}
+                    </li>
+                  ))}
+                  {ringing ? <li className="self-center text-[11px] text-muted-foreground">Answered on the first ring</li> : null}
+                </ol>
               </div>
 
-              <ol className="flex flex-col divide-y divide-border rounded-2xl border border-border">
-                {FIELDS.map((field, index) => {
-                  const done = index < captured;
-                  const current = index === captured && onCall;
-                  return (
-                    <li key={field.label} className="flex items-center gap-3 px-4 py-2.5">
-                      <span
-                        className={cn(
-                          "flex size-5 shrink-0 items-center justify-center rounded-full transition-colors duration-300",
-                          done ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
-                        )}
-                      >
-                        {done ? (
-                          <Check className="size-3" strokeWidth={3} aria-hidden="true" />
-                        ) : current ? (
-                          <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-                        ) : null}
-                      </span>
-                      <span className="w-16 shrink-0 text-xs text-muted-foreground">{field.label}</span>
-                      <span
-                        className={cn(
-                          "min-w-0 truncate text-sm transition-opacity duration-300",
-                          done ? "font-medium opacity-100" : "opacity-0",
-                        )}
-                      >
-                        {field.value}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ol>
+              {/* Lead card */}
+              <div className="flex min-w-0 flex-col rounded-2xl border border-border bg-background p-4 text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">New lead</p>
+                  <span className="text-[11px] text-muted-foreground tabular-nums">
+                    {captured}/{FIELDS.length} captured
+                  </span>
+                </div>
+                <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width] duration-500"
+                    style={{ width: `${(captured / FIELDS.length) * 100}%` }}
+                  />
+                </div>
 
-              {/* Booking sync */}
-              <div
-                className={cn(
-                  "flex items-center gap-3 rounded-2xl px-4 py-3 transition-colors duration-500",
-                  booked ? "bg-emerald-500/10" : syncing ? "bg-primary/8" : "bg-muted/60",
-                )}
-              >
-                <span
+                <dl className="mt-3 flex flex-1 flex-col">
+                  {FIELDS.map((field, index) => {
+                    const done = index < captured;
+                    const current = index === captured && onCall;
+                    return (
+                      <div key={field.label} className="flex items-start gap-2.5 border-t border-border py-2 first:border-t-0">
+                        <span
+                          className={cn(
+                            "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full transition-colors duration-300",
+                            done ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                          )}
+                        >
+                          {done ? (
+                            <Check className="size-2.5" strokeWidth={3.5} aria-hidden="true" />
+                          ) : current ? (
+                            <Loader2 className="size-2.5 animate-spin" aria-hidden="true" />
+                          ) : null}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <dt className="text-[11px] text-muted-foreground">{field.label}</dt>
+                          <dd className="min-h-5 text-[13px]">
+                            {done ? (
+                              <span className="animate-in fade-in block truncate font-medium duration-300">{field.value}</span>
+                            ) : (
+                              <span
+                                className={cn("mt-1.5 block h-2 w-24 rounded-full bg-muted", current && "animate-pulse")}
+                                aria-hidden="true"
+                              />
+                            )}
+                          </dd>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </dl>
+
+                {/* Booking sync */}
+                <div
                   className={cn(
-                    "flex size-9 shrink-0 items-center justify-center rounded-xl transition-colors duration-500",
-                    booked ? "bg-emerald-500 text-white" : "bg-background text-primary ring-1 ring-border",
+                    "mt-2 flex items-center gap-2.5 rounded-xl px-3 py-2.5 transition-colors duration-500",
+                    booked ? "bg-emerald-500/10" : syncing ? "bg-primary/8" : "bg-muted/60",
                   )}
                 >
-                  {syncing ? (
-                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                  ) : booked ? (
-                    <CalendarCheck className="size-4" aria-hidden="true" />
-                  ) : (
-                    <CalendarCheck className="size-4 opacity-50" aria-hidden="true" />
-                  )}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">
-                    {booked ? "Site visit booked · Thu 9:00 AM" : syncing ? "Adding to your Schedule…" : "Waiting for a visit time"}
-                  </p>
-                  <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-                    {booked ? (
-                      <>
-                        <UserCheck className="size-3.5 shrink-0" aria-hidden="true" />
-                        Assigned to Tate R. · water heaters · draft estimate ready
-                      </>
-                    ) : (
-                      "Synced to the calendar when the caller agrees"
+                  <span
+                    className={cn(
+                      "flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-500",
+                      booked ? "bg-emerald-500 text-white" : "bg-background text-primary ring-1 ring-border",
                     )}
-                  </p>
+                  >
+                    {syncing ? (
+                      <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <CalendarCheck className={cn("size-4", !booked && "opacity-50")} aria-hidden="true" />
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-semibold">
+                      {booked ? "Visit booked · Thu 9:00 AM" : syncing ? "Adding to your Schedule…" : "Waiting for a visit time"}
+                    </p>
+                    <p className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+                      {booked ? (
+                        <>
+                          <UserCheck className="size-3 shrink-0" aria-hidden="true" />
+                          Tate R. · draft estimate ready
+                        </>
+                      ) : (
+                        "Synced when the caller agrees"
+                      )}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Earlier calls */}
-            <div className="border-t border-border px-5 pt-4 pb-5 sm:px-6">
-              <p className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Earlier calls</p>
-              <ul className="flex flex-col">
-                {RECENT.map((call) => (
-                  <li key={call.caller} className="flex items-center gap-3 py-1.5 text-sm">
-                    <span className="w-16 shrink-0 text-xs text-muted-foreground tabular-nums">{call.time}</span>
-                    <span className="min-w-0 flex-1 truncate">{call.caller}</span>
-                    <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", TONES[call.tone])}>
-                      {call.outcome}
-                    </span>
-                  </li>
+            {/* Today + call log */}
+            <div className="mt-2.5 grid gap-2.5 sm:mt-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-3">
+              <dl className="grid grid-cols-3 gap-2 rounded-2xl border border-border bg-background p-3 sm:grid-cols-1 sm:gap-2.5 sm:px-5">
+                {[
+                  ["Calls today", booked ? "8" : "7"],
+                  ["Visits booked", booked ? "4" : "3"],
+                  ["Missed", "0"],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex flex-col items-center sm:flex-row sm:items-baseline sm:gap-2">
+                    <dd className="text-lg font-semibold tabular-nums sm:w-5">{value}</dd>
+                    <dt className="text-[11px] whitespace-nowrap text-muted-foreground">{label}</dt>
+                  </div>
                 ))}
-              </ul>
+              </dl>
+              <div className="min-w-0 rounded-2xl border border-border bg-background px-4 py-3">
+                <p className="mb-1.5 text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Call log</p>
+                <ul className="flex flex-col">
+                  {RECENT.map((call) => (
+                    <li key={call.caller} className="flex items-center gap-3 py-1 text-sm">
+                      <span className="w-15 shrink-0 text-[11px] text-muted-foreground tabular-nums">{call.time}</span>
+                      <span className="min-w-0 flex-1 truncate">{call.caller}</span>
+                      <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", TONES[call.tone])}>
+                        {call.outcome}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
-          <p className="mt-3 text-center text-[11px] text-white/45">Illustrative preview of the AI Receptionist in your portal.</p>
+          <p className="mt-3 text-center text-[11px] text-muted-foreground">Illustrative preview of the AI Receptionist in your portal.</p>
         </div>
       </Container>
     </section>

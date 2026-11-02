@@ -904,6 +904,14 @@ export async function submitTechnicianChangeRequest(
   return mapRequest(dataOf(await postData(technicianApi.jobChangeRequests(jobId), input, { silent: true })));
 }
 
+/** Technician "Mark complete": proof photos + notes, sent to the office for approval. */
+export async function submitTechnicianJobCompletion(
+  jobId: string,
+  input: { photos: string[]; notes: string },
+): Promise<ContractorRequest> {
+  return mapRequest(dataOf(await postData(technicianApi.jobCompletion(jobId), input, { silent: true })));
+}
+
 /** Map a raw request (e.g. embedded in the technician job response). */
 export function mapChangeRequest(value: unknown): ContractorRequest {
   return mapRequest(value);

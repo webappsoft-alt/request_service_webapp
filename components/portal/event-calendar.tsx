@@ -1588,7 +1588,7 @@ function TimedBar({
         <div className="space-y-0.5">
           {/* Job No */}
           <span className="truncate text-xs font-bold leading-tight block">{event.title}</span>
-          {event.stageId ? <StageCardPill event={event} /> : null}
+          {event.stageId ? <StageCardPill event={event} /> : <JobStatusCardPill event={event} />}
 
           {/* Estimate / Job / Request / Task Name */}
           {event.detail && event.detail !== event.title ? (
@@ -1713,6 +1713,39 @@ function StageCardPill({ event }: { event: PortalCalendarEvent }) {
   );
 }
 
+const DONE_JOB = new Set(["completed", "invoiced", "paid"]);
+const ACTIVE_JOB = new Set(["in_progress", "on_site", "en_route", "dispatched"]);
+
+/** "yyyy-mm-dd" for today in local time. */
+function todayKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * A job card's own status (when the feed provides it): Completed, In progress, Cancelled, or
+ * Scheduled, and Late once its last day has passed without being finished.
+ */
+function JobStatusCardPill({ event }: { event: PortalCalendarEvent }) {
+  const status = event.kind === "job" ? event.recordStatus : undefined;
+  if (!status) return null;
+  const lastDay = event.endDate || event.date;
+  const shown: { label: string; tone: string } = DONE_JOB.has(status)
+    ? { label: "Completed", tone: STAGE_PILL_TONE.completed }
+    : status === "cancelled"
+      ? { label: "Cancelled", tone: "bg-neutral-200 text-neutral-700" }
+      : lastDay && lastDay < todayKey()
+        ? { label: "Late", tone: STAGE_PILL_TONE.late }
+        : ACTIVE_JOB.has(status)
+          ? { label: "In progress", tone: STAGE_PILL_TONE.in_progress }
+          : { label: status === "on_hold" ? "On hold" : "Scheduled", tone: STAGE_PILL_TONE.pending };
+  return (
+    <span className={cn("inline-block w-fit rounded-full px-1.5 py-px text-[9px] leading-tight font-bold", shown.tone)}>
+      {shown.label}
+    </span>
+  );
+}
+
 function CalendarChip({
   event,
   employeeLabel,
@@ -1802,7 +1835,7 @@ function CalendarChip({
       <div className="min-w-0 space-y-0.5">
         {/* Job No */}
         <span className="block truncate text-[11px] font-bold leading-snug">{event.title}</span>
-        {event.stageId ? <StageCardPill event={event} /> : null}
+        {event.stageId ? <StageCardPill event={event} /> : <JobStatusCardPill event={event} />}
 
         {/* Estimate / Job / Request / Task Name */}
         {event.detail && event.detail !== event.title ? (

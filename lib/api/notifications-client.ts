@@ -131,7 +131,7 @@ export async function markAllNotificationsRead() {
   };
 }
 
-export type ProviderNotificationSection = "estimates" | "jobs" | "schedule" | "orders";
+export type ProviderNotificationSection = "estimates" | "jobs" | "schedule" | "orders" | "invoices" | "payments";
 
 /** Pro opened a sidebar section: its customer / field updates are read (badge + bell drop together). */
 export async function markNotificationSectionRead(section: ProviderNotificationSection) {

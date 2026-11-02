@@ -48,6 +48,7 @@ function toCalendarEvent(row: TechScheduleRow, employeeId: string): PortalCalend
     employeeId,
     href,
     status: row.status || "scheduled",
+    recordStatus: kind === "job" ? row.record?.status || undefined : undefined,
     serviceAddress: addressLine(row.record?.location) || undefined,
   };
 }

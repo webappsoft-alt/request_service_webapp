@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Clock3, FilePlus2, Mail, Phone } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock3, FilePlus2, Mail, Phone } from "lucide-react";
 import { ChangeOrderRequestDialog } from "@/components/contractor/change-order-request-dialog";
 import { RequestStatusPill } from "@/components/contractor/contractor-ui";
 import {
@@ -29,6 +29,12 @@ import {
   customerName,
 } from "@/components/technician/tech-ui";
 import { TimeTrackingPanel } from "@/components/time-tracking/time-tracking-panel";
+import {
+  TechCompleteJobDialog,
+  TechCompletionBanner,
+  TechJobTimeLog,
+  completionState,
+} from "@/components/technician/tech-job-completion";
 import { Button } from "@/components/ui/button";
 import { CenteredSpinner } from "@/components/ui/spinner";
 import type { TechLineItem } from "@/lib/api/technician-client";
@@ -138,6 +144,7 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
   const data = entry?.data;
   const items = useMemo(() => data?.job.items ?? [], [data]);
   const [changeOpen, setChangeOpen] = useState(false);
+  const [completeOpen, setCompleteOpen] = useState(false);
 
   if (!data) {
     if (!entry || entry.loading) {
@@ -176,6 +183,16 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
   const awaitingMe = fieldOrders.filter((order) => order.requestedByMe && order.acceptance === "pending").length;
   const jobTax = Number(job.tax) || 0;
   const jobTotal = Number(job.total) || undefined;
+  const { canComplete, reason: completeReason } = completionState(job.status, job.completion);
+  // Clock-in locks once completion is submitted (pending) or approved; a rejection (re-work) opens it.
+  const completionLock =
+    job.completion?.status === "pending_pro_approval"
+      ? "You marked this job complete. Clock-in is locked while the office reviews it."
+      : job.completion?.status === "approved" || job.completion?.status === "accepted"
+        ? "The office approved your completed work. Clock-in is closed for this job."
+        : "";
+  // This job only (the response can include the running session on another record).
+  const jobEntries = data.timeEntries.filter((entry) => !entry.job || entry.job.id === job.id);
 
   const tabs = [
     { id: "summary", label: "Summary" },
@@ -195,6 +212,15 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
         badge={<JobStatusPill status={job.status} />}
         actions={
           <>
+            <Button
+              size="sm"
+              className="h-8 bg-emerald-600 text-white hover:bg-emerald-700"
+              disabled={!canComplete}
+              title={canComplete ? "Send proof photos to the office to close this job" : completeReason}
+              onClick={() => setCompleteOpen(true)}
+            >
+              <CheckCircle2 className="size-3.5" /> {job.completion?.status === "rejected" ? "Resubmit work" : "Mark complete"}
+            </Button>
             <TechChatButton side="technician" contextType="job" contextId={job.id} label="Chat with office" className="h-8" />
             <Button size="sm" variant="outline" className="h-8" disabled={closed} onClick={() => setChangeOpen(true)}>
               <FilePlus2 className="size-3.5" /> Request scope change
@@ -317,11 +343,12 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
           }
           return (
             <div className="space-y-3">
+              <TechCompletionBanner completion={job.completion} />
               <ClockControl
                 target={{ kind: "job", id: job.id }}
                 site={{ location, record: { recordType: "job", recordNumber: job.number, customerName: name } }}
-                disabled={closed}
-                disabledReason={closed ? `This job is ${job.status}; clocking in is closed.` : undefined}
+                disabled={closed || Boolean(completionLock)}
+                disabledReason={closed ? `This job is ${job.status}; clocking in is closed.` : completionLock || undefined}
               />
               <StageProgressPanel
                 recordKey={job.id}
@@ -382,6 +409,7 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
                   </div>
                 </DetailCard>
               </div>
+              <TechJobTimeLog entries={jobEntries} />
               <DetailCard title="Schedule">
                 {schedule.length ? (
                   <ul className="divide-y divide-border-soft text-sm">
@@ -413,6 +441,12 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
           await submitTechnicianChangeRequest(job.id, input);
           await dispatch(fetchTechJob(job.id));
         }}
+      />
+      <TechCompleteJobDialog
+        job={job}
+        open={completeOpen}
+        onOpenChange={setCompleteOpen}
+        onSubmitted={() => void dispatch(fetchTechJob(job.id))}
       />
     </div>
   );

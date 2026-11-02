@@ -102,6 +102,9 @@ function NavLinks({
       return pendingFieldRequests + inbox.jobUpdates;
     // Visits booked (e.g. by the AI receptionist).
     if (href === "/pro/dashboard/schedule") return inbox.scheduleUpdates;
+    // Invoices sent / customer payments, until the Pro opens that page.
+    if (href === "/pro/dashboard/invoices") return inbox.invoiceUpdates;
+    if (href === "/pro/dashboard/payments") return inbox.paymentUpdates;
     return 0;
   }
 
@@ -126,6 +129,10 @@ function NavLinks({
       ];
     if (href === "/pro/dashboard/schedule")
       return [{ label: "New bookings", count: inbox.scheduleUpdates }];
+    if (href === "/pro/dashboard/invoices")
+      return [{ label: "Invoices sent", count: inbox.invoiceUpdates }];
+    if (href === "/pro/dashboard/payments")
+      return [{ label: "Customer payments", count: inbox.paymentUpdates }];
     if (href === "/pro/dashboard/orders")
       return [
         { label: "New booking requests", count: inbox.pendingOrders },
@@ -348,6 +355,8 @@ const NOTIFICATION_SECTIONS: Array<{
     count: "scheduleUpdates",
   },
   { href: "/pro/dashboard/orders", section: "orders", count: "orderUpdates" },
+  { href: "/pro/dashboard/invoices", section: "invoices", count: "invoiceUpdates" },
+  { href: "/pro/dashboard/payments", section: "payments", count: "paymentUpdates" },
 ];
 
 /**

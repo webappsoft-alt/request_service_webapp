@@ -17,17 +17,18 @@ import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { TECH_PAGE_SIZE, fetchTechJobs } from "@/store/technicianSlice";
 
+// "All" first and by default, so finished jobs stay visible next to open ones.
 const SCOPES = [
+  { id: "all", label: "All" },
   { id: "open", label: "Open" },
   { id: "done", label: "Completed" },
-  { id: "all", label: "All" },
 ] as const;
 
 export function TechnicianJobsView() {
   const dispatch = useAppDispatch();
   const { data, loading, error } = useAppSelector((state) => state.technician.jobs);
   const version = useAppSelector((state) => state.technician.versions.jobs);
-  const [scope, setScope] = useState<"open" | "done" | "all">("open");
+  const [scope, setScope] = useState<"open" | "done" | "all">("all");
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [page, setPage] = useState(1);

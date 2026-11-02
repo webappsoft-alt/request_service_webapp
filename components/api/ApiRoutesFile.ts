@@ -267,6 +267,12 @@ export const providerCrmApi = {
   reports: "provider/reports",
   /** GET Main / Sales / Service dashboard aggregates */
   dashboard: "provider/dashboard",
+  /** GET pipeline board (leads → estimates → booked → in-progress → invoices) */
+  pipeline: "provider/pipeline",
+  /** GET next cards of one pipeline column ("See more") — query: loaded, limit */
+  pipelineColumn: (columnId: string) => `provider/pipeline/columns/${columnId}`,
+  /** PATCH — move a card to another pipeline stage */
+  pipelineCard: (kind: string, id: string) => `provider/pipeline/cards/${kind}/${id}`,
   /** GET sales tax percent for a U.S. state — query: `state` */
   taxRate: "provider/tax-rate",
 } as const;

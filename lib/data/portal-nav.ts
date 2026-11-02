@@ -7,6 +7,7 @@ import {
   Building2,
   CalendarDays,
   ClipboardList,
+  Columns3,
   CreditCard,
   Handshake,
   Images,
@@ -45,7 +46,10 @@ export type PortalNavGroup = {
 export const portalNavGroups: PortalNavGroup[] = [
   {
     id: "home",
-    items: [{ href: "/pro/dashboard", label: "Dashboard", icon: LayoutDashboard, description: "Today at a glance: sales, work and money" }],
+    items: [
+      { href: "/pro/dashboard", label: "Dashboard", icon: LayoutDashboard, description: "Today at a glance: sales, work and money" },
+      { href: "/pro/dashboard/pipeline", label: "Pipeline", icon: Columns3, description: "Drag leads, estimates, jobs and invoices through each stage" },
+    ],
   },
   {
     id: "people",

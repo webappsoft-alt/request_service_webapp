@@ -36,7 +36,8 @@ const POINTS = [
  * entering the 200 m site radius) beside the job's update timeline, played on a loop while on
  * screen; copy on the other side. Illustrative — homeowners get the updates, not a live map.
  */
-export function GeofenceTrackingSection() {
+export function GeofenceTrackingSection({ tone = "default" }: { tone?: "default" | "clean" }) {
+  const clean = tone === "clean";
   const [step, setStep] = useState(0);
   const [inView, setInView] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -66,12 +67,19 @@ export function GeofenceTrackingSection() {
   const marker = MARKER[step];
 
   return (
-    <Section className="bg-muted/50">
-      <Container className="grid items-center gap-12 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)] lg:gap-16">
+    <Section density={clean ? "tight" : "default"} className={clean ? undefined : "bg-muted/50"}>
+      <Container className={cn("grid items-center lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)]", clean ? "gap-8 lg:gap-12" : "gap-12 lg:gap-16")}>
         {/* Illustration (left on desktop, below the copy on phones) */}
         <div ref={panelRef} className="order-2 min-w-0 lg:order-1">
-          <div className="overflow-hidden rounded-[2rem] border border-border bg-background shadow-[0_40px_80px_-48px_rgba(0,63,125,0.45)]">
-            <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4 lg:px-7 lg:py-5">
+          <div
+            className={cn(
+              "overflow-hidden bg-background",
+              clean
+                ? "rounded-2xl shadow-[0_24px_60px_-32px_rgba(11,42,79,0.35),0_0_0_1px_rgba(11,42,79,0.06)]"
+                : "rounded-[2rem] border border-border shadow-[0_40px_80px_-48px_rgba(0,63,125,0.45)]",
+            )}
+          >
+            <div className={cn("flex items-center justify-between gap-3 px-5 py-4 lg:px-7 lg:py-5", clean ? "bg-[#F7FAFD]" : "border-b border-border")}>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold lg:text-base">JOB-1042 · Kitchen leak repair</p>
                 <p className="truncate text-xs text-muted-foreground">214 Palm Avenue, Tampa</p>
@@ -89,8 +97,8 @@ export function GeofenceTrackingSection() {
 
             <div className="grid sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
               {/* Map */}
-              <div className="relative border-b border-border bg-[#eef3f9] sm:border-r sm:border-b-0 dark:bg-slate-900">
-                <svg viewBox="0 0 320 220" className="block h-full min-h-[14rem] w-full lg:min-h-[24rem]" role="img" aria-label="Illustration: a pro's marker entering the 200 metre site radius around the home">
+              <div className={cn("relative bg-[#eef3f9] dark:bg-slate-900", !clean && "border-b border-border sm:border-r sm:border-b-0")}>
+                <svg viewBox="0 0 320 220" className={cn("block h-full min-h-[14rem] w-full", clean ? "lg:min-h-[19rem]" : "lg:min-h-[24rem]")} role="img" aria-label="Illustration: a pro's marker entering the 200 metre site radius around the home">
                   {/* streets */}
                   <g className="stroke-white dark:stroke-slate-800" strokeWidth="14" strokeLinecap="round" fill="none">
                     <path d="M-10 186 H120 Q150 186 160 160 L176 104" />
@@ -144,10 +152,13 @@ export function GeofenceTrackingSection() {
               </div>
 
               {/* Updates timeline */}
-              <ol className="relative flex flex-col gap-4 p-5 lg:gap-7 lg:p-7 lg:pt-9" aria-live="polite">
+              <ol className={cn("relative flex flex-col gap-4 p-5", clean ? "lg:gap-5 lg:p-6" : "lg:gap-7 lg:p-7 lg:pt-9")} aria-live="polite">
                 <span
                   aria-hidden="true"
-                  className="absolute top-7 bottom-7 left-[1.875rem] w-px bg-border lg:top-11 lg:bottom-11 lg:left-[2.375rem]"
+                  className={cn(
+                    "absolute top-7 bottom-7 left-[1.875rem] w-px bg-border",
+                    clean ? "lg:top-8 lg:bottom-8 lg:left-[2.125rem]" : "lg:top-11 lg:bottom-11 lg:left-[2.375rem]",
+                  )}
                 />
                 {EVENTS.map((event, index) => {
                   const done = index <= step;
@@ -181,27 +192,33 @@ export function GeofenceTrackingSection() {
         </div>
 
         {/* Copy */}
-        <div className="order-1 flex min-w-0 flex-col gap-8 lg:order-2">
-          <div className="flex flex-col gap-4">
+        <div className={cn("order-1 flex min-w-0 flex-col lg:order-2", clean ? "gap-6" : "gap-8")}>
+          <div className={cn("flex flex-col", clean ? "gap-3" : "gap-4")}>
             <p className="eyebrow text-primary">On-site verified</p>
-            <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-[2.75rem] md:leading-[1.1]">
+            <h2 className={cn("text-balance text-3xl font-semibold tracking-tight", clean ? "md:text-[2.1rem] md:leading-[1.15]" : "md:text-[2.75rem] md:leading-[1.1]")}>
               Know when your pro arrives — and what&apos;s done.
             </h2>
-            <p className="max-w-xl text-sm leading-7 text-muted-foreground md:text-base">
+            <p className={cn("max-w-xl text-sm text-muted-foreground", clean ? "leading-6" : "leading-7 md:text-base")}>
               Arrival and crew time are checked against your address with geofencing, and every step of the job
               shows up in your project timeline as it happens.
             </p>
           </div>
 
-          <dl className="flex flex-col divide-y divide-border">
+          <dl className={cn("flex flex-col", clean ? "gap-4" : "divide-y divide-border")}>
             {POINTS.map((point, index) => {
               const Icon = [MapPin, Clock3, ShieldCheck][index];
               return (
-                <div key={point.title} className="flex gap-4 py-5 first:pt-0 last:pb-0">
-                  <Icon className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
+                <div key={point.title} className={cn("flex gap-4", !clean && "py-5 first:pt-0 last:pb-0")}>
+                  {clean ? (
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#E8F0FA] text-primary">
+                      <Icon className="size-4" aria-hidden="true" />
+                    </span>
+                  ) : (
+                    <Icon className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
+                  )}
                   <div className="flex min-w-0 flex-col gap-1">
-                    <dt className="text-[15px] font-semibold tracking-tight">{point.title}</dt>
-                    <dd className="text-sm leading-6 text-muted-foreground">{point.body}</dd>
+                    <dt className={cn("font-semibold tracking-tight", clean ? "text-sm" : "text-[15px]")}>{point.title}</dt>
+                    <dd className={cn("text-muted-foreground", clean ? "text-[13px] leading-5" : "text-sm leading-6")}>{point.body}</dd>
                   </div>
                 </div>
               );

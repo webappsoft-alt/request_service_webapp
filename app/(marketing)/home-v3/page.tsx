@@ -29,8 +29,8 @@ export const metadata = buildMetadata({
 
 /**
  * Keeps the complete v1 header, hero, search, and Browse Services composition unchanged.
- * Flow (concept A, light design system): four ways to start → RS AI showcase → real pros →
- * proof of control → trust strip → closing CTA → how it works → AI redesigner → job updates → FAQ.
+ * Flow (concept A board): three ways to start → RS AI panel → real pros → proof of control →
+ * trust strip → how it works → AI redesigner → closing CTA → job updates → FAQ.
  */
 export default async function HomeV3Page() {
   const initialCategories = await fetchParentCategoriesForSeo();
@@ -51,15 +51,15 @@ export default async function HomeV3Page() {
         </DeferredHydration>
         <ProofOfControl />
         <TrustStrip />
-        <ReadyToSolve />
         <DeferredHydration>
-          <WorkflowSection />
+          <WorkflowSection lift={false} edgeFade={false} />
         </DeferredHydration>
         <DeferredHydration>
           <RedesignerSection variant="showcase" tone="light" />
         </DeferredHydration>
+        <ReadyToSolve />
         <DeferredHydration>
-          <GeofenceTrackingSection />
+          <GeofenceTrackingSection tone="clean" />
         </DeferredHydration>
         <DeferredHydration>
           <HomeFaqSection />

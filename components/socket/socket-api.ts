@@ -272,6 +272,10 @@ export type RealtimeEvents = {
     href?: string;
   };
   ORDER_UPDATED: Record<string, unknown>;
+  /** Provider room: a card moved on the pipeline board (by anyone in the company). */
+  PIPELINE_UPDATED: import("@/lib/api/pipeline-client").PipelineMoveResult;
+  /** Provider room: a lead / estimate / job / invoice changed anywhere — refetch the board. */
+  PIPELINE_INVALIDATE: { at: string };
   LEAD_STATUS_UPDATED: {
     id: string;
     status: string;

@@ -55,8 +55,7 @@ function PlanColumn({ plan, cycle, isProvider }: { plan: ProSubscriptionPlan; cy
   const cta = planCta(plan, isProvider);
 
   return (
-    <div className={cn("relative flex min-w-0 flex-col p-6 lg:p-7", plan.highlighted && "bg-primary/[0.04]")}>
-      {plan.highlighted ? <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-primary" /> : null}
+    <div className="relative flex h-full min-w-0 flex-col p-6 lg:p-7">
       <div className="flex items-center gap-2">
         <h3 className="text-lg font-semibold tracking-tight">{plan.name}</h3>
         {plan.badge ? (
@@ -109,7 +108,7 @@ function PlanColumn({ plan, cycle, isProvider }: { plan: ProSubscriptionPlan; cy
         {plan.features.map((feature) => (
           <li key={feature.label} className="flex items-start gap-2.5">
             {feature.included ? (
-              <Check className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} aria-hidden="true" />
+              <Check className="mt-0.5 size-4 shrink-0 text-primary" strokeWidth={2.5} aria-hidden="true" />
             ) : (
               <Minus className="mt-0.5 size-4 shrink-0 text-muted-foreground/50" aria-hidden="true" />
             )}
@@ -125,9 +124,9 @@ function PlanColumn({ plan, cycle, isProvider }: { plan: ProSubscriptionPlan; cy
 }
 
 /**
- * Plans as one open comparison panel: a column per plan (price, CTA, AI minutes, its own
- * checklist) split by hairlines, the popular plan tinted. Phones get a plan switcher and one
- * column at a time. Prices and features come from the live plans API.
+ * Plans as separate cards (price, CTA, plan limits, its own checklist) with soft borders and
+ * shadows; the popular plan is outlined in brand blue. Phones get a plan switcher and one card at a
+ * time. Prices and features come from the live plans API.
  */
 export function ProPricingV1() {
   const [cycle, setCycle] = useState<ProPlanBillingCycle>("monthly");
@@ -140,7 +139,7 @@ export function ProPricingV1() {
 
   return (
     <Section id="plans" className="scroll-mt-24 bg-background">
-      <Container className="flex flex-col gap-10">
+      <Container className="flex flex-col gap-8">
         <div className="mx-auto flex max-w-2xl flex-col items-center gap-4 text-center">
           <p className="eyebrow text-primary">Pricing</p>
           <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-[2.75rem] md:leading-[1.1]">
@@ -153,9 +152,9 @@ export function ProPricingV1() {
         </div>
 
         {state === "loading" ? (
-          <div className="grid overflow-hidden rounded-[1.75rem] border border-border bg-background lg:grid-cols-4">
+          <div className="grid gap-5 lg:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => (
-              <div key={index} className={cn("flex flex-col gap-4 p-7", index > 0 && "hidden lg:flex")}>
+              <div key={index} className={cn("flex flex-col gap-4 rounded-2xl border border-border bg-background p-7", index > 0 && "hidden lg:flex")}>
                 <Skeleton className="h-6 w-24" />
                 <Skeleton className="h-10 w-32" />
                 <Skeleton className="h-10 w-full" />
@@ -184,18 +183,33 @@ export function ProPricingV1() {
                   </button>
                 ))}
               </div>
-              <div className="overflow-hidden rounded-[1.75rem] border border-border bg-background">
+              <div
+                className={cn(
+                  "overflow-hidden rounded-2xl border bg-background shadow-[0_12px_30px_-24px_rgba(15,23,42,0.25)]",
+                  plans[mobileIndex]?.highlighted ? "border-primary ring-1 ring-primary" : "border-border",
+                )}
+              >
                 <PlanColumn plan={plans[mobileIndex]} cycle={cycle} isProvider={isProvider} />
               </div>
             </div>
 
-            {/* Desktop: all plans side by side */}
+            {/* Desktop: one card per plan, the popular one outlined in brand blue */}
             <div
-              className="hidden overflow-hidden rounded-[1.75rem] border border-border bg-background lg:grid lg:divide-x lg:divide-border"
+              className="hidden items-stretch gap-5 lg:grid"
               style={{ gridTemplateColumns: `repeat(${plans.length}, minmax(0, 1fr))` }}
             >
               {plans.map((plan) => (
-                <PlanColumn key={plan.id} plan={plan} cycle={cycle} isProvider={isProvider} />
+                <div
+                  key={plan.id}
+                  className={cn(
+                    "overflow-hidden rounded-2xl border bg-background transition-shadow duration-300 hover:shadow-[0_24px_50px_-30px_rgba(15,23,42,0.35)]",
+                    plan.highlighted
+                      ? "border-primary shadow-[0_24px_50px_-28px_rgba(0,63,125,0.45)] ring-1 ring-primary"
+                      : "border-border shadow-[0_12px_30px_-24px_rgba(15,23,42,0.25)]",
+                  )}
+                >
+                  <PlanColumn plan={plan} cycle={cycle} isProvider={isProvider} />
+                </div>
               ))}
             </div>
           </>

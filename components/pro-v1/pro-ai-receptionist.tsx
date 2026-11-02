@@ -4,15 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
-  Bot,
   CalendarCheck,
   Check,
-  FileText,
-  Loader2,
+  Clock3,
+  MapPin,
   Phone,
-  PhoneIncoming,
-  ShieldCheck,
-  UserCheck,
+  Sparkles,
+  Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Container, Section } from "@/components/layout/container";
@@ -20,57 +18,85 @@ import { proPaths } from "@/lib/pro-paths";
 import { cn } from "@/lib/utils";
 
 /** What the receptionist really does (backend ai-calling intake + technician match + call log). */
-const HIGHLIGHTS = [
-  {
-    icon: PhoneIncoming,
-    title: "Your own business number",
-    body: "Answered in your company's name, day or night. Forward your current line to it.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Qualifies before it books",
-    body: "Checks the service and your area, and hands urgent calls to you.",
-  },
-  {
-    icon: CalendarCheck,
-    title: "Books inside your hours",
-    body: "Visits land on your Schedule with a free technician whose skills fit.",
-  },
-  {
-    icon: FileText,
-    title: "Every call on file",
-    body: "Transcript, details, and a draft estimate — nothing is sent until you review it.",
-  },
+const POINTS = [
+  "Answers 24/7 on your own business number, in your company's name",
+  "Checks the service and your area before it books anything",
+  "Books the visit inside your hours with a free, matching technician",
 ] as const;
 
-const GREETING = "Thanks for calling Summit Home Services — how can I help?";
-
-/** The intake fields captured during the sample call, in order, with the line that captured each. */
-const FIELDS = [
-  { label: "Caller", value: "Daniel Reyes · (303) 555-0187", who: "caller", said: "Hi, this is Daniel Reyes." },
-  { label: "Job", value: "Water heater — no hot water", who: "caller", said: "Our water heater quit — no hot water since last night." },
-  { label: "Address", value: "1180 Elm St, Denver 80220", who: "caller", said: "We're at 1180 Elm St in Denver." },
-  { label: "Coverage", value: "Plumbing · in your area", who: "ai", said: "Good news — that's inside our plumbing service area." },
-  { label: "Visit", value: "Thu · 9:00 – 11:00 AM", who: "ai", said: "A technician can come Thursday, 9 to 11. Shall I book it?" },
+/** The call, one line per step. */
+const SCRIPT = [
+  { who: "ai", text: "Summit Home Services, how can I help?" },
+  {
+    who: "caller",
+    text: "Hi, Daniel Reyes. Our water heater quit last night.",
+  },
+  { who: "caller", text: "We're at 1180 Elm St, Denver." },
+  { who: "ai", text: "That's in our area. Thursday 9 to 11 work for you?" },
+  { who: "caller", text: "Thursday at 9 is perfect." },
 ] as const;
 
-/** Steps: 0 ringing → 1..5 fields captured → 6 syncing → 7 booked (then hold and loop). */
-const STEP_MS = 1700;
-const SYNC_MS = 1600;
+/** Steps: 0 ringing → 1..5 lines → 6 booking → 7 booked (hold, then loop). */
+const RING_MS = 1600;
+const LINE_MS = 2400;
+const BOOKING_MS = 1500;
 const HOLD_MS = 4200;
-const BOOKED = FIELDS.length + 2;
+const BOOKING = SCRIPT.length + 1;
+const BOOKED = SCRIPT.length + 2;
+
+/** The call log: each step starts working on `startAt` and is done on `doneAt`. */
+const ACTIONS = [
+  {
+    label: "Caller identified",
+    detail: "Daniel Reyes · (303) 555-0187",
+    startAt: 1,
+    doneAt: 2,
+  },
+  {
+    label: "Job captured",
+    detail: "Water heater — no hot water",
+    startAt: 2,
+    doneAt: 3,
+  },
+  {
+    label: "Address verified",
+    detail: "1180 Elm St, Denver · in your area",
+    startAt: 3,
+    doneAt: 4,
+  },
+  {
+    label: "Visit booked",
+    detail: "Thu 9:00 – 11:00 AM · Tate R.",
+    startAt: 4,
+    doneAt: BOOKED,
+  },
+] as const;
+
+/**
+ * Voice bars with deterministic timings, rounded so server and client render identical styles.
+ * The envelope tapers the ends so the wave reads as a voice, not a block.
+ */
+const BARS = Array.from({ length: 44 }, (_, i) => ({
+  duration: Math.round((0.55 + ((i * 37) % 9) / 11) * 100) / 100,
+  delay: ((i * 53) % 10) / 10,
+  cap: Math.round(40 + 60 * Math.sin((Math.PI * (i + 0.5)) / 44)),
+}));
 
 function clock(seconds: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 /**
- * Pro landing (for-pros-v1): "AI Business Receptionist" — a heading row, four short highlights,
- * and one compact card where a live call's transcript fills the lead details until the visit is
- * booked. Loops while on screen; static final state with reduced motion. Illustrative.
+ * Pro landing (for-pros-v1): "AI Business Receptionist" — copy on the left; on the right a
+ * compact frosted-glass live-call widget: caller header with timer, a slim voice waveform, the
+ * line being spoken, a horizontal four-step call log (spinner → pulsing green check, the track
+ * filling as it goes), and one status line that ends on "Added to your Schedule". CTAs sit under
+ * the widget. Loops while on screen; booked end state with reduced motion. Illustrative.
  */
 export function ProAiReceptionist() {
   const [step, setStep] = useState(0);
+  const [typed, setTyped] = useState(0);
+  const [seconds, setSeconds] = useState(0);
   const [inView, setInView] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -79,38 +105,70 @@ export function ProAiReceptionist() {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       setReducedMotion(true);
       setStep(BOOKED);
+      setSeconds(112);
       return;
     }
     const panel = panelRef.current;
     if (!panel) return;
-    const observer = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting), { threshold: 0.3 });
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { threshold: 0.3 },
+    );
     observer.observe(panel);
     return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
     if (!inView || reducedMotion) return;
-    const delay = step === BOOKED ? HOLD_MS : step === BOOKED - 1 ? SYNC_MS : STEP_MS;
-    const timer = window.setTimeout(() => setStep((current) => (current >= BOOKED ? 0 : current + 1)), delay);
+    const delay =
+      step === 0
+        ? RING_MS
+        : step === BOOKED
+          ? HOLD_MS
+          : step === BOOKING
+            ? BOOKING_MS
+            : LINE_MS;
+    const timer = window.setTimeout(() => {
+      setTyped(0);
+      if (step >= BOOKED) setSeconds(0);
+      setStep(step >= BOOKED ? 0 : step + 1);
+    }, delay);
     return () => window.clearTimeout(timer);
   }, [inView, reducedMotion, step]);
 
-  const captured = Math.min(step, FIELDS.length);
-  const syncing = step === BOOKED - 1;
-  const booked = step === BOOKED;
-  const ringing = step === 0;
-  const onCall = step > 0 && step < BOOKED - 1;
+  // Call timer: ticks while the line is open.
+  const live = step >= 1 && step <= BOOKING;
+  useEffect(() => {
+    if (!inView || reducedMotion || !live) return;
+    const timer = window.setInterval(
+      () => setSeconds((value) => value + 1),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [inView, reducedMotion, live]);
 
-  // Greeting, then the line behind each captured field; the card shows the latest two.
-  const lines = step > 0 ? [{ who: "ai", said: GREETING }, ...FIELDS.slice(0, captured)] : [];
-  const visibleLines = lines.slice(-2);
+  const line = step >= 1 && step <= SCRIPT.length ? SCRIPT[step - 1] : null;
+  useEffect(() => {
+    if (!line || reducedMotion || typed >= line.text.length) return;
+    const timer = window.setTimeout(() => setTyped((count) => count + 2), 26);
+    return () => window.clearTimeout(timer);
+  }, [line, typed, reducedMotion]);
+
+  const ringing = step === 0;
+  const booked = step === BOOKED;
+  const caller = line?.who === "caller";
+  const doneCount = ACTIONS.filter((action) => step >= action.doneAt).length;
+  const lastDone = doneCount > 0 ? ACTIONS[doneCount - 1] : null;
 
   return (
-    <Section id="ai-receptionist" className="relative scroll-mt-24 bg-background">
-      <Container className="flex flex-col gap-10">
-        {/* Heading row */}
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-end lg:gap-14">
-          <div className="flex flex-col gap-3">
+    <Section
+      id="ai-receptionist"
+      className="relative scroll-mt-24 overflow-hidden bg-background"
+    >
+      <Container className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-14">
+        {/* Copy */}
+        <div className="flex min-w-0 flex-col gap-6">
+          <div className="flex flex-col gap-4">
             <p className="inline-flex w-fit items-center gap-2 rounded-full bg-primary/8 px-3 py-1 text-xs font-semibold text-primary">
               <span className="relative flex size-2" aria-hidden="true">
                 <span className="absolute inset-0 animate-ping rounded-full bg-emerald-400/60 motion-reduce:animate-none" />
@@ -119,208 +177,357 @@ export function ProAiReceptionist() {
               AI Business Receptionist
             </p>
             <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-[2.5rem] md:leading-[1.1]">
-              Never miss a lead. Your 24/7 AI phone receptionist.
+              Never miss a lead — even on the job.
             </h2>
-          </div>
-          <div className="flex flex-col gap-4">
-            <p className="text-sm leading-7 text-muted-foreground md:text-base">
-              A dedicated business number that answers in your company&apos;s name, qualifies the homeowner, and books the
-              site visit onto your calendar — while you&apos;re on the job.
+            <p className="max-w-lg text-sm leading-7 text-muted-foreground md:text-base">
+              Your AI receptionist picks up every call, captures the job, and
+              books the visit — then leaves the transcript and a draft estimate
+              for you to review.
             </p>
-            <div className="flex flex-wrap items-center gap-4">
-              <Button asChild>
-                <Link href={proPaths.register}>
-                  Get your AI number
-                  <ArrowRight data-icon="inline-end" />
-                </Link>
-              </Button>
-              <Link href="#plans" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
-                See plans with AI minutes
-              </Link>
-            </div>
           </div>
+          <ul className="flex flex-col gap-3">
+            {POINTS.map((point) => (
+              <li key={point} className="flex items-start gap-3 text-sm">
+                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                  <Check
+                    className="size-3 text-primary"
+                    strokeWidth={3}
+                    aria-hidden="true"
+                  />
+                </span>
+                {point}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <div className="grid items-center gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-10">
-          {/* Highlights */}
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {HIGHLIGHTS.map((item) => {
-              const Icon = item.icon;
-              return (
-                <li key={item.title} className="flex flex-col gap-2 rounded-2xl border border-border bg-muted/30 p-4">
-                  <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Icon className="size-4" aria-hidden="true" />
-                  </span>
-                  <h3 className="text-sm font-semibold tracking-tight">{item.title}</h3>
-                  <p className="text-[13px] leading-5 text-muted-foreground">{item.body}</p>
-                </li>
-              );
-            })}
-          </ul>
+        {/* Live call widget, CTAs underneath */}
+        <div className="flex min-w-0 flex-col gap-5">
+          <div ref={panelRef} className="relative">
+            {/* Ambient brand glow behind the glass */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -inset-6"
+            >
+              <div className="rs-glow absolute -top-4 right-0 size-48 rounded-full bg-primary/20 blur-3xl" />
+              <div
+                className="rs-glow absolute bottom-0 left-0 size-40 rounded-full bg-sky-400/20 blur-3xl"
+                style={{ animationDelay: "-3.5s" }}
+              />
+            </div>
 
-          {/* Compact live-call card */}
-          <div ref={panelRef} className="min-w-0">
-            <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-[0_24px_60px_-36px_rgba(15,23,42,0.3)]">
-              {/* Line */}
-              <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
-                <p className="flex min-w-0 items-center gap-2 text-xs">
-                  <Phone className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
-                  <span className="truncate">
-                    <span className="font-mono font-semibold tabular-nums">(303) 555-0142</span>
-                    <span className="text-muted-foreground"> · Summit Home Services</span>
+            <div
+              aria-live="polite"
+              className="relative overflow-hidden rounded-2xl border border-white/70 bg-white/65 shadow-[0_24px_60px_-34px_rgba(0,63,125,0.45),inset_0_1px_0_rgba(255,255,255,0.8)] ring-1 ring-primary/10 backdrop-blur-xl dark:border-white/10 dark:bg-white/4 dark:shadow-[0_24px_60px_-34px_rgba(0,0,0,0.7)]"
+            >
+              {/* Caller header */}
+              <div className="flex items-center gap-3 px-4 pt-4">
+                <span className="relative flex size-10 shrink-0 items-center justify-center">
+                  {!booked ? (
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "absolute inset-0 animate-ping rounded-full motion-reduce:hidden",
+                        ringing ? "bg-primary/25" : "bg-primary/20",
+                      )}
+                      style={{ animationDuration: "1.8s" }}
+                    />
+                  ) : null}
+                  <span className="relative flex size-10 items-center justify-center rounded-full bg-linear-to-br from-primary to-[#01305f] text-xs font-semibold text-primary-foreground">
+                    {ringing ? (
+                      <Phone className="size-4" aria-hidden="true" />
+                    ) : (
+                      "DR"
+                    )}
                   </span>
-                </p>
-                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-                  <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-                  Answering 24/7
                 </span>
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.14em] uppercase">
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        ringing
+                          ? "animate-pulse bg-amber-500"
+                          : booked
+                            ? "bg-primary"
+                            : "animate-pulse bg-red-500",
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        ringing
+                          ? "text-amber-600 dark:text-amber-400"
+                          : booked
+                            ? "text-primary"
+                            : "text-red-600 dark:text-red-400",
+                      )}
+                    >
+                      {ringing
+                        ? "Incoming call"
+                        : booked
+                          ? "Call complete"
+                          : "Live call active"}
+                    </span>
+                  </p>
+                  <p className="truncate text-[15px] font-semibold tracking-tight">
+                    Daniel Reyes
+                  </p>
+                  <p className="flex items-center gap-x-2.5 truncate text-[11px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <Phone className="size-2.5" aria-hidden="true" /> (303)
+                      555-0187
+                    </span>
+                    <span className="hidden items-center gap-1 sm:inline-flex">
+                      <MapPin className="size-2.5" aria-hidden="true" /> Denver,
+                      CO
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Wrench className="size-2.5" aria-hidden="true" /> Water
+                      heater
+                    </span>
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="rounded-md bg-primary/8 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-primary tabular-nums">
+                    {clock(seconds)}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <Sparkles
+                      className="size-2.5 text-primary"
+                      aria-hidden="true"
+                    />{" "}
+                    AI · 24/7
+                  </span>
+                </div>
               </div>
 
-              <div className="grid sm:grid-cols-2 sm:divide-x sm:divide-border" aria-live="polite">
-                {/* Call */}
-                <div className="flex min-w-0 flex-col gap-3 p-4">
-                  <div className="flex items-center gap-3">
-                    <span className="relative flex size-9 shrink-0 items-center justify-center">
-                      {!syncing && !booked ? (
-                        <span
-                          aria-hidden="true"
-                          className={cn(
-                            "absolute inset-0 rounded-full motion-reduce:animate-none",
-                            ringing ? "animate-ping bg-primary/20" : "animate-pulse bg-emerald-500/15",
-                          )}
-                        />
-                      ) : null}
+              {/* Waveform + spoken line */}
+              <div className="mx-4 mt-3 rounded-xl bg-primary/5 px-3 py-2.5 ring-1 ring-primary/8 dark:bg-white/4 dark:ring-white/8">
+                <div
+                  aria-hidden="true"
+                  className="flex h-9 items-center gap-0.5"
+                >
+                  {BARS.map((bar, index) => (
+                    <span
+                      key={index}
+                      className="flex h-full flex-1 items-center justify-center"
+                    >
                       <span
                         className={cn(
-                          "relative flex size-9 items-center justify-center rounded-full text-xs font-semibold",
-                          syncing || booked ? "bg-muted text-muted-foreground" : "bg-primary text-primary-foreground",
+                          "w-full max-w-0.75 rounded-full transition-colors duration-500",
+                          line ? "rs-wave" : "rs-wave-idle",
+                          !line
+                            ? "bg-muted-foreground/35"
+                            : caller
+                              ? "bg-primary/60 dark:bg-sky-300/70"
+                              : "bg-primary dark:bg-sky-300",
                         )}
-                      >
-                        {step > 0 ? "DR" : <PhoneIncoming className="size-4" aria-hidden="true" />}
-                      </span>
+                        style={{
+                          animationDuration: `${line ? bar.duration : bar.duration * 2}s`,
+                          animationDelay: `${bar.delay}s`,
+                          maxHeight: `${bar.cap}%`,
+                        }}
+                      />
                     </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{step > 0 ? "Daniel Reyes" : "Incoming call"}</p>
-                      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
-                        {onCall ? (
-                          <>
-                            <span aria-hidden="true" className="flex h-3 items-end gap-0.5">
-                              {[0, 1, 2, 3].map((bar) => (
-                                <span key={bar} className="rs-wave w-0.5 rounded-full bg-emerald-500" style={{ animationDelay: `${bar * 120}ms` }} />
-                              ))}
-                            </span>
-                            <span className="text-emerald-700 dark:text-emerald-300">AI on the line · {clock(8 + captured * 36)}</span>
-                          </>
-                        ) : ringing ? (
-                          "Ringing…"
-                        ) : (
-                          "Call ended · 3:12"
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Latest two lines of the transcript */}
-                  <ol className="flex min-h-26 flex-col justify-end gap-1.5">
-                    {visibleLines.map((line) => (
-                      <li
-                        key={line.said}
+                  ))}
+                </div>
+                <p
+                  key={step}
+                  className="animate-in fade-in mt-1.5 truncate text-[13px] leading-5 duration-300"
+                >
+                  {line ? (
+                    <>
+                      <span
                         className={cn(
-                          "animate-in fade-in slide-in-from-bottom-1 max-w-[92%] rounded-xl px-2.5 py-1.5 text-xs leading-snug duration-300",
-                          line.who === "ai"
-                            ? "self-start rounded-bl-sm bg-muted text-foreground"
-                            : "self-end rounded-br-sm bg-primary text-primary-foreground",
+                          "mr-1 font-semibold",
+                          caller ? "text-primary" : "text-primary",
                         )}
                       >
-                        {line.who === "ai" ? (
-                          <span className="mb-0.5 flex items-center gap-1 text-[10px] font-semibold text-primary">
-                            <Bot className="size-3" aria-hidden="true" /> AI receptionist
-                          </span>
-                        ) : null}
-                        {line.said}
-                      </li>
-                    ))}
-                    {ringing ? <li className="self-center text-[11px] text-muted-foreground">Answered on the first ring</li> : null}
-                  </ol>
-                </div>
-
-                {/* Lead */}
-                <div className="flex min-w-0 flex-col border-t border-border p-4 sm:border-t-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold">New lead</p>
-                    <span className="text-[11px] text-muted-foreground tabular-nums">
-                      {captured}/{FIELDS.length}
+                        {caller ? "Daniel:" : "AI:"}
+                      </span>
+                      {reducedMotion ? line.text : line.text.slice(0, typed)}
+                      {!reducedMotion && typed < line.text.length ? (
+                        <span
+                          aria-hidden="true"
+                          className="ml-0.5 inline-block h-3 w-0.5 animate-pulse bg-current align-middle"
+                        />
+                      ) : null}
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {ringing
+                        ? "Answering on the first ring…"
+                        : booked
+                          ? "Transcript saved to the lead."
+                          : "Confirming the visit…"}
                     </span>
-                  </div>
-                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-                    <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${(captured / FIELDS.length) * 100}%` }} />
-                  </div>
-                  <dl className="mt-2.5 flex flex-col gap-1.5">
-                    {FIELDS.map((field, index) => {
-                      const done = index < captured;
-                      const current = index === captured && onCall;
-                      return (
-                        <div key={field.label} className="flex items-center gap-2 text-xs">
-                          <span
-                            className={cn(
-                              "flex size-3.5 shrink-0 items-center justify-center rounded-full transition-colors duration-300",
-                              done ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
-                            )}
-                          >
-                            {done ? (
-                              <Check className="size-2.5" strokeWidth={3.5} aria-hidden="true" />
-                            ) : current ? (
-                              <Loader2 className="size-2.5 animate-spin" aria-hidden="true" />
-                            ) : null}
-                          </span>
-                          <dt className="w-14 shrink-0 text-muted-foreground">{field.label}</dt>
-                          <dd className="min-w-0 flex-1 truncate font-medium">
-                            {done ? (
-                              <span className="animate-in fade-in duration-300">{field.value}</span>
-                            ) : (
-                              <span className={cn("block h-1.5 w-20 rounded-full bg-muted", current && "animate-pulse")} aria-hidden="true" />
-                            )}
-                          </dd>
-                        </div>
-                      );
-                    })}
-                  </dl>
-                </div>
+                  )}
+                </p>
               </div>
 
-              {/* Booking + today */}
+              {/* Call log: horizontal stepper */}
+              <ol className="relative mx-4 mt-4 grid grid-cols-4">
+                <span
+                  aria-hidden="true"
+                  className="absolute top-3.5 right-[12.5%] left-[12.5%] h-px bg-border"
+                />
+                <span
+                  aria-hidden="true"
+                  className="absolute top-3.5 left-[12.5%] h-px bg-primary transition-[width] duration-700 ease-out"
+                  style={{
+                    width: `${(Math.max(0, doneCount - 1) / (ACTIONS.length - 1)) * 75}%`,
+                  }}
+                />
+                {ACTIONS.map((action, index) => {
+                  const state: StepState =
+                    step >= action.doneAt
+                      ? "done"
+                      : step >= action.startAt
+                        ? "working"
+                        : "queued";
+                  const isBooking = index === ACTIONS.length - 1;
+                  return (
+                    <li
+                      key={action.label}
+                      className="relative flex flex-col items-center gap-1.5 px-1 text-center"
+                    >
+                      <StepNode state={state} waiting={isBooking} />
+                      <span
+                        className={cn(
+                          "text-[11px] leading-tight transition-colors duration-300",
+                          state === "queued"
+                            ? "text-muted-foreground"
+                            : "font-semibold text-foreground",
+                        )}
+                      >
+                        {action.label}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-[10px] font-medium",
+                          state === "done"
+                            ? "text-primary"
+                            : state === "working"
+                              ? "text-primary"
+                              : "text-muted-foreground/70",
+                        )}
+                      >
+                        {state === "done"
+                          ? isBooking
+                            ? "Confirmed"
+                            : "Done"
+                          : state === "working"
+                            ? isBooking
+                              ? "Confirming…"
+                              : "Working…"
+                            : isBooking
+                              ? "Waiting"
+                              : "Queued"}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+
+              {/* Status line: latest result, then the booking */}
               <div
                 className={cn(
-                  "flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border px-4 py-2.5 transition-colors duration-500",
-                  booked ? "bg-emerald-500/8" : "bg-muted/40",
+                  "mt-4 flex h-11 items-center gap-2.5 border-t px-4 text-xs transition-colors duration-500",
+                  booked
+                    ? "border-primary/15 bg-primary/6"
+                    : "border-primary/8 dark:border-white/8",
                 )}
               >
-                <p className="flex min-w-0 items-center gap-2 text-xs font-semibold">
-                  {syncing ? (
-                    <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" aria-hidden="true" />
-                  ) : (
-                    <CalendarCheck className={cn("size-3.5 shrink-0", booked ? "text-emerald-600" : "text-muted-foreground")} aria-hidden="true" />
-                  )}
-                  <span className="truncate">
-                    {booked ? "Visit booked · Thu 9:00 AM" : syncing ? "Adding to your Schedule…" : "Waiting for a visit time"}
-                  </span>
-                  {booked ? (
-                    <span className="hidden items-center gap-1 font-normal text-muted-foreground sm:inline-flex">
-                      <UserCheck className="size-3" aria-hidden="true" /> Tate R.
+                {booked ? (
+                  <>
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                      <CalendarCheck className="size-3.5" aria-hidden="true" />
                     </span>
-                  ) : null}
-                </p>
-                <p className="text-[11px] text-muted-foreground tabular-nums">
-                  Today: <span className="font-semibold text-foreground">{booked ? 8 : 7}</span> calls ·{" "}
-                  <span className="font-semibold text-foreground">{booked ? 4 : 3}</span> booked ·{" "}
-                  <span className="font-semibold text-foreground">0</span> missed
-                </p>
+                    <span
+                      key="booked"
+                      className="animate-in fade-in slide-in-from-bottom-1 min-w-0 truncate duration-500"
+                    >
+                      <span className="font-semibold">
+                        Added to your Schedule
+                      </span>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · Thu 9–11 AM · Tate R. · customer notified
+                      </span>
+                    </span>
+                  </>
+                ) : (
+                  <span
+                    key={lastDone?.label ?? "none"}
+                    className="animate-in fade-in min-w-0 truncate text-muted-foreground duration-500"
+                  >
+                    {lastDone ? (
+                      <>
+                        <span className="font-medium text-foreground">
+                          {lastDone.label}
+                        </span>{" "}
+                        · {lastDone.detail}
+                      </>
+                    ) : (
+                      "Call log updates as the AI works…"
+                    )}
+                  </span>
+                )}
+                <span className="ml-auto shrink-0 text-[10px] font-medium text-muted-foreground tabular-nums">
+                  {doneCount}/{ACTIONS.length}
+                </span>
               </div>
             </div>
-            <p className="mt-2.5 text-center text-[11px] text-muted-foreground">Illustrative preview of the AI Receptionist in your portal.</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button asChild>
+              <Link href={proPaths.register}>
+                Get your AI number
+                <ArrowRight data-icon="inline-end" />
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="#plans">See plans</Link>
+            </Button>
           </div>
         </div>
       </Container>
     </Section>
+  );
+}
+
+type StepState = "queued" | "working" | "done";
+
+/** Stepper node: hollow (clock while waiting) → spinning ring → green check with a soft pulse. */
+function StepNode({ state, waiting }: { state: StepState; waiting: boolean }) {
+  if (state === "done") {
+    return (
+      <span className="rs-check-pulse relative z-10 flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
+        <Check
+          className="animate-in zoom-in-50 size-3.5 duration-300"
+          strokeWidth={3.5}
+          aria-hidden="true"
+        />
+      </span>
+    );
+  }
+  if (state === "working") {
+    return (
+      <span className="relative z-10 flex size-7 items-center justify-center rounded-full bg-background">
+        <span className="absolute inset-0 animate-spin rounded-full border-2 border-primary/15 border-t-primary motion-reduce:animate-none" />
+        <span className="size-1.5 animate-pulse rounded-full bg-primary" />
+      </span>
+    );
+  }
+  return (
+    <span className="relative z-10 flex size-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground">
+      {waiting ? (
+        <Clock3 className="size-3" aria-hidden="true" />
+      ) : (
+        <span className="size-1.5 rounded-full bg-muted-foreground/40" />
+      )}
+    </span>
   );
 }

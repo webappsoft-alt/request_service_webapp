@@ -34,10 +34,11 @@ const beats = [
   },
 ] as const;
 
-export function ProProduct() {
+/** `compact`: tighter gaps and brand-blue trade icons (the /for-pros-v1 layout). */
+export function ProProduct({ compact = false }: { compact?: boolean } = {}) {
   return (
     <Section id="process" density="tight" className="scroll-mt-24">
-      <Container className="flex flex-col gap-12 lg:gap-14">
+      <Container className={cn("flex flex-col", compact ? "gap-8 lg:gap-10" : "gap-12 lg:gap-14")}>
         <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 text-center">
           <p className="eyebrow text-primary">Made for home service teams</p>
           <h2 className="text-3xl font-semibold tracking-tight md:text-[2.5rem] md:leading-[1.12]">
@@ -50,7 +51,7 @@ export function ProProduct() {
         </div>
 
         {/* Pipeline — open, no outer box */}
-        <ol className="relative mx-auto grid w-full max-w-5xl gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+        <ol className={cn("relative mx-auto grid w-full max-w-5xl sm:grid-cols-2 lg:grid-cols-4 lg:gap-6", compact ? "gap-6" : "gap-8")}>
           {/* Connector line (desktop) */}
           <span
             aria-hidden="true"
@@ -76,7 +77,7 @@ export function ProProduct() {
         </ol>
 
         {/* Trades — editorial directory, not a centered icon grid */}
-        <div className="mx-auto w-full max-w-5xl border-t border-[#e6edf5] pt-10">
+        <div className={cn("mx-auto w-full max-w-5xl border-t border-[#e6edf5]", compact ? "pt-8" : "pt-10")}>
           <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.5fr)] lg:items-start lg:gap-14">
             <div className="flex flex-col gap-3 lg:pt-1">
               <p className="eyebrow text-primary">Trades</p>
@@ -102,7 +103,7 @@ export function ProProduct() {
                   <span
                     className={cn(
                       "flex size-10 shrink-0 items-center justify-center rounded-lg",
-                      serviceAccents[category.slug],
+                      compact ? "bg-primary/10 text-primary" : serviceAccents[category.slug],
                     )}
                   >
                     <CategoryIcon slug={category.slug} className="size-4" />

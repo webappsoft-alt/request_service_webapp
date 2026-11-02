@@ -52,7 +52,7 @@ export function ProShowcase() {
 
   return (
     <Section id="how-it-works" className="scroll-mt-24 bg-muted/50">
-      <Container ref={rootRef} className="flex flex-col gap-10 lg:gap-14">
+      <Container ref={rootRef} className="flex flex-col gap-8 lg:gap-10">
         <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 text-center">
           <p className="eyebrow text-primary">The portal</p>
           <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-[2.75rem] md:leading-[1.1]">
@@ -116,7 +116,7 @@ export function ProShowcase() {
             {/* What this area does */}
             <div
               key={`${item.id}-copy`}
-              className="animate-in fade-in slide-in-from-bottom-1 mt-8 grid gap-6 duration-500 lg:mt-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-12"
+              className="animate-in fade-in slide-in-from-bottom-1 mt-6 grid gap-6 duration-500 lg:mt-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-12"
             >
               <div className="flex flex-col gap-2">
                 <p className="font-mono text-xs tracking-[0.16em] text-primary uppercase">

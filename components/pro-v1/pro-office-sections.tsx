@@ -144,7 +144,7 @@ const WEEK = [
 export function ProTeamTimeSection() {
   return (
     <Section id="team" className="relative scroll-mt-24 bg-muted/50">
-      <Container className="relative flex flex-col gap-10">
+      <Container className="relative flex flex-col gap-8">
         {/* Heading row */}
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-end lg:gap-14">
           <div className="flex flex-col gap-3">

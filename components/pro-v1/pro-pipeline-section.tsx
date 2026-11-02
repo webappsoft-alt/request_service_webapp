@@ -112,7 +112,7 @@ export function ProPipelineSection() {
 
   return (
     <Section id="pipeline" className="relative scroll-mt-24 bg-background">
-      <Container className="relative flex flex-col gap-10 lg:gap-14">
+      <Container className="relative flex flex-col gap-8 lg:gap-10">
         <div className="mx-auto flex max-w-2xl flex-col items-center gap-4 text-center">
           <p className="inline-flex w-fit items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
             <Columns3 className="size-3.5" aria-hidden="true" />

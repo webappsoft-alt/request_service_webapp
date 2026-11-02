@@ -805,6 +805,16 @@
   }
 }
 
+/* /for-pros-v1: a tighter rhythm than the default sections (client review). Unlayered, so it wins. */
+.pros-v1 .section-space {
+  padding-block: 3rem;
+}
+@media (min-width: 768px) {
+  .pros-v1 .section-space {
+    padding-block: 4rem;
+  }
+}
+
 @utility section-space-tight {
   padding-block: 2.5rem;
 
@@ -2151,6 +2161,40 @@ body.rs-cal-dragging [data-cal-overlay] {
   .rs-wave {
     animation: none;
     height: 55%;
+  }
+}
+
+/* for-pros-v1 AI receptionist widget: idle line-noise, step check pulse, ambient glow. */
+@keyframes rs-wave-idle {
+  0%, 100% { height: 8%; }
+  50% { height: 26%; }
+}
+.rs-wave-idle {
+  animation: rs-wave-idle 1.8s ease-in-out infinite;
+}
+@keyframes rs-check-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(0, 63, 125, 0.4); }
+  70% { box-shadow: 0 0 0 7px rgba(0, 63, 125, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 63, 125, 0); }
+}
+.rs-check-pulse {
+  animation: rs-check-pulse 2.4s ease-out infinite;
+}
+@keyframes rs-glow {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.06); }
+}
+.rs-glow {
+  animation: rs-glow 7s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rs-wave-idle {
+    animation: none;
+    height: 14%;
+  }
+  .rs-check-pulse,
+  .rs-glow {
+    animation: none;
   }
 }
 

@@ -5,6 +5,7 @@ import { ArrowRight, BadgeCheck, Quote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/layout/container";
 import { testimonials } from "@/lib/data/content";
+import { cn } from "@/lib/utils";
 import { proPaths } from "@/lib/pro-paths";
 import { useAppSelector } from "@/store/hooks";
 import {
@@ -22,7 +23,11 @@ const assurances = [
   "Your estimates and customers stay yours",
 ] as const;
 
-export function ProClose() {
+/**
+ * Testimonial + "Open your account" CTA. `band`: full-width brand band (no rounded card) for the
+ * middle of a page; default: the rounded card used at the bottom of /for-pros.
+ */
+export function ProClose({ band = false }: { band?: boolean } = {}) {
   const auth = useAppSelector(selectAuth);
   const user = useAppSelector(selectAuthUser);
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
@@ -32,10 +37,26 @@ export function ProClose() {
     (user?.role === "provider" || auth.role === "provider");
 
   return (
-    <section className="pb-14 md:pb-20">
+    <section
+      className={cn(
+        band
+          ? "bg-[linear-gradient(150deg,#003F7D_0%,#01305f_55%,#02203f_100%)] text-primary-foreground"
+          : "pb-14 md:pb-20",
+      )}
+    >
       <Container>
-        <div className="overflow-hidden rounded-3xl bg-[linear-gradient(150deg,#003F7D_0%,#01305f_55%,#02203f_100%)] text-primary-foreground">
-          <div className="grid gap-10 p-8 sm:p-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:gap-16 lg:p-14">
+        <div
+          className={cn(
+            !band &&
+              "overflow-hidden rounded-3xl bg-[linear-gradient(150deg,#003F7D_0%,#01305f_55%,#02203f_100%)] text-primary-foreground",
+          )}
+        >
+          <div
+            className={cn(
+              "grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:items-center lg:gap-16",
+              band ? "py-12 md:py-16" : "p-8 sm:p-10 lg:p-14",
+            )}
+          >
             <figure className="flex flex-col gap-5">
               <Quote className="size-7 text-white/35" aria-hidden="true" />
               <blockquote className="text-xl leading-[1.35] font-semibold tracking-tight text-white md:text-2xl">
@@ -61,8 +82,14 @@ export function ProClose() {
 
               <ul className="flex flex-col gap-2.5">
                 {assurances.map((item) => (
-                  <li key={item} className="flex items-start gap-2.5 text-sm text-white/75">
-                    <BadgeCheck className="mt-0.5 size-4 shrink-0 text-white/50" aria-hidden="true" />
+                  <li
+                    key={item}
+                    className="flex items-start gap-2.5 text-sm text-white/75"
+                  >
+                    <BadgeCheck
+                      className="mt-0.5 size-4 shrink-0 text-white/50"
+                      aria-hidden="true"
+                    />
                     {item}
                   </li>
                 ))}
@@ -70,7 +97,11 @@ export function ProClose() {
 
               <div className="mt-1 flex flex-col gap-2.5 sm:flex-row">
                 {isProvider ? (
-                  <Button size="xl" className="bg-white text-primary hover:bg-white/90" asChild>
+                  <Button
+                    size="xl"
+                    className="bg-white text-primary hover:bg-white/90"
+                    asChild
+                  >
                     <Link href={proPaths.dashboard}>
                       Open dashboard
                       <ArrowRight data-icon="inline-end" />
@@ -78,7 +109,11 @@ export function ProClose() {
                   </Button>
                 ) : (
                   <>
-                    <Button size="xl" className="bg-white text-primary hover:bg-white/90" asChild>
+                    <Button
+                      size="xl"
+                      className="bg-white text-primary hover:bg-white/90"
+                      asChild
+                    >
                       <Link href={proPaths.register}>
                         Create your account
                         <ArrowRight data-icon="inline-end" />

@@ -9,9 +9,10 @@ import { PeaceOfMindList } from "@/components/home-concepts/peace-of-mind-list";
 import { RedesignerSection } from "@/components/ai-redesigner/redesigner-section";
 import {
   NextStepWays,
-  ProofOfControl,
-  ReadyToSolve,
-  TrustStrip,
+  // Hidden for now (client feedback); see the commented sections below.
+  // ProofOfControl,
+  // ReadyToSolve,
+  // TrustStrip,
 } from "@/components/home-concepts/next-step-layout";
 import { DeferredHydration } from "@/components/shared/deferred-hydration";
 import { fetchParentCategoriesForSeo } from "@/lib/data/public-categories-seo";
@@ -28,7 +29,7 @@ export const metadata = buildMetadata({
 /**
  * Keeps the complete v1 header, hero, search, and Browse Services composition unchanged.
  * Flow: three ways to start → real pros (two rows) → peace of mind list → AI designer (v1's dark
- * version) → proof of control → trust strip → closing CTA → FAQ.
+ * version) → FAQ. Proof of control, trust strip, and closing CTA are commented out for now.
  */
 export default async function HomeV3Page() {
   const initialCategories = await fetchParentCategoriesForSeo();
@@ -50,10 +51,10 @@ export default async function HomeV3Page() {
           <DeferredHydration>
             <RedesignerSection variant="showcase" />
           </DeferredHydration>
-          <ProofOfControl />
+          {/* <ProofOfControl /> */}
         </PeaceOfMindList>
-        <TrustStrip />
-        <ReadyToSolve />
+        {/* <TrustStrip /> */}
+        {/* <ReadyToSolve /> */}
         <DeferredHydration>
           <HomeFaqSection />
         </DeferredHydration>

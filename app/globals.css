@@ -2217,3 +2217,72 @@ body.rs-cal-dragging [data-cal-overlay] {
 .showcase-progress {
   animation: showcase-progress linear forwards;
 }
+
+/* for-pros-v1 feature tabs: active tab border, and the motion used by the tab visuals. */
+@property --rs-tab-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes rs-tab-spin {
+  to { --rs-tab-angle: 360deg; }
+}
+.rs-tab-active {
+  position: absolute;
+  border-radius: 0.75rem;
+  background: var(--background);
+  box-shadow: 0 10px 32px -8px color-mix(in srgb, var(--primary) 45%, transparent);
+  transition: left 0.3s cubic-bezier(0.22, 1, 0.36, 1), top 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.3s cubic-bezier(0.22, 1, 0.36, 1), height 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.rs-tab-active::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--rs-tab-angle),
+    var(--primary),
+    color-mix(in srgb, var(--primary) 20%, transparent) 40%,
+    var(--primary) 70%,
+    color-mix(in srgb, var(--primary) 20%, transparent) 85%,
+    var(--primary)
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: rs-tab-spin 3.5s linear infinite;
+}
+@keyframes rs-dash-flow {
+  to { stroke-dashoffset: -16; }
+}
+.rs-dash-flow {
+  stroke-dasharray: 5 3;
+  animation: rs-dash-flow 0.8s linear infinite;
+}
+/* Soft tint with a faint dot grid behind the tab visuals. */
+.rs-stage {
+  background-color: color-mix(in srgb, var(--primary) 3%, var(--background));
+  background-image:
+    radial-gradient(ellipse 70% 60% at 12% 0%, color-mix(in srgb, var(--primary) 14%, transparent), transparent),
+    radial-gradient(circle, color-mix(in srgb, var(--primary) 16%, transparent) 1px, transparent 1px);
+  background-size: 100% 100%, 18px 18px;
+}
+/* Torn bottom edge of the printed receipt. */
+.rs-receipt {
+  clip-path: polygon(
+    0 0, 100% 0, 100% calc(100% - 8px), 95% 100%, 90% calc(100% - 8px), 85% 100%, 80% calc(100% - 8px),
+    75% 100%, 70% calc(100% - 8px), 65% 100%, 60% calc(100% - 8px), 55% 100%, 50% calc(100% - 8px),
+    45% 100%, 40% calc(100% - 8px), 35% 100%, 30% calc(100% - 8px), 25% 100%, 20% calc(100% - 8px),
+    15% 100%, 10% calc(100% - 8px), 5% 100%, 0 calc(100% - 8px)
+  );
+}
+@media (prefers-reduced-motion: reduce) {
+  .rs-tab-active,
+  .rs-tab-active::before,
+  .rs-dash-flow {
+    animation: none;
+    transition: none;
+  }
+}

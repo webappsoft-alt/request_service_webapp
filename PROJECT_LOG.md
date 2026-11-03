@@ -67,6 +67,59 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-03
 
+- **/home-v3: Proof of Control, testimonial strip, and "Ready to solve it?" commented out** — client
+  feedback. Hidden on this page only, by commenting out their imports and JSX so they're easy to
+  bring back; the components are unchanged · `app/(marketing)/home-v3/page.tsx`.
+- **/for-pros-v1 tabs: faster switching, fuller visuals** — client spec. Switching: only the visual
+  and copy swap (0.2s fade, was 0.7s on the whole panel), the highlight slides in 0.3s, loops start
+  after 0.25s, and animated numbers write straight to the DOM instead of re-rendering per frame;
+  background blur removed. Dashboard is now stats, important actions, quick actions, and
+  notifications. Employees is an org chart (owner, office, field) with role, pay, and technician
+  login. Estimate is wider with status, customer, property, validity, line types, tax, and a
+  signature. Fixed services is a price-tagged grid. Payments keeps the card and balance and adds
+  Credit card, ACH, Check, and Cash rows. Customers and Invoices gained side panels; the stage
+  background is a soft tint with a dot grid. Apple Pay and per-role permission toggles were left
+  out because the product has neither · `components/pro-v1/pro-dashboard-mocks.tsx`,
+  `components/pro-v1/pro-feature-tabs.tsx`, `app/globals.css`.
+- **/for-pros-v1 tabs: new tab style, a different visual and motion per tab** — client feedback
+  with a reference: tabs were too heavy, and every panel looked the same. Tabs are now plain text
+  with one highlight (white, soft glow, spinning primary-color border) that slides to the active
+  tab. The panel is a soft gradient with the visual on the left and copy on a white card. Visuals:
+  Dashboard bento with count-ups and a ring, Pipeline card carry, Customers card deck, Employees
+  network, Timesheets phone timer, Leads flowing from sources, Estimate paper with a drawn
+  signature, Jobs van on a route, Schedules drag with a ripple, Invoices printing receipt with a
+  PAID stamp, Payments flipping card and ring, Fixed services marquee, Reports self-drawing chart
+  with a phone. All sample data; reduced motion is respected ·
+  `components/pro-v1/pro-dashboard-mocks.tsx`, `components/pro-v1/pro-feature-tabs.tsx`,
+  `app/globals.css`.
+- **/for-pros-v1 tabs: animated working mock-ups instead of scrolling screenshots** — client spec.
+  Each of the 14 tabs now plays a short loop of its screen, in portal style with sample data:
+  Pipeline drags a card across stages, Schedules drags a job onto a technician, Estimate and
+  Invoices build line items and recalculate totals, and AI Receptionist reuses the approved call
+  widget. Tabs advance after one pass of the loop. Scroll animation removed;
+  `dash-*.webp` captures are no longer used but kept in `public/marketing/pro/` ·
+  `components/pro-v1/pro-dashboard-mocks.tsx` (new), `components/pro-v1/pro-feature-tabs.tsx`,
+  `components/pro-v1/pro-ai-receptionist.tsx` (`CALL_LOOP_MS`), `components/pro/pro-screenshot.tsx`,
+  `app/globals.css`.
+- **/for-pros-v1 tabs now use the pro dashboard's own options and real captures** — client: tabs
+  must match the sidebar and show our screens, not mock-ups or Workiz's feature names. Fourteen
+  sidebar options (in sidebar order), each with a new capture from the live pro portal that scrolls
+  slowly like a recording; tabs auto-advance while on screen until one is clicked. Removes Service
+  Plans, QuickBooks, and the mock-ups. Captures hide the portal sidebar and header, and customer,
+  business, and staff details were swapped for sample data in the browser before capture, because
+  the account holds personal details; nothing in the account changed. Messages left out: opening a
+  conversation could mark it read · `components/pro-v1/pro-feature-tabs.tsx`,
+  `components/pro/pro-screenshot.tsx` (`animated`, default off), `app/globals.css`
+  (`rs-shot-move`), `public/marketing/pro/dash-*.webp` (new).
+- **/for-pros-v1: feature tabs replace the sections above the "Get started" band** — client spec
+  with Workiz references. The portal showcase, AI receptionist, technician, contractor, and team
+  sections are off the page (components kept); the hero is now followed by ten pill tabs over one
+  panel of copy beside a small mock-up. Workiz's "Genius" names became AI Answering, Business Phone,
+  and Marketing. Service Plans and QuickBooks show "Coming soon" because the product has neither.
+  Automations copy covers reminders and signed scope → job only, since there are no automated
+  customer SMS flows. Business Phone and Marketing use real captures; the AI tab reuses the call
+  widget, now exported as `ReceptionistCallCard` · `components/pro-v1/pro-feature-tabs.tsx` (new),
+  `components/pro-v1/pro-ai-receptionist.tsx`, `app/(marketing)/for-pros-v1/page.tsx`.
 - **/home-v3: "Ready to solve it?" directly above the FAQ; step sub-text on two lines** — client
   request. Proof of Control and the testimonial strip now come before the banner, and the spacer
   above the banner is gone as it no longer follows the AI designer. Proof of Control pins with the

@@ -28,7 +28,7 @@ export const metadata = buildMetadata({
 /**
  * Keeps the complete v1 header, hero, search, and Browse Services composition unchanged.
  * Flow: three ways to start → real pros (two rows) → peace of mind list → AI designer (v1's dark
- * version) → closing CTA → proof of control → trust strip → FAQ.
+ * version) → proof of control → trust strip → closing CTA → FAQ.
  */
 export default async function HomeV3Page() {
   const initialCategories = await fetchParentCategoriesForSeo();
@@ -50,12 +50,10 @@ export default async function HomeV3Page() {
           <DeferredHydration>
             <RedesignerSection variant="showcase" />
           </DeferredHydration>
-          <div className="pt-10 md:pt-14">
-            <ReadyToSolve />
-          </div>
+          <ProofOfControl />
         </PeaceOfMindList>
-        <ProofOfControl />
         <TrustStrip />
+        <ReadyToSolve />
         <DeferredHydration>
           <HomeFaqSection />
         </DeferredHydration>

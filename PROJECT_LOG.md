@@ -67,6 +67,13 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-03
 
+- **/home-v3: "Ready to solve it?" directly above the FAQ; step sub-text on two lines** — client
+  request. Proof of Control and the testimonial strip now come before the banner, and the spacer
+  above the banner is gone as it no longer follows the AI designer. Proof of Control pins with the
+  list so the screen stays filled if the AI designer is off. Step sub-text is narrowed to wrap to
+  about 2 even lines · `app/(marketing)/home-v3/page.tsx`,
+  `components/home-concepts/peace-of-mind-list.tsx`.
+
 - **/home-v3: Peace of mind list now the 7 steps, no gap while pinned** — client: blank space showed
   below the section while it was pinned, and the list should be the 7 steps, not 10 rows. Dropped
   the 3 assurance rows (`ASSURANCES` private again). The AI designer and "Ready to solve it?" now

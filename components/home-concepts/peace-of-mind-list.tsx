@@ -120,7 +120,7 @@ export function PeaceOfMindList({ children }: { children?: ReactNode }) {
                         </span>
                         <div className="flex flex-col gap-1">
                           <h3 className="text-base font-semibold tracking-tight sm:text-lg">{item.title}</h3>
-                          <p className="max-w-lg text-sm leading-6 text-muted-foreground">{item.body}</p>
+                          <p className="max-w-60 text-balance text-sm leading-6 text-muted-foreground">{item.body}</p>
                         </div>
                       </li>
                     ))}

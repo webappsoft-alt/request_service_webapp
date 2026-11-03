@@ -5,14 +5,12 @@ import { HomeSearchDock } from "@/components/home/home-search-dock";
 import { HomeMotion } from "@/components/home/home-motion";
 import { ServicesSection } from "@/components/home/services-section";
 import { HomeFaqSection } from "@/components/home/faq-section";
-import { WorkflowSection } from "@/components/home/workflow-section";
+import { PeaceOfMindList } from "@/components/home-concepts/peace-of-mind-list";
 import { RedesignerSection } from "@/components/ai-redesigner/redesigner-section";
-import { GeofenceTrackingSection } from "@/components/home-v1/geofence-tracking-section";
 import {
   NextStepWays,
   ProofOfControl,
   ReadyToSolve,
-  RsAiShowcase,
   TrustStrip,
 } from "@/components/home-concepts/next-step-layout";
 import { DeferredHydration } from "@/components/shared/deferred-hydration";
@@ -29,8 +27,8 @@ export const metadata = buildMetadata({
 
 /**
  * Keeps the complete v1 header, hero, search, and Browse Services composition unchanged.
- * Flow (concept A board): three ways to start → RS AI panel → real pros → proof of control →
- * trust strip → how it works → AI redesigner → closing CTA → job updates → FAQ.
+ * Flow: three ways to start → real pros (two rows) → peace of mind list → AI designer (v1's dark
+ * version) → closing CTA → proof of control → trust strip → FAQ.
  */
 export default async function HomeV3Page() {
   const initialCategories = await fetchParentCategoriesForSeo();
@@ -45,22 +43,19 @@ export default async function HomeV3Page() {
         </div>
 
         <NextStepWays />
-        <RsAiShowcase />
         <DeferredHydration>
-          <FeaturedProvidersSection />
+          <FeaturedProvidersSection variant="homeowners" />
         </DeferredHydration>
+        <PeaceOfMindList>
+          <DeferredHydration>
+            <RedesignerSection variant="showcase" />
+          </DeferredHydration>
+          <div className="pt-10 md:pt-14">
+            <ReadyToSolve />
+          </div>
+        </PeaceOfMindList>
         <ProofOfControl />
         <TrustStrip />
-        <DeferredHydration>
-          <WorkflowSection lift={false} edgeFade={false} />
-        </DeferredHydration>
-        <DeferredHydration>
-          <RedesignerSection variant="showcase" tone="light" />
-        </DeferredHydration>
-        <ReadyToSolve />
-        <DeferredHydration>
-          <GeofenceTrackingSection tone="clean" />
-        </DeferredHydration>
         <DeferredHydration>
           <HomeFaqSection />
         </DeferredHydration>

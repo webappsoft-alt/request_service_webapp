@@ -65,6 +65,56 @@ Modules, layout, notification channels and API conventions: see
 
 Newest first. Format: **what** — why · files.
 
+### 2026-11-03
+
+- **/home-v3: Peace of mind list now the 7 steps, no gap while pinned** — client: blank space showed
+  below the section while it was pinned, and the list should be the 7 steps, not 10 rows. Dropped
+  the 3 assurance rows (`ASSURANCES` private again). The AI designer and "Ready to solve it?" now
+  pin with the list, so they fill the screen below it and everything moves up together at the last
+  row · `components/home-concepts/peace-of-mind-list.tsx`, `app/(marketing)/home-v3/page.tsx`,
+  `components/home-v1/assurance-split.tsx`.
+
+- **/home-v3: Peace of mind section pins while its list scrolls** — client: only the list should
+  move until every row has been seen, then the page continues. The wheel listener let the page
+  drift, so it was replaced: the section is sticky under the header inside a taller track and page
+  scroll drives the list 1:1, for wheel, trackpad, keyboard and touch. Windows too short to fit
+  the section fall back to the list's own scroll · `components/home-concepts/peace-of-mind-list.tsx`.
+
+- **/home-v3: Peace of mind list scrolls from anywhere in the section** — client: the wheel should
+  move the list with the cursor on the left or right, not only over the list. Non-passive wheel
+  listener on the section with eased scrolling; applies only while the list is fully on screen, and
+  the page takes over at either end · `components/home-concepts/peace-of-mind-list.tsx`.
+
+- **/home-v3: 7-step section replaced by a scrolling "Peace of mind" list** — client: remove the
+  horizontal steps, use v1's "You stay in control at every step", 4 items visible, inner scroll
+  with no scrollbar, tighter rows and lighter lines. v1 has only 3 points, so (agreed) the list is
+  those 3 then the 7 steps as text rows, 01–10. Native scrolling, so the page continues at the end
+  of the list; the visible height is measured to fit exactly 4 rows; a fade hints at more.
+  `/home-v1` keeps its own section · new `components/home-concepts/peace-of-mind-list.tsx`,
+  `app/(marketing)/home-v3/page.tsx`, `components/home-v1/assurance-split.tsx` (exports
+  `ASSURANCES`).
+
+- **/home-v3: space above "Ready to solve it?"** — client: the two dark sections touched, so added
+  a gap between the AI designer and the band · `app/(marketing)/home-v3/page.tsx`.
+
+- **/home-v3: testimonial strip moved, v1 AI designer added** — client: Proof of Control and the
+  testimonial/stats strip both belong under "Ready to solve it?", so the strip moved there too.
+  The AI designer is back, using v1's dark full-width version (not v3's light card), before
+  "Ready to solve it?" · `app/(marketing)/home-v3/page.tsx`.
+
+- **/home-v3: removed the "Start with a quote request" band** — client asked to take it out after
+  seeing it. "Ready to solve it?" now follows How it works directly. `/home-v1` still shows the
+  band · `app/(marketing)/home-v3/page.tsx`.
+
+- **/home-v3 restructure** — client layout request, this page only. Removed the RS AI, on-site
+  verified (geofence) and kitchen/bathroom redesigner sections. Featured Pros now follows "Your
+  home problem has a next step", with v1's "Built for homeowners" heading and 8 cards (two rows
+  of four on desktop). Proof of Control moved directly under "Ready to solve it?". v1's dark blue
+  band takes the redesigner's slot, using v1's copy since the client gave none. `/` and `/home-v1`
+  are unchanged: the new look is behind `variant="homeowners"`, and the band was only extracted
+  as `QuoteBand` · `app/(marketing)/home-v3/page.tsx`,
+  `components/home/featured-providers-section.tsx`, `components/home-v1/assurance-split.tsx`.
+
 ### 2026-11-02
 
 - **/for-pros-v1 AI receptionist: grey by default, brand blue when active (no green)** — client:

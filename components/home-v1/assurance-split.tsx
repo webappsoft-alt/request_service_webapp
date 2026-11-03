@@ -18,6 +18,45 @@ const ASSURANCES = [
   },
 ] as const;
 
+/** Full-bleed dark blue call-to-action band. */
+export function QuoteBand() {
+  return (
+    <section className="relative overflow-hidden bg-[#003F7D] text-white dark:bg-[#0a2a52]">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-40 right-[-10%] size-[36rem] rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.22),transparent_65%)]"
+      />
+      <Container className="relative flex flex-col gap-8 py-16 md:py-20 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex max-w-2xl flex-col gap-3">
+          <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-[2.4rem] md:leading-[1.12]">
+            Start with a quote request — or pick a pro by name.
+          </h2>
+          <p className="max-w-xl text-sm leading-7 text-white/75 md:text-base">
+            General requests go to matching local professionals. Choosing a company from search or a profile sends
+            that request only to them.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <Button size="xl" className="bg-white text-[#003F7D] hover:bg-white/90" asChild>
+            <Link href="/get-a-quote">
+              Get a quote
+              <ArrowRight data-icon="inline-end" />
+            </Link>
+          </Button>
+          <Button
+            size="xl"
+            variant="outline"
+            className="border-white/35 bg-transparent text-white hover:bg-white/10 hover:text-white"
+            asChild
+          >
+            <Link href="/find-a-professional">Find a professional</Link>
+          </Button>
+        </div>
+      </Container>
+    </section>
+  );
+}
+
 /**
  * "Peace of mind" as a statement + numbered rows (no cards), followed by a full-bleed
  * call-to-action band instead of a rounded box.
@@ -57,39 +96,7 @@ export function AssuranceSplit() {
         </Container>
       </Section>
 
-      <section className="relative overflow-hidden bg-[#003F7D] text-white dark:bg-[#0a2a52]">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -top-40 right-[-10%] size-[36rem] rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.22),transparent_65%)]"
-        />
-        <Container className="relative flex flex-col gap-8 py-16 md:py-20 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex max-w-2xl flex-col gap-3">
-            <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-[2.4rem] md:leading-[1.12]">
-              Start with a quote request — or pick a pro by name.
-            </h2>
-            <p className="max-w-xl text-sm leading-7 text-white/75 md:text-base">
-              General requests go to matching local professionals. Choosing a company from search or a profile sends
-              that request only to them.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Button size="xl" className="bg-white text-[#003F7D] hover:bg-white/90" asChild>
-              <Link href="/get-a-quote">
-                Get a quote
-                <ArrowRight data-icon="inline-end" />
-              </Link>
-            </Button>
-            <Button
-              size="xl"
-              variant="outline"
-              className="border-white/35 bg-transparent text-white hover:bg-white/10 hover:text-white"
-              asChild
-            >
-              <Link href="/find-a-professional">Find a professional</Link>
-            </Button>
-          </div>
-        </Container>
-      </section>
+      <QuoteBand />
     </>
   );
 }

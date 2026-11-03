@@ -23,8 +23,21 @@ import {
 
 const LANDING_PROVIDERS_LIMIT = 4;
 const PROVIDER_SKELETON_COUNT = 4;
+/** Two rows of four on desktop. */
+const HOMEOWNERS_PROVIDERS_LIMIT = 8;
 
-export function FeaturedProvidersSection() {
+export function FeaturedProvidersSection({
+  variant = "default",
+}: {
+  variant?: "default" | "homeowners";
+}) {
+  const isHomeowners = variant === "homeowners";
+  const providerLimit = isHomeowners
+    ? HOMEOWNERS_PROVIDERS_LIMIT
+    : LANDING_PROVIDERS_LIMIT;
+  const skeletonCount = isHomeowners
+    ? HOMEOWNERS_PROVIDERS_LIMIT
+    : PROVIDER_SKELETON_COUNT;
   const dispatch = useAppDispatch();
   const customerLocation = useAppSelector((state) => state.location);
   const items = useAppSelector((state) => state.publicProfessionals.items);
@@ -86,11 +99,8 @@ export function FeaturedProvidersSection() {
   ]);
 
   const providers = useMemo(
-    () =>
-      items
-        .slice(0, LANDING_PROVIDERS_LIMIT)
-        .map(publicProfessionalToProvider),
-    [items],
+    () => items.slice(0, providerLimit).map(publicProfessionalToProvider),
+    [items, providerLimit],
   );
 
   const showSkeleton =
@@ -104,12 +114,26 @@ export function FeaturedProvidersSection() {
     <Section tone="muted" density="tight">
       <Container className="flex flex-col gap-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex flex-col gap-2">
-            <p className="eyebrow text-muted-foreground">Featured Pros</p>
-            <h2 className="text-3xl font-semibold md:text-[2.5rem]">
-              Pros you can compare on more than stars
-            </h2>
-          </div>
+          {isHomeowners ? (
+            <div className="flex max-w-2xl flex-col gap-4">
+              <p className="eyebrow text-primary">Built for homeowners</p>
+              <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-[2.75rem] md:leading-[1.1]">
+                Find the Right Home Service Professional.{" "}
+                <span className="text-primary">Get the Job Done.</span>
+              </h2>
+              <p className="max-w-xl text-sm leading-7 text-muted-foreground md:text-base">
+                Tell us what you need, connect with local professionals, review
+                written estimates, and manage your project—all in one place.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <p className="eyebrow text-muted-foreground">Featured Pros</p>
+              <h2 className="text-3xl font-semibold md:text-[2.5rem]">
+                Pros you can compare on more than stars
+              </h2>
+            </div>
+          )}
           <Link
             href="/find-a-professional"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-brand transition-colors hover:text-foreground"
@@ -124,7 +148,7 @@ export function FeaturedProvidersSection() {
           aria-busy={showSkeleton || undefined}
         >
           {showSkeleton ? (
-            Array.from({ length: PROVIDER_SKELETON_COUNT }, (_, index) => (
+            Array.from({ length: skeletonCount }, (_, index) => (
               <ProviderCardSkeleton key={`provider-skeleton-${index}`} />
             ))
           ) : providers.length > 0 ? (

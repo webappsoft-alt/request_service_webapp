@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, MapPin, ShieldCheck, Star } from "lucide-react";
@@ -111,6 +112,31 @@ function ServiceBadges({
   );
 }
 
+/** Company logo for the photo card; falls back to the initials when there is none or it fails to load. */
+function CardLogo({ provider }: { provider: Provider }) {
+  const [failed, setFailed] = useState(false);
+  const src = provider.logoUrl;
+  return (
+    <span className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-card">
+      {src && !failed ? (
+        <Image
+          src={src}
+          alt={`${provider.companyName} logo`}
+          fill
+          sizes="40px"
+          className="object-cover"
+          unoptimized={!canOptimizeImage(src)}
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <span className="flex size-full items-center justify-center bg-primary text-xs font-semibold text-primary-foreground">
+          {provider.logoInitials}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function ProviderCard({
   provider,
   visual = false,
@@ -124,9 +150,12 @@ export function ProviderCard({
   onBeforeNavigate,
   highlightService,
   servesLabel,
+  showLogo = false,
 }: {
   provider: Provider;
   visual?: boolean;
+  /** Photo card only: the company logo (or initials) beside the name (home-v3 featured pros). */
+  showLogo?: boolean;
   hideCredentials?: boolean;
   active?: boolean;
   place?: ExplorePlace;
@@ -309,24 +338,52 @@ export function ProviderCard({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-2 px-0.5">
-          <div className="flex items-start justify-between gap-3">
-            <h3
-              className="min-w-0 text-lg leading-snug font-semibold tracking-tight capitalize"
-              title={provider.companyName}
-            >
-              <span className="line-clamp-2 break-words">{provider.companyName}</span>
-            </h3>
-            <span className="max-w-[45%] shrink-0 truncate rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground/80">
-              {categoryBadge}
-            </span>
-          </div>
+          {showLogo ? (
+            // Logo (or initials) beside the full name; location and category on the line below.
+            <>
+              <div className="flex items-center gap-2.5">
+                <CardLogo provider={provider} />
+                <h3
+                  className="min-w-0 flex-1 text-base leading-snug font-semibold tracking-tight capitalize"
+                  title={provider.companyName}
+                >
+                  <span className="line-clamp-2 wrap-break-word">{provider.companyName}</span>
+                </h3>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <ProviderCardLocation
+                  city={provider.city}
+                  state={provider.state}
+                  servesLabel={servesLabel}
+                  className="leading-5"
+                />
+                <span className="max-w-[45%] shrink-0 truncate rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground/80">
+                  {categoryBadge}
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-start justify-between gap-3">
+                <h3
+                  className="min-w-0 text-lg leading-snug font-semibold tracking-tight capitalize"
+                  title={provider.companyName}
+                >
+                  <span className="line-clamp-2 break-words">{provider.companyName}</span>
+                </h3>
+                <span className="max-w-[45%] shrink-0 truncate rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground/80">
+                  {categoryBadge}
+                </span>
+              </div>
 
-          <ProviderCardLocation
-            city={provider.city}
-            state={provider.state}
-            servesLabel={servesLabel}
-            className="leading-5"
-          />
+              <ProviderCardLocation
+                city={provider.city}
+                state={provider.state}
+                servesLabel={servesLabel}
+                className="leading-5"
+              />
+            </>
+          )}
 
           {hasRating || verified ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">

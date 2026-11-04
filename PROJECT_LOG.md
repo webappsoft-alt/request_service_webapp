@@ -67,6 +67,29 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-04
 
+- **/home-v3 header: brand slogan** — client request. "Find the Right Pro. Get the Job Done." sits under
+  "Request Service" in the header (small, muted, tight spacing) on /home-v3 only; other pages keep the
+  plain logo. New optional `tagline` prop on `Logo` · `components/layout/logo.tsx`,
+  `components/layout/site-header.tsx`
+
+- **/home-v3: "Hire With Confidence" trust section + logos on pro cards** — client request. New
+  section between the featured pros and the AI designer: eyebrow "Built for your peace of mind",
+  heading, intro, and four point cards (Know Who You're Hiring, Clear Written Estimates, Customer
+  Reviews, Your Project, Organized). Featured pro cards on home-v3 now show the company logo (the
+  pro's uploaded image, initials when there is none or it fails to load) beside the full name, with
+  location and category on the line below — opt-in `showLogo` on `ProviderCard`, so the card on other
+  pages is unchanged · `components/home-concepts/hire-with-confidence-section.tsx` (new),
+  `components/shared/provider-card.tsx`, `components/home/featured-providers-section.tsx`,
+  `app/(marketing)/home-v3/page.tsx`
+
+- **AI designer: slider back on the landing page, "after only" moved into the tool** — client
+  clarified: the after-only view was meant for the customer's own result after they log in and try
+  the designer, not the landing page. /home-v3 shows the before/after slider again (`afterOnly` no
+  longer passed); the wizard result on /ai-kitchen-bath-designer now shows only the redesigned image
+  (slider commented out). Footer "Chat With Us" renamed "Contact With Us" (still goes to /contact) ·
+  `app/(marketing)/home-v3/page.tsx`, `components/ai-redesigner/redesigner-wizard.tsx`,
+  `components/layout/site-footer.tsx`
+
 - **/for-pros-v1 Timesheets tab: third column** — client: fill the empty space beside the phone and
   cards. Wide stages (`@2xl`) add a "Sessions today" timeline for Tate (clocked in, started JOB-983,
   break, clocked out — each appears as the day plays, with a "Not clocked in yet" line before the

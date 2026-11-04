@@ -42,7 +42,7 @@ import {
   selectRedesignCatalog,
   selectRedesignCatalogStatus,
 } from "@/store/aiRedesignerSlice";
-import { BeforeAfterSlider } from "./before-after-slider";
+// import { BeforeAfterSlider } from "./before-after-slider";
 import { SwatchDot } from "./finish-swatch";
 import {
   DetailsStep,
@@ -72,24 +72,38 @@ const PHOTO_TAGS = ["Wide shot", "Good light", "Whole room"];
 type ContactErrors = Partial<Record<keyof RedesignContact | "consent", string>>;
 
 function emptyPicks(): FinishPicks {
-  return Object.fromEntries(FINISH_CATEGORIES.map((key) => [key, { style: null, color: null }])) as FinishPicks;
+  return Object.fromEntries(
+    FINISH_CATEGORIES.map((key) => [key, { style: null, color: null }]),
+  ) as FinishPicks;
 }
 
 function picksFromStyle(style: RedesignStyle | undefined): FinishPicks {
   const picks = emptyPicks();
   if (!style) return picks;
   for (const key of FINISH_CATEGORIES) {
-    picks[key] = { style: style.defaults?.[key]?.style || null, color: style.defaults?.[key]?.color || null };
+    picks[key] = {
+      style: style.defaults?.[key]?.style || null,
+      color: style.defaults?.[key]?.color || null,
+    };
   }
   return picks;
 }
 
-function validateContact(contact: RedesignContact, consent: boolean): ContactErrors {
+function validateContact(
+  contact: RedesignContact,
+  consent: boolean,
+): ContactErrors {
   const errors: ContactErrors = {};
   if (contact.name.trim().length < 2) errors.name = "Please enter your name.";
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contact.email.trim())) errors.email = "Please enter a valid email.";
-  if (!/^\d{5}(-\d{4})?$/.test(contact.zip.trim())) errors.zip = "Please enter a 5-digit ZIP Code.";
-  if (contact.phone.trim() && !/^[0-9+().\s-]{7,20}$/.test(contact.phone.trim())) errors.phone = "Please enter a valid phone number.";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contact.email.trim()))
+    errors.email = "Please enter a valid email.";
+  if (!/^\d{5}(-\d{4})?$/.test(contact.zip.trim()))
+    errors.zip = "Please enter a 5-digit ZIP Code.";
+  if (
+    contact.phone.trim() &&
+    !/^[0-9+().\s-]{7,20}$/.test(contact.phone.trim())
+  )
+    errors.phone = "Please enter a valid phone number.";
   if (!consent) errors.consent = "Please agree so we can share your design.";
   return errors;
 }
@@ -117,10 +131,20 @@ function GeneratingOverlay({ startedAt }: { startedAt: number }) {
     return () => window.clearInterval(timer);
   }, []);
   const elapsed = now - startedAt;
-  const progress = Math.min(95, 95 * (1 - Math.exp(-elapsed / (EXPECTED_MS / 2.2))));
-  const line = Math.min(PROGRESS_LINES.length - 1, Math.floor((elapsed / EXPECTED_MS) * PROGRESS_LINES.length));
+  const progress = Math.min(
+    95,
+    95 * (1 - Math.exp(-elapsed / (EXPECTED_MS / 2.2))),
+  );
+  const line = Math.min(
+    PROGRESS_LINES.length - 1,
+    Math.floor((elapsed / EXPECTED_MS) * PROGRESS_LINES.length),
+  );
   return (
-    <div className="absolute inset-0 overflow-hidden" role="status" aria-live="polite">
+    <div
+      className="absolute inset-0 overflow-hidden"
+      role="status"
+      aria-live="polite"
+    >
       {/* Keyframes kept local so the global stylesheet is untouched. */}
       <style>{`@keyframes redesign-scan{0%{transform:translateY(-110%)}100%{transform:translateY(330%)}}`}</style>
       <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/45 to-black/65 backdrop-blur-[1.5px]" />
@@ -134,14 +158,22 @@ function GeneratingOverlay({ startedAt }: { startedAt: number }) {
           </span>
           <div className="min-w-0">
             <p className="text-sm font-semibold">Designing your room…</p>
-            <p key={line} className="animate-in fade-in slide-in-from-bottom-1 text-xs text-white/80 duration-500">
+            <p
+              key={line}
+              className="animate-in fade-in slide-in-from-bottom-1 text-xs text-white/80 duration-500"
+            >
               {PROGRESS_LINES[line]}
             </p>
           </div>
-          <span className="ml-auto text-xs font-semibold tabular-nums">{Math.round(progress)}%</span>
+          <span className="ml-auto text-xs font-semibold tabular-nums">
+            {Math.round(progress)}%
+          </span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-white/20">
-          <div className="h-full rounded-full bg-white transition-[width] duration-500 ease-out" style={{ width: `${progress}%` }} />
+          <div
+            className="h-full rounded-full bg-white transition-[width] duration-500 ease-out"
+            style={{ width: `${progress}%` }}
+          />
         </div>
       </div>
     </div>
@@ -163,7 +195,10 @@ export function RedesignerWizard() {
   };
 
   const [step, setStep] = useState(0);
-  const [photo, setPhoto] = useState<{ url: string | null; preview: string | null }>({ url: null, preview: null });
+  const [photo, setPhoto] = useState<{
+    url: string | null;
+    preview: string | null;
+  }>({ url: null, preview: null });
   const [uploading, setUploading] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -172,7 +207,9 @@ export function RedesignerWizard() {
   const [picks, setPicks] = useState<FinishPicks>(emptyPicks);
   const [notes, setNotes] = useState("");
   const [contact, setContact] = useState<RedesignContact>(() => ({
-    name: [authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ") || String(authUser?.name || ""),
+    name:
+      [authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ") ||
+      String(authUser?.name || ""),
     email: authUser?.email || "",
     phone: authUser?.phone || "",
     zip: authUser?.zip || authUser?.location?.zip || "",
@@ -181,7 +218,10 @@ export function RedesignerWizard() {
   const [contactErrors, setContactErrors] = useState<ContactErrors>({});
   const [history, setHistory] = useState<RedesignGeneration[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [running, setRunning] = useState<{ id: string; startedAt: number } | null>(null);
+  const [running, setRunning] = useState<{
+    id: string;
+    startedAt: number;
+  } | null>(null);
   const [starting, setStarting] = useState(false);
   const previewUrlRef = useRef<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -198,14 +238,21 @@ export function RedesignerWizard() {
   );
 
   const styles = useMemo(
-    () => (catalog?.styles || []).filter((style) => style.roomType === roomType),
+    () =>
+      (catalog?.styles || []).filter((style) => style.roomType === roomType),
     [catalog, roomType],
   );
   const finishes = useMemo(
-    () => (catalog?.finishes || []).filter((finish) => finish.roomType === roomType),
+    () =>
+      (catalog?.finishes || []).filter(
+        (finish) => finish.roomType === roomType,
+      ),
     [catalog, roomType],
   );
-  const finishById = useMemo(() => new Map(finishes.map((finish) => [finish.id, finish])), [finishes]);
+  const finishById = useMemo(
+    () => new Map(finishes.map((finish) => [finish.id, finish])),
+    [finishes],
+  );
   const categories = useMemo(
     () =>
       catalog?.rooms?.find((room) => room.roomType === roomType)?.categories ||
@@ -242,7 +289,9 @@ export function RedesignerWizard() {
       setPhoto({ url, preview });
     } catch (error) {
       setPhoto({ url: null, preview: null });
-      setPhotoError(extractErrorMessage(error) || "Upload failed. Please try again.");
+      setPhotoError(
+        extractErrorMessage(error) || "Upload failed. Please try again.",
+      );
     } finally {
       setUploading(false);
     }
@@ -261,17 +310,33 @@ export function RedesignerWizard() {
     setPicks(picksFromStyle(next));
   };
 
-  const pick = (category: FinishCategory, kind: "style" | "color", id: string | null) => {
-    setPicks((prev) => ({ ...prev, [category]: { ...prev[category], [kind]: id } }));
+  const pick = (
+    category: FinishCategory,
+    kind: "style" | "color",
+    id: string | null,
+  ) => {
+    setPicks((prev) => ({
+      ...prev,
+      [category]: { ...prev[category], [kind]: id },
+    }));
   };
 
   const surprise = () => {
-    const random = <T,>(items: T[]) => (items.length ? items[Math.floor(Math.random() * items.length)] : undefined);
+    const random = <T,>(items: T[]) =>
+      items.length
+        ? items[Math.floor(Math.random() * items.length)]
+        : undefined;
     const next = emptyPicks();
     for (const key of FINISH_CATEGORIES) {
       next[key] = {
-        style: random(finishes.filter((f) => f.category === key && f.kind === "style"))?.id || null,
-        color: random(finishes.filter((f) => f.category === key && f.kind === "color"))?.id || null,
+        style:
+          random(
+            finishes.filter((f) => f.category === key && f.kind === "style"),
+          )?.id || null,
+        color:
+          random(
+            finishes.filter((f) => f.category === key && f.kind === "color"),
+          )?.id || null,
       };
     }
     setPicks(next);
@@ -284,10 +349,23 @@ export function RedesignerWizard() {
         .filter((item) => item.id !== styleId)
         .map((item) => {
           const presetPicks = picksFromStyle(item);
-          const dots = (["cabinets", "countertops", "hardware"] as FinishCategory[])
-            .map((key) => finishById.get(presetPicks[key].color || "") || finishById.get(presetPicks[key].style || ""))
-            .filter((finish): finish is NonNullable<typeof finish> => Boolean(finish));
-          return { id: item.id, name: `${item.name} palette`, picks: presetPicks, dots };
+          const dots = (
+            ["cabinets", "countertops", "hardware"] as FinishCategory[]
+          )
+            .map(
+              (key) =>
+                finishById.get(presetPicks[key].color || "") ||
+                finishById.get(presetPicks[key].style || ""),
+            )
+            .filter((finish): finish is NonNullable<typeof finish> =>
+              Boolean(finish),
+            );
+          return {
+            id: item.id,
+            name: `${item.name} palette`,
+            picks: presetPicks,
+            dots,
+          };
         })
         .filter((preset) => preset.dots.length)
         .slice(0, 3),
@@ -296,19 +374,45 @@ export function RedesignerWizard() {
 
   /** The finish that best represents a category (colour first, then shape). */
   const mainFinish = (key: FinishCategory) =>
-    finishById.get(picks[key].color || "") || finishById.get(picks[key].style || "") || null;
-  const patternFor = (key: FinishCategory) => finishById.get(picks[key].style || "")?.pattern;
+    finishById.get(picks[key].color || "") ||
+    finishById.get(picks[key].style || "") ||
+    null;
+  const patternFor = (key: FinishCategory) =>
+    finishById.get(picks[key].style || "")?.pattern;
 
   const designChips = [
-    ...(style ? [{ key: "style", label: style.name, image: style.image, color: style.swatches[0] }] : []),
-    ...FINISH_CATEGORIES.map((key) => ({ key, finish: mainFinish(key) })).filter((item) => item.finish),
+    ...(style
+      ? [
+          {
+            key: "style",
+            label: style.name,
+            image: style.image,
+            color: style.swatches[0],
+          },
+        ]
+      : []),
+    ...FINISH_CATEGORIES.map((key) => ({
+      key,
+      finish: mainFinish(key),
+    })).filter((item) => item.finish),
   ];
 
   const summary: SummaryRow[] = [
-    { label: "Style", value: style ? `${style.name} ${roomWord}` : "—", image: style?.image || undefined },
+    {
+      label: "Style",
+      value: style ? `${style.name} ${roomWord}` : "—",
+      image: style?.image || undefined,
+    },
     ...categories.map(({ key, label }) => {
-      const names = [finishById.get(picks[key].style || "")?.name, finishById.get(picks[key].color || "")?.name].filter(Boolean);
-      return { label, value: names.join(" · ") || "Keep existing", swatch: mainFinish(key) };
+      const names = [
+        finishById.get(picks[key].style || "")?.name,
+        finishById.get(picks[key].color || "")?.name,
+      ].filter(Boolean);
+      return {
+        label,
+        value: names.join(" · ") || "Keep existing",
+        swatch: mainFinish(key),
+      };
     }),
   ];
 
@@ -340,7 +444,10 @@ export function RedesignerWizard() {
       setActiveId(run.id);
       setRunning({ id: run.id, startedAt: Date.now() });
     } catch (error) {
-      toast.error(extractErrorMessage(error) || "Could not start your design. Please try again.");
+      toast.error(
+        extractErrorMessage(error) ||
+          "Could not start your design. Please try again.",
+      );
     } finally {
       setStarting(false);
     }
@@ -356,7 +463,10 @@ export function RedesignerWizard() {
 
     const finish = (run: RedesignGeneration | null, message?: string) => {
       if (cancelled) return;
-      if (run) setHistory((prev) => prev.map((item) => (item.id === run.id ? run : item)));
+      if (run)
+        setHistory((prev) =>
+          prev.map((item) => (item.id === run.id ? run : item)),
+        );
       if (message) toast.error(message);
       else toast.success("Your new room is ready!");
       setRunning(null);
@@ -367,7 +477,11 @@ export function RedesignerWizard() {
         const run = await getRedesign(runningId);
         if (cancelled) return;
         if (run.status === "done") return finish(run);
-        if (run.status === "failed") return finish(run, run.error || "We couldn't create this design. Please try again.");
+        if (run.status === "failed")
+          return finish(
+            run,
+            run.error || "We couldn't create this design. Please try again.",
+          );
       } catch {
         // Network blip: keep polling until the time limit.
       }
@@ -396,7 +510,9 @@ export function RedesignerWizard() {
     return (
       <div className="mx-auto flex max-w-lg flex-col items-center gap-4 rounded-3xl border border-input bg-card px-6 py-12 text-center">
         <Sparkles className="size-8 text-primary" aria-hidden="true" />
-        <h1 className="text-2xl font-semibold">The AI designer is coming soon</h1>
+        <h1 className="text-2xl font-semibold">
+          The AI designer is coming soon
+        </h1>
         <p className="text-sm text-muted-foreground">
           {status === "failed"
             ? "We couldn't load the designer right now. Please try again in a moment."
@@ -413,8 +529,12 @@ export function RedesignerWizard() {
   const done = active?.status === "done" && Boolean(active.resultImage);
   const shownPhoto = active?.sourceImage || photo.preview || photo.url;
   const reachable = (index: number) =>
-    !busy && (index === 0 || (index === 1 && Boolean(photo.url)) || (index >= 2 && Boolean(photo.url && styleId)));
-  const canNext = [Boolean(photo.url) && !uploading, Boolean(styleId), true][step] ?? false;
+    !busy &&
+    (index === 0 ||
+      (index === 1 && Boolean(photo.url)) ||
+      (index >= 2 && Boolean(photo.url && styleId)));
+  const canNext =
+    [Boolean(photo.url) && !uploading, Boolean(styleId), true][step] ?? false;
   const nextLabel = ["Next: Style", "Next: Finishes", "Next: Details"][step];
   const stageLabel = running
     ? "Designing…"
@@ -447,7 +567,9 @@ export function RedesignerWizard() {
             </span>
             <div className="leading-tight">
               <p className="text-[15px] font-semibold">{siteConfig.name}</p>
-              <p className="text-[13px] text-muted-foreground">AI design studio</p>
+              <p className="text-[13px] text-muted-foreground">
+                AI design studio
+              </p>
             </div>
           </div>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3.5 py-1.5 text-[13px] font-semibold text-primary">
@@ -457,9 +579,12 @@ export function RedesignerWizard() {
         </div>
         <div className="flex flex-col gap-1.5">
           <h1 className="text-3xl font-semibold tracking-tight md:text-[2.6rem] md:leading-[1.1]">
-            {catalog.section?.title || "See your kitchen or bathroom, redesigned"}
+            {catalog.section?.title ||
+              "See your kitchen or bathroom, redesigned"}
           </h1>
-          <p className="max-w-3xl text-[15px] text-muted-foreground md:text-base">{catalog.section?.subtitle}</p>
+          <p className="max-w-3xl text-[15px] text-muted-foreground md:text-base">
+            {catalog.section?.subtitle}
+          </p>
         </div>
       </div>
 
@@ -469,14 +594,28 @@ export function RedesignerWizard() {
         <div className="flex min-w-0 flex-col gap-4 bg-muted/40 bg-[radial-gradient(circle,rgba(0,0,0,0.07)_1px,transparent_1.2px)] [background-size:18px_18px] p-4 md:p-5 lg:min-h-0 lg:overflow-y-auto lg:border-r">
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-2 rounded-full bg-card px-3.5 py-1.5 text-[13px] font-medium shadow-sm capitalize">
-              <span className={cn("size-1.5 rounded-full", running ? "animate-pulse bg-primary" : done ? "bg-emerald-500" : "bg-muted-foreground/60")} />
+              <span
+                className={cn(
+                  "size-1.5 rounded-full",
+                  running
+                    ? "animate-pulse bg-primary"
+                    : done
+                      ? "bg-emerald-500"
+                      : "bg-muted-foreground/60",
+                )}
+              />
               {stageLabel}
             </span>
             <div className="flex items-center gap-2">
               {done && active ? (
                 <button
                   type="button"
-                  onClick={() => void downloadImage(active.resultImage, `redesign-${active.id.slice(0, 8)}.jpg`)}
+                  onClick={() =>
+                    void downloadImage(
+                      active.resultImage,
+                      `redesign-${active.id.slice(0, 8)}.jpg`,
+                    )
+                  }
                   className="inline-flex items-center gap-1.5 rounded-full bg-card px-3.5 py-1.5 text-[13px] font-medium shadow-sm transition-colors hover:bg-muted"
                 >
                   <Download className="size-3.5" aria-hidden="true" />
@@ -504,12 +643,20 @@ export function RedesignerWizard() {
               <div className="absolute inset-0">
                 <div className="relative size-full overflow-hidden rounded-2xl shadow-[0_24px_50px_-28px_rgba(0,0,0,0.55)]">
                   {done && active ? (
-                    <BeforeAfterSlider
+                    // Only the redesigned room (client feedback); the before/after slider is kept commented out.
+                    // <BeforeAfterSlider
+                    //   key={active.id}
+                    //   before={active.sourceImage}
+                    //   after={active.resultImage}
+                    //   alt={`${active.style} ${active.roomType}`}
+                    //   className="animate-in fade-in size-full duration-700"
+                    // />
+                    // eslint-disable-next-line @next/next/no-img-element -- generated result from our storage
+                    <img
                       key={active.id}
-                      before={active.sourceImage}
-                      after={active.resultImage}
-                      alt={`${active.style} ${active.roomType}`}
-                      className="animate-in fade-in size-full duration-700"
+                      src={active.resultImage}
+                      alt={`${active.style} ${active.roomType}, redesigned`}
+                      className="animate-in fade-in block size-full object-cover duration-700"
                     />
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element -- the customer's own photo (blob or our storage)
@@ -519,7 +666,9 @@ export function RedesignerWizard() {
                       className="block size-full object-cover"
                     />
                   )}
-                  {running ? <GeneratingOverlay startedAt={running.startedAt} /> : null}
+                  {running ? (
+                    <GeneratingOverlay startedAt={running.startedAt} />
+                  ) : null}
                   {uploading ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/35 text-white backdrop-blur-[1px]">
                       <span className="size-8 animate-spin rounded-full border-2 border-white/40 border-t-white" />
@@ -545,7 +694,9 @@ export function RedesignerWizard() {
                 }}
                 className={cn(
                   "absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 text-center transition-colors",
-                  dragOver ? "border-primary bg-primary/[0.06]" : "border-input bg-card/60 hover:border-primary/40",
+                  dragOver
+                    ? "border-primary bg-primary/[0.06]"
+                    : "border-input bg-card/60 hover:border-primary/40",
                 )}
               >
                 <span className="flex size-20 items-center justify-center rounded-full bg-primary/[0.07]">
@@ -553,12 +704,22 @@ export function RedesignerWizard() {
                     <Upload className="size-5" aria-hidden="true" />
                   </span>
                 </span>
-                <span className="text-lg font-semibold">Upload a photo of your {roomWord}</span>
-                <span className="text-sm text-muted-foreground">Drag it here, or tap to take or choose one</span>
+                <span className="text-lg font-semibold">
+                  Upload a photo of your {roomWord}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  Drag it here, or tap to take or choose one
+                </span>
                 <span className="mt-1 flex flex-wrap justify-center gap-2">
                   {PHOTO_TAGS.map((tag) => (
-                    <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-input bg-card px-2.5 py-1 text-xs text-muted-foreground">
-                      <Check className="size-3 text-emerald-600" aria-hidden="true" />
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 rounded-full border border-input bg-card px-2.5 py-1 text-xs text-muted-foreground"
+                    >
+                      <Check
+                        className="size-3 text-emerald-600"
+                        aria-hidden="true"
+                      />
                       {tag}
                     </span>
                   ))}
@@ -569,24 +730,48 @@ export function RedesignerWizard() {
 
           {/* Your design */}
           <div className="flex items-center gap-3 rounded-2xl bg-card px-4 py-2.5 shadow-sm">
-            <span className="shrink-0 text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">Your design</span>
+            <span className="shrink-0 text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+              Your design
+            </span>
             <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto py-0.5 [scrollbar-width:none]">
               {designChips.length ? (
                 designChips.map((chip) => (
-                  <span key={chip.key} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-input bg-card py-1 pr-3 pl-1 text-[13px] font-medium">
+                  <span
+                    key={chip.key}
+                    className="inline-flex shrink-0 items-center gap-2 rounded-full border border-input bg-card py-1 pr-3 pl-1 text-[13px] font-medium"
+                  >
                     {"finish" in chip && chip.finish ? (
-                      <SwatchDot finish={chip.finish} fallbackPattern={patternFor(chip.key as FinishCategory)} className="size-6" />
+                      <SwatchDot
+                        finish={chip.finish}
+                        fallbackPattern={patternFor(chip.key as FinishCategory)}
+                        className="size-6"
+                      />
                     ) : "image" in chip && chip.image ? (
                       // eslint-disable-next-line @next/next/no-img-element -- style preview thumbnail
-                      <img src={chip.image} alt="" className="size-6 rounded-full object-cover" />
+                      <img
+                        src={chip.image}
+                        alt=""
+                        className="size-6 rounded-full object-cover"
+                      />
                     ) : (
-                      <span className="size-6 rounded-full border border-black/10" style={{ background: "color" in chip ? chip.color : undefined }} />
+                      <span
+                        className="size-6 rounded-full border border-black/10"
+                        style={{
+                          background: "color" in chip ? chip.color : undefined,
+                        }}
+                      />
                     )}
-                    {"finish" in chip && chip.finish ? chip.finish.name : "label" in chip ? chip.label : ""}
+                    {"finish" in chip && chip.finish
+                      ? chip.finish.name
+                      : "label" in chip
+                        ? chip.label
+                        : ""}
                   </span>
                 ))
               ) : (
-                <span className="text-[13px] text-muted-foreground">Your picks show up here</span>
+                <span className="text-[13px] text-muted-foreground">
+                  Your picks show up here
+                </span>
               )}
             </div>
           </div>
@@ -601,13 +786,24 @@ export function RedesignerWizard() {
                   aria-label={`Show ${item.style} design`}
                   className={cn(
                     "relative h-[58px] w-20 shrink-0 overflow-hidden rounded-xl border-2 bg-muted transition-colors",
-                    item.id === activeId ? "border-primary" : "border-transparent hover:border-primary/40",
+                    item.id === activeId
+                      ? "border-primary"
+                      : "border-transparent hover:border-primary/40",
                   )}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element -- design thumbnail */}
-                  <img src={item.resultImage || item.sourceImage} alt="" className={cn("size-full object-cover", !item.resultImage && "opacity-50")} />
+                  <img
+                    src={item.resultImage || item.sourceImage}
+                    alt=""
+                    className={cn(
+                      "size-full object-cover",
+                      !item.resultImage && "opacity-50",
+                    )}
+                  />
                   {item.status === "failed" ? (
-                    <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-[10px] font-semibold text-white">Failed</span>
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-[10px] font-semibold text-white">
+                      Failed
+                    </span>
                   ) : !item.resultImage ? (
                     <span className="absolute inset-0 flex items-center justify-center">
                       <span className="size-4 animate-spin rounded-full border-2 border-white/50 border-t-white" />
@@ -620,8 +816,13 @@ export function RedesignerWizard() {
 
           <div className="mt-auto flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold">Love it? {siteConfig.name} pros can build it.</p>
-              <p className="text-[13px] text-muted-foreground">Bring this design to a free consultation, or keep trying other looks.</p>
+              <p className="text-sm font-semibold">
+                Love it? {siteConfig.name} pros can build it.
+              </p>
+              <p className="text-[13px] text-muted-foreground">
+                Bring this design to a free consultation, or keep trying other
+                looks.
+              </p>
             </div>
             <Button asChild className="h-10 shrink-0 rounded-full px-5">
               <Link href="/get-a-quote">
@@ -650,16 +851,35 @@ export function RedesignerWizard() {
                     <span
                       className={cn(
                         "flex size-7 items-center justify-center rounded-full text-xs font-semibold transition-colors",
-                        isDone || isCurrent ? "bg-primary text-primary-foreground" : "border border-input text-muted-foreground",
+                        isDone || isCurrent
+                          ? "bg-primary text-primary-foreground"
+                          : "border border-input text-muted-foreground",
                       )}
                     >
-                      {isDone ? <Check className="size-3.5" aria-hidden="true" /> : index + 1}
+                      {isDone ? (
+                        <Check className="size-3.5" aria-hidden="true" />
+                      ) : (
+                        index + 1
+                      )}
                     </span>
-                    <span className={cn("text-[13px]", isCurrent ? "font-semibold text-foreground" : "text-muted-foreground")}>{label}</span>
+                    <span
+                      className={cn(
+                        "text-[13px]",
+                        isCurrent
+                          ? "font-semibold text-foreground"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {label}
+                    </span>
                     <span
                       className={cn(
                         "h-[3px] w-full rounded-full transition-colors",
-                        isCurrent ? "bg-primary" : isDone ? "bg-primary/35" : "bg-muted",
+                        isCurrent
+                          ? "bg-primary"
+                          : isDone
+                            ? "bg-primary/35"
+                            : "bg-muted",
                       )}
                     />
                   </button>
@@ -668,7 +888,10 @@ export function RedesignerWizard() {
             })}
           </ol>
 
-          <div key={step} className="animate-in fade-in slide-in-from-right-2 flex-1 duration-300 lg:-mx-2 lg:min-h-0 lg:overflow-y-auto lg:px-2 lg:pb-2">
+          <div
+            key={step}
+            className="animate-in fade-in slide-in-from-right-2 flex-1 duration-300 lg:-mx-2 lg:min-h-0 lg:overflow-y-auto lg:px-2 lg:pb-2"
+          >
             {step === 0 ? (
               <PhotoStep
                 roomType={roomType}
@@ -679,7 +902,14 @@ export function RedesignerWizard() {
                 onPick={pickPhoto}
               />
             ) : null}
-            {step === 1 ? <StyleStep roomType={roomType} styles={styles} styleId={styleId} onStyle={chooseStyle} /> : null}
+            {step === 1 ? (
+              <StyleStep
+                roomType={roomType}
+                styles={styles}
+                styleId={styleId}
+                onStyle={chooseStyle}
+              />
+            ) : null}
             {step === 2 ? (
               <FinishesStep
                 styleName={style?.name || "selected"}
@@ -704,7 +934,8 @@ export function RedesignerWizard() {
                   setContact((prev) => ({ ...prev, ...patch }));
                   setContactErrors((prev) => {
                     const next = { ...prev };
-                    for (const key of Object.keys(patch)) delete next[key as keyof RedesignContact];
+                    for (const key of Object.keys(patch))
+                      delete next[key as keyof RedesignContact];
                     return next;
                   });
                 }}
@@ -732,12 +963,20 @@ export function RedesignerWizard() {
             ) : null}
             <button
               type="button"
-              onClick={() => (step < 3 ? setStep((value) => value + 1) : void create())}
+              onClick={() =>
+                step < 3 ? setStep((value) => value + 1) : void create()
+              }
               disabled={step < 3 ? !canNext : busy || uploading}
               className="group inline-flex h-12 flex-1 items-center justify-between gap-3 rounded-full bg-primary pr-1.5 pl-6 text-[15px] font-semibold text-primary-foreground shadow-[0_12px_24px_-14px_rgba(0,63,125,0.9)] transition-[opacity,transform] hover:opacity-95 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span>
-                {step < 3 ? nextLabel : running ? "Designing…" : done ? `Design my ${roomWord} again` : `Design my ${roomWord}`}
+                {step < 3
+                  ? nextLabel
+                  : running
+                    ? "Designing…"
+                    : done
+                      ? `Design my ${roomWord} again`
+                      : `Design my ${roomWord}`}
               </span>
               <span className="flex size-9 items-center justify-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
                 {step < 3 ? (
@@ -751,7 +990,11 @@ export function RedesignerWizard() {
             </button>
           </div>
           {step === 3 && done ? (
-            <button type="button" onClick={() => setStep(2)} className="mt-3 text-center text-sm font-semibold text-primary hover:underline">
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              className="mt-3 text-center text-sm font-semibold text-primary hover:underline"
+            >
               Try other finishes
             </button>
           ) : null}

@@ -157,6 +157,7 @@ export function FeaturedProvidersSection({
                 key={provider.id}
                 provider={provider}
                 visual
+                showLogo={isHomeowners}
                 hideCredentials={index === 1 || index === 2}
               />
             ))

@@ -6,11 +6,14 @@ export function Logo({
   inverse = false,
   compact = false,
   href = "/",
+  tagline,
 }: {
   className?: string;
   inverse?: boolean;
   compact?: boolean;
   href?: string;
+  /** Short brand slogan shown under the name. */
+  tagline?: string;
 }) {
   return (
     <Link
@@ -28,7 +31,26 @@ export function Logo({
       >
         RS
       </span>
-      {compact ? null : (
+      {compact ? null : tagline ? (
+        <span className="flex flex-col leading-tight">
+          <span
+            className={cn(
+              "text-[15px] font-semibold tracking-tight",
+              inverse ? "text-primary-foreground dark:text-white" : "text-foreground"
+            )}
+          >
+            Request Service
+          </span>
+          <span
+            className={cn(
+              "mt-0.5 text-[11px] font-medium tracking-wide",
+              inverse ? "text-primary-foreground/75" : "text-muted-foreground"
+            )}
+          >
+            {tagline}
+          </span>
+        </span>
+      ) : (
         <span
           className={cn(
             "text-[15px] font-semibold tracking-tight",

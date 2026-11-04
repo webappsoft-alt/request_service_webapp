@@ -5,15 +5,16 @@ import { HomeSearchDock } from "@/components/home/home-search-dock";
 import { HomeMotion } from "@/components/home/home-motion";
 import { ServicesSection } from "@/components/home/services-section";
 import { HomeFaqSection } from "@/components/home/faq-section";
-import { PeaceOfMindList } from "@/components/home-concepts/peace-of-mind-list";
+// import { PeaceOfMindTimeline } from "@/components/home-concepts/peace-of-mind-timeline";
+import { CustomerReviewsSection } from "@/components/home-concepts/customer-reviews-section";
 import { RedesignerSection } from "@/components/ai-redesigner/redesigner-section";
-import {
-  NextStepWays,
-  // Hidden for now (client feedback); see the commented sections below.
-  // ProofOfControl,
-  // ReadyToSolve,
-  // TrustStrip,
-} from "@/components/home-concepts/next-step-layout";
+// Hidden for now (client feedback); see the commented sections below.
+// import {
+//   NextStepWays,
+//   ProofOfControl,
+//   ReadyToSolve,
+//   TrustStrip,
+// } from "@/components/home-concepts/next-step-layout";
 import { DeferredHydration } from "@/components/shared/deferred-hydration";
 import { fetchParentCategoriesForSeo } from "@/lib/data/public-categories-seo";
 import { buildMetadata } from "@/lib/seo";
@@ -28,8 +29,8 @@ export const metadata = buildMetadata({
 
 /**
  * Keeps the complete v1 header, hero, search, and Browse Services composition unchanged.
- * Flow: three ways to start → real pros (two rows) → peace of mind list → AI designer (v1's dark
- * version) → FAQ. Proof of control, trust strip, and closing CTA are commented out for now.
+ * Flow: customer reviews (replaces the peace of mind timeline, commented out) → real pros (two rows) → AI designer (v1's dark version) → FAQ.
+ * "Three ways to start", proof of control, trust strip, and closing CTA are commented out for now.
  */
 export default async function HomeV3Page() {
   const initialCategories = await fetchParentCategoriesForSeo();
@@ -43,16 +44,16 @@ export default async function HomeV3Page() {
           <ServicesSection initialParents={initialCategories} />
         </div>
 
-        <NextStepWays />
+        {/* <NextStepWays /> */}
+        {/* <PeaceOfMindTimeline /> */}
+        <CustomerReviewsSection />
         <DeferredHydration>
           <FeaturedProvidersSection variant="homeowners" />
         </DeferredHydration>
-        <PeaceOfMindList>
-          <DeferredHydration>
-            <RedesignerSection variant="showcase" />
-          </DeferredHydration>
-          {/* <ProofOfControl /> */}
-        </PeaceOfMindList>
+        <DeferredHydration>
+          <RedesignerSection variant="showcase" afterOnly />
+        </DeferredHydration>
+        {/* <ProofOfControl /> */}
         {/* <TrustStrip /> */}
         {/* <ReadyToSolve /> */}
         <DeferredHydration>

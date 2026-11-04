@@ -49,11 +49,14 @@ const STEPS = [
 export function RedesignerSection({
   variant = "default",
   tone = "dark",
+  afterOnly = false,
 }: {
   /** "showcase": full-width split-screen (home-v1 prototype). Same data and switch. */
   variant?: "default" | "showcase";
   /** Showcase copy panel palette. "light" follows the page's light tokens (home-v3). */
   tone?: "dark" | "light";
+  /** Showcase only: show just the redesigned "after" image, no before/after slider (home-v3). */
+  afterOnly?: boolean;
 } = {}) {
   const dispatch = useAppDispatch();
   const catalog = useAppSelector(selectRedesignCatalog);
@@ -205,7 +208,25 @@ export function RedesignerSection({
             </div>
 
             <div className={light ? "relative min-h-[20rem] lg:min-h-[30rem]" : "relative min-h-[22rem] lg:min-h-[38rem]"}>
-              {showcase ? (
+              {showcase && afterOnly ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- AI result from our storage, sized by the frame */}
+                  <img
+                    src={showcase.after}
+                    alt={
+                      showcase.style
+                        ? `${showcase.style} AI redesign`
+                        : "AI redesign"
+                    }
+                    className="absolute inset-0 size-full object-cover"
+                  />
+                  <p className="pointer-events-none absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/55 px-3 py-1 text-xs text-white backdrop-blur-sm">
+                    <Sparkles className="size-3.5" aria-hidden="true" />
+                    AI redesign
+                    {showcase.style ? ` · ${showcase.style}` : ""}
+                  </p>
+                </>
+              ) : showcase ? (
                 <>
                   <BeforeAfterSlider
                     before={showcase.before}

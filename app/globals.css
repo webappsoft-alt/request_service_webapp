@@ -2286,3 +2286,29 @@ body.rs-cal-dragging [data-cal-overlay] {
     transition: none;
   }
 }
+
+/* Home-v3 customer reviews: two slow vertical columns, faded at the top and bottom. */
+.rs-review-track {
+  mask-image: linear-gradient(to bottom, transparent, #000 4rem, #000 calc(100% - 4rem), transparent);
+}
+.rs-review-col {
+  animation: rs-review-up 48s linear infinite;
+}
+.rs-review-col-slow {
+  animation-duration: 60s;
+  animation-direction: reverse;
+}
+.rs-review-track:hover .rs-review-col,
+.rs-review-track:focus-within .rs-review-col {
+  animation-play-state: paused;
+}
+@keyframes rs-review-up {
+  to {
+    transform: translateY(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rs-review-col {
+    animation: none;
+  }
+}

@@ -65,6 +65,33 @@ Modules, layout, notification channels and API conventions: see
 
 Newest first. Format: **what** — why · files.
 
+### 2026-11-04
+
+- **/home-v3: AI designer shows only the "after" image** — client feedback. The before/after
+  drag slider is replaced on home-v3 by the redesigned image alone, with an "AI redesign · style"
+  label instead of "Drag to compare". New opt-in `afterOnly` prop on `RedesignerSection`
+  (showcase variant), so /home-v1 keeps its slider and the copy/steps are untouched ·
+  `components/ai-redesigner/redesigner-section.tsx`, `app/(marketing)/home-v3/page.tsx`
+
+- **/home-v3: customer reviews section replaces the "Peace of mind" timeline** — client spec.
+  `PeaceOfMindTimeline` is commented out (file kept). New dark split section right after Browse
+  Services: heading, rating summary (average and 5→1 breakdown computed from the reviews shown),
+  three trust points, and a "Find a reviewed pro" link on the left; glass review cards (stars,
+  verified badge, service, quote, avatar initials) on the right that scroll in slow vertical
+  columns from `lg` (one column, two from `xl`; paused on hover, static with reduced motion) and
+  become a swipeable row below `lg`. There is no public review feed yet, so the eight reviews are
+  labelled samples, in line with /about and /terms; swap in live reviews from completed jobs when
+  available · `components/home-concepts/customer-reviews-section.tsx`,
+  `app/(marketing)/home-v3/page.tsx`, `app/globals.css` (`rs-review-*`)
+
+- **/home-v3: "Peace of mind" steps redesigned as a timeline card, in the old "next step" spot** —
+  client spec. "Your home problem has a next step" is commented out; the seven steps now sit right
+  after Browse Services as one "project file" card (numbered icons on a connecting line, title, and
+  a status chip with the step's sub-text), horizontal at `xl` and a vertical timeline below. The
+  pinned scrolling list is no longer used, so the AI designer now follows Featured Pros on its own
+  (`peace-of-mind-list.tsx` kept, unused) · `components/home-concepts/peace-of-mind-timeline.tsx`
+  (new), `app/(marketing)/home-v3/page.tsx`.
+
 ### 2026-11-03
 
 - **/home-v3: Proof of Control, testimonial strip, and "Ready to solve it?" commented out** — client

@@ -67,6 +67,17 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-04
 
+- **/for-pros-v1 feature tabs: fuller mockups, new Jobs board, live fixed services** — client
+  feedback. Dashboard shows 5 important actions; Pipeline columns get a third card with amounts,
+  a live count, and a column total; Customers adds a per-customer "Recent activity" card and a
+  longer search list with a total; Timesheets adds a "Crew today" card; Leads shows 5 rows with
+  stages; Jobs replaces the map/van with a "Today's jobs" card list and a stage-tracker card;
+  Schedules event blocks now use the portal calendar's event-card look (accent bar, time tag);
+  Payments adds a month summary card. Fixed services cards now load live public fixed services
+  (`public/fixed-services`: name, category, price/unit, first uploaded photo) once per page,
+  one per category first, falling back to the sample cards if the request fails. Estimate
+  untouched (its brief was cut off) · `components/pro-v1/pro-dashboard-mocks.tsx`
+
 - **/home-v3: AI designer shows only the "after" image** — client feedback. The before/after
   drag slider is replaced on home-v3 by the redesigned image alone, with an "AI redesign · style"
   label instead of "Drag to compare". New opt-in `afterOnly` prop on `RedesignerSection`

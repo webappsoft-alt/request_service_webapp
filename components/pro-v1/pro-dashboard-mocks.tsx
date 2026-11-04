@@ -27,16 +27,22 @@ import {
   Plug,
   Receipt,
   Search,
-  Truck,
   UserPlus,
   Wind,
   Wrench,
+  type LucideIcon,
 } from "lucide-react";
 import {
   CALL_LOOP_MS,
   ReceptionistCallCard,
 } from "@/components/pro-v1/pro-ai-receptionist";
+import { publicApi } from "@/components/api/ApiRoutesFile";
+import { getData } from "@/components/api/sliceHttp";
 import { cn } from "@/lib/utils";
+import {
+  normalizePublicFixedService,
+  type PublicFixedService,
+} from "@/store/publicFixedServicesSlice";
 
 /**
  * One visual per pro dashboard tab on /for-pros-v1, each with its own kind of motion: count-ups, a
@@ -278,6 +284,16 @@ const DASH_ACTIONS = [
     title: "JOB-376 · Water heater",
     who: "Needs a crew",
   },
+  {
+    tag: "Estimate follow-up",
+    title: "EST-588 · Panel upgrade",
+    who: "Ava Mitchell · sent 3 days ago",
+  },
+  {
+    tag: "Change order",
+    title: "JOB-381 · Approved extra",
+    who: "Liam Foster · $95",
+  },
 ] as const;
 const DASH_SHORTCUTS = [
   { label: "New estimate", icon: FilePlus2 },
@@ -344,7 +360,7 @@ function DashboardVisual() {
               return (
                 <li
                   key={action.title}
-                  className="flex items-center gap-2 px-3 py-1.5"
+                  className="flex items-center gap-2 px-3 py-1"
                 >
                   <div
                     className={cn(
@@ -433,9 +449,33 @@ function DashboardVisual() {
 
 /** Pipeline: a card lifted and carried across columns. */
 const PIPELINE_COLUMNS = [
-  { name: "Leads", cards: ["Drain cleaning", "AC tune-up"] },
-  { name: "Estimates", cards: ["Panel upgrade", "AC repair"] },
-  { name: "Scheduled", cards: ["Fixture install", "Roof repair"] },
+  {
+    name: "Leads",
+    total: "$1,190",
+    cards: [
+      { name: "Drain cleaning", amount: "$180" },
+      { name: "AC tune-up", amount: "$129" },
+      { name: "Gutter repair", amount: "$881" },
+    ],
+  },
+  {
+    name: "Estimates",
+    total: "$4,260",
+    cards: [
+      { name: "Panel upgrade", amount: "$2,400" },
+      { name: "AC repair", amount: "$640" },
+      { name: "Faucet swap", amount: "$1,220" },
+    ],
+  },
+  {
+    name: "Scheduled",
+    total: "$3,935",
+    cards: [
+      { name: "Fixture install", amount: "$310" },
+      { name: "Roof repair", amount: "$2,700" },
+      { name: "Water softener", amount: "$925" },
+    ],
+  },
 ] as const;
 const PIPELINE_FRAMES = [
   { col: 0, label: "New lead", lift: false },
@@ -457,27 +497,39 @@ function PipelineVisual() {
   return (
     <Stage
       rootRef={ref}
-      className="flex items-center p-4 pb-14 @md:p-6 @md:pb-14"
+      className="flex items-center p-4 pb-13 @md:px-6 @md:pt-4 @md:pb-13"
     >
       <div className="relative w-full">
         <div className="grid grid-cols-3 gap-2 @md:gap-3">
-          {PIPELINE_COLUMNS.map((column) => (
+          {PIPELINE_COLUMNS.map((column, index) => (
             <div
               key={column.name}
               className="flex min-w-0 flex-col gap-2 rounded-2xl border border-border/70 bg-background/70 p-2"
             >
-              <p className="truncate px-1 pt-1 text-xs font-semibold">
-                {column.name}
+              <p className="flex items-center justify-between gap-1 px-1 pt-1 text-xs font-semibold">
+                <span className="truncate">{column.name}</span>
+                <span className="shrink-0 rounded-full bg-primary/10 px-1.5 text-[10px] text-primary tabular-nums">
+                  {column.cards.length + (frame.col === index ? 1 : 0)}
+                </span>
               </p>
               <div className="h-20 shrink-0 rounded-xl border border-dashed border-primary/25" />
               {column.cards.map((card) => (
                 <div
-                  key={card}
-                  className="truncate rounded-xl bg-background px-2.5 py-2.5 text-xs shadow-sm"
+                  key={card.name}
+                  className="flex items-center justify-between gap-1 rounded-xl bg-background px-2.5 py-2 text-xs shadow-sm"
                 >
-                  {card}
+                  <span className="truncate">{card.name}</span>
+                  <span className="hidden shrink-0 text-[10px] text-muted-foreground tabular-nums @md:inline">
+                    {card.amount}
+                  </span>
                 </div>
               ))}
+              <p className="truncate border-t border-border/70 px-1 pt-1.5 text-[10px] text-muted-foreground">
+                Total{" "}
+                <span className="font-semibold text-foreground">
+                  {column.total}
+                </span>
+              </p>
             </div>
           ))}
         </div>
@@ -530,6 +582,11 @@ const CUSTOMER_CARDS = [
     estimates: 2,
     owing: "$156",
     source: "AI call",
+    activity: [
+      "Invoice INV-874 sent · $156",
+      "JOB-983 completed · Furnace cleaning",
+      "Estimate EST-584 signed",
+    ],
   },
   {
     name: "Noah Bennett",
@@ -538,6 +595,11 @@ const CUSTOMER_CARDS = [
     estimates: 4,
     owing: "$0",
     source: "Website",
+    activity: [
+      "Paid INV-559 · $1,620",
+      "JOB-376 scheduled · Thu 9:00 AM",
+      "New request REQ-643 · Plumbing",
+    ],
   },
   {
     name: "Ava Mitchell",
@@ -546,9 +608,19 @@ const CUSTOMER_CARDS = [
     estimates: 3,
     owing: "$0",
     source: "Referral",
+    activity: [
+      "Estimate EST-588 viewed · Panel upgrade",
+      "Site visit booked · Mon 10:00 AM",
+      "Note added · Gate code 4417",
+    ],
   },
 ] as const;
-const CUSTOMER_EXTRAS = ["Liam Foster", "Grace Kim"] as const;
+const CUSTOMER_EXTRAS = [
+  "Liam Foster",
+  "Grace Kim",
+  "Ethan Brooks",
+  "Chloe Ramos",
+] as const;
 const CUSTOMERS_MS = 2200;
 
 function CustomersVisual() {
@@ -559,7 +631,7 @@ function CustomersVisual() {
       <div
         className={cn(
           FLOAT_CARD,
-          "hidden w-44 shrink-0 overflow-hidden @xl:block",
+          "hidden w-44 shrink-0 flex-col self-stretch overflow-hidden @xl:flex",
         )}
       >
         <p className="flex items-center gap-2 border-b border-border px-3 py-2.5 text-[11px] text-muted-foreground">
@@ -581,56 +653,93 @@ function CustomersVisual() {
             ),
           )}
         </ul>
+        <p className="mt-auto border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
+          <span className="font-semibold text-foreground">248</span> customers ·
+          12 this month
+        </p>
       </div>
-      <div className="relative h-56 w-full max-w-sm">
-        {CUSTOMER_CARDS.map((customer, index) => {
-          const position =
-            (index - step + CUSTOMER_CARDS.length) % CUSTOMER_CARDS.length;
-          return (
-            <div
-              key={customer.name}
-              className={cn(
-                FLOAT_CARD,
-                "absolute inset-x-0 top-0 p-5 transition-[transform,opacity] duration-1000",
-                EASE,
-              )}
-              style={{
-                transform: `translateY(${position * 18}px) scale(${1 - position * 0.06})`,
-                opacity: 1 - position * 0.28,
-                zIndex: CUSTOMER_CARDS.length - position,
-              }}
-            >
-              <div className="flex items-center gap-3">
-                <Initials name={customer.name} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold tracking-tight">
-                    {customer.name}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {customer.address}
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
-                  {customer.source}
-                </span>
-              </div>
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                {[
-                  [customer.jobs, "Jobs"],
-                  [customer.estimates, "Estimates"],
-                  [customer.owing, "Owing"],
-                ].map(([value, label]) => (
-                  <div key={label} className="rounded-xl bg-primary/6 py-2.5">
-                    <p className="text-base font-semibold tabular-nums">
-                      {value}
+      <div className="flex w-full max-w-sm flex-col gap-3">
+        <div className="relative h-48 w-full">
+          {CUSTOMER_CARDS.map((customer, index) => {
+            const position =
+              (index - step + CUSTOMER_CARDS.length) % CUSTOMER_CARDS.length;
+            return (
+              <div
+                key={customer.name}
+                className={cn(
+                  FLOAT_CARD,
+                  "absolute inset-x-0 top-0 p-5 transition-[transform,opacity] duration-1000",
+                  EASE,
+                )}
+                style={{
+                  transform: `translateY(${position * 18}px) scale(${1 - position * 0.06})`,
+                  opacity: 1 - position * 0.28,
+                  zIndex: CUSTOMER_CARDS.length - position,
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <Initials name={customer.name} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold tracking-tight">
+                      {customer.name}
                     </p>
-                    <p className="text-[11px] text-muted-foreground">{label}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {customer.address}
+                    </p>
                   </div>
-                ))}
+                  <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
+                    {customer.source}
+                  </span>
+                </div>
+                <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                  {[
+                    [customer.jobs, "Jobs"],
+                    [customer.estimates, "Estimates"],
+                    [customer.owing, "Owing"],
+                  ].map(([value, label]) => (
+                    <div key={label} className="rounded-xl bg-primary/6 py-2.5">
+                      <p className="text-base font-semibold tabular-nums">
+                        {value}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {label}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+        <div
+          key={CUSTOMER_CARDS[step].name}
+          className={cn(
+            FLOAT_CARD,
+            "animate-in fade-in hidden p-3 duration-500 @md:block",
+          )}
+        >
+          <p className="text-xs font-semibold">Recent activity</p>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {CUSTOMER_CARDS[step].activity.map((item, index) => (
+              <li key={item} className="flex items-center gap-2 text-[11px]">
+                <span
+                  className={cn(
+                    "size-1.5 shrink-0 rounded-full",
+                    index === 0 ? "bg-primary" : "bg-primary/25",
+                  )}
+                />
+                <span
+                  className={cn(
+                    "truncate",
+                    index === 0 ? "font-medium" : "text-muted-foreground",
+                  )}
+                >
+                  {item}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </Stage>
   );
@@ -859,47 +968,83 @@ function TimesheetsVisual() {
           </span>
         </div>
       </PhoneFrame>
-      <div className={cn(FLOAT_CARD, "hidden w-56 p-4 @md:block")}>
-        <p className="text-xs font-semibold">This week</p>
-        <ul className="mt-3 flex flex-col gap-2.5">
-          {WEEK.map(([day, value]) => (
-            <li key={day} className="flex items-center gap-2 text-[11px]">
-              <span className="w-7 text-muted-foreground">{day}</span>
+      <div className="hidden w-56 flex-col gap-3 @md:flex">
+        <div className={cn(FLOAT_CARD, "p-4")}>
+          <p className="text-xs font-semibold">This week</p>
+          <ul className="mt-3 flex flex-col gap-2.5">
+            {WEEK.map(([day, value]) => (
+              <li key={day} className="flex items-center gap-2 text-[11px]">
+                <span className="w-7 text-muted-foreground">{day}</span>
+                <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-primary/10">
+                  <span
+                    className="block h-full rounded-full bg-primary"
+                    style={{ width: `${(value / 8) * 100}%` }}
+                  />
+                </span>
+                <span className="w-8 text-right tabular-nums">{value}h</span>
+              </li>
+            ))}
+            <li className="flex items-center gap-2 text-[11px]">
+              <span className="w-7 font-medium text-primary">Fri</span>
               <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-primary/10">
                 <span
-                  className="block h-full rounded-full bg-primary"
-                  style={{ width: `${(value / 8) * 100}%` }}
+                  className="block h-full rounded-full bg-primary transition-[width] duration-1500 ease-out"
+                  style={{ width: `${(frame.hours / 8) * 100}%` }}
                 />
               </span>
-              <span className="w-8 text-right tabular-nums">{value}h</span>
+              <span className="w-8 text-right font-medium">
+                <CountUp value={frame.hours} format={oneDecimal} ms={1500} />h
+              </span>
             </li>
-          ))}
-          <li className="flex items-center gap-2 text-[11px]">
-            <span className="w-7 font-medium text-primary">Fri</span>
-            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-primary/10">
-              <span
-                className="block h-full rounded-full bg-primary transition-[width] duration-1500 ease-out"
-                style={{ width: `${(frame.hours / 8) * 100}%` }}
-              />
-            </span>
-            <span className="w-8 text-right font-medium">
-              <CountUp value={frame.hours} format={oneDecimal} ms={1500} />h
-            </span>
-          </li>
-        </ul>
-        <p className="mt-3 border-t border-border pt-3 text-xs font-semibold">
-          <CountUp
-            value={WEEK_HOURS + frame.hours}
-            format={oneDecimal}
-            ms={1500}
-          />{" "}
-          hrs ·{" "}
-          <CountUp
-            value={(WEEK_HOURS + frame.hours) * PAY_RATE}
-            format={dollars}
-            ms={1500}
-          />
-        </p>
+          </ul>
+          <p className="mt-3 border-t border-border pt-3 text-xs font-semibold">
+            <CountUp
+              value={WEEK_HOURS + frame.hours}
+              format={oneDecimal}
+              ms={1500}
+            />{" "}
+            hrs ·{" "}
+            <CountUp
+              value={(WEEK_HOURS + frame.hours) * PAY_RATE}
+              format={dollars}
+              ms={1500}
+            />
+          </p>
+        </div>
+        <div className={cn(FLOAT_CARD, "p-3")}>
+          <p className="text-xs font-semibold">Crew today</p>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {[
+              { name: "Tate Fischer", on: frame.on, note: "JOB-983" },
+              { name: "Maria Lee", on: true, note: "JOB-376" },
+              { name: "Sam Ortiz", on: false, note: "Off at 3:00 PM" },
+            ].map((member) => (
+              <li
+                key={member.name}
+                className="flex items-center gap-2 text-[11px]"
+              >
+                <Initials name={member.name} className="size-5 text-[8px]" />
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {member.name}
+                </span>
+                <span
+                  className={cn(
+                    "flex shrink-0 items-center gap-1 text-[10px] transition-colors duration-500",
+                    member.on ? "text-primary" : "text-muted-foreground",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "size-1.5 rounded-full",
+                      member.on ? "bg-primary" : "bg-muted-foreground/40",
+                    )}
+                  />
+                  {member.on ? member.note : "Clocked out"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </Stage>
   );
@@ -921,13 +1066,23 @@ const LEAD_FEED = [
   { id: "REQ-974", name: "Daniel Reyes", service: "Water heater", source: 2 },
   { id: "REQ-975", name: "Mia Sanders", service: "Panel upgrade", source: 1 },
   { id: "REQ-976", name: "Liam Foster", service: "AC tune-up", source: 0 },
+  { id: "REQ-977", name: "Grace Kim", service: "Roof inspection", source: 2 },
+  { id: "REQ-978", name: "Ethan Brooks", service: "Outlet repair", source: 1 },
 ] as const;
+/** Where a lead sits once newer ones arrive above it (by row). */
+const LEAD_STAGES = [
+  "Contacted",
+  "Estimate sent",
+  "Site visit",
+  "Won",
+] as const;
+const LEADS_SHOWN = 5;
 const LEADS_MS = 1700;
 
 function LeadsVisual() {
   const { ref, step } = useLoopStep(LEAD_FEED.length, LEADS_MS);
   const source = LEAD_FEED[step].source;
-  const shown = [0, 1, 2].map(
+  const shown = Array.from({ length: LEADS_SHOWN }, (_, offset) => offset).map(
     (offset) =>
       LEAD_FEED[(step - offset + LEAD_FEED.length) % LEAD_FEED.length],
   );
@@ -983,7 +1138,7 @@ function LeadsVisual() {
             <li
               key={lead.id}
               className={cn(
-                "flex items-center gap-3 px-4 py-2.5",
+                "flex items-center gap-3 px-4 py-2",
                 index === 0 &&
                   "animate-in fade-in slide-in-from-top-4 bg-primary/5 duration-700",
               )}
@@ -996,10 +1151,14 @@ function LeadsVisual() {
                 </p>
               </div>
               {index === 0 ? (
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
                   New
                 </span>
-              ) : null}
+              ) : (
+                <span className="shrink-0 text-[10px] text-muted-foreground">
+                  {LEAD_STAGES[index - 1]}
+                </span>
+              )}
             </li>
           ))}
         </ul>
@@ -1151,111 +1310,167 @@ function EstimateVisual() {
   );
 }
 
-/** Jobs: a van drives the route on a map while the job moves through its stages. */
-const ROUTE = "M40 196 C 110 196, 110 118, 190 118 S 270 54, 360 46";
-const JOB_FRAMES = [
-  { at: 0, label: "Scheduled" },
-  { at: 50, label: "On the way" },
-  { at: 100, label: "Arrived" },
-  { at: 100, label: "In progress" },
-  { at: 100, label: "Completed" },
+/** Jobs: a board of today's jobs; the featured one moves through its stages, card and list in sync. */
+const JOB_STAGES = [
+  "Scheduled",
+  "On the way",
+  "Arrived",
+  "In progress",
+  "Completed",
+] as const;
+const JOB_BOARD = [
+  {
+    id: "JOB-983",
+    service: "Furnace cleaning",
+    customer: "Olivia Hart",
+    tech: "Tate Fischer",
+    time: "9:00 AM",
+    amount: "$237",
+    stage: null,
+  },
+  {
+    id: "JOB-376",
+    service: "Water heater install",
+    customer: "Noah Bennett",
+    tech: "Maria Lee",
+    time: "11:30 AM",
+    amount: "$1,840",
+    stage: 3,
+  },
+  {
+    id: "JOB-381",
+    service: "Panel upgrade",
+    customer: "Liam Foster",
+    tech: "Sam Ortiz",
+    time: "1:00 PM",
+    amount: "$2,535",
+    stage: 0,
+  },
+  {
+    id: "JOB-379",
+    service: "Drain cleaning",
+    customer: "Ava Mitchell",
+    tech: "Tate Fischer",
+    time: "8:00 AM",
+    amount: "$180",
+    stage: 4,
+  },
 ] as const;
 const JOBS_MS = 1600;
 
 function JobsVisual() {
-  const { ref, step } = useLoopStep(JOB_FRAMES.length, JOBS_MS);
-  const frame = JOB_FRAMES[step];
+  const { ref, step } = useLoopStep(JOB_STAGES.length, JOBS_MS);
+  const featured = JOB_BOARD[0];
 
   return (
-    <Stage rootRef={ref} className="overflow-hidden">
-      <svg
-        viewBox="0 0 400 240"
-        preserveAspectRatio="xMidYMid meet"
-        className="absolute inset-0 size-full overflow-visible"
-        aria-hidden="true"
-      >
-        <g className="stroke-primary/12" strokeWidth="6" fill="none">
-          <path d="M-500 70 H900" />
-          <path d="M-500 170 H900" />
-          <path d="M90 -300 V500" />
-          <path d="M240 -300 V500" />
-          <path d="M500 -300 L 40 500" />
-        </g>
-        <path
-          d={ROUTE}
-          fill="none"
-          strokeWidth="4"
-          strokeLinecap="round"
-          className="stroke-primary/25"
-        />
-        <path
-          d={ROUTE}
-          fill="none"
-          strokeWidth="4"
-          strokeLinecap="round"
-          pathLength={100}
-          strokeDasharray="100"
-          strokeDashoffset={100 - frame.at}
-          className={cn(
-            "stroke-primary",
-            step > 0 &&
-              "transition-[stroke-dashoffset] duration-1500 ease-in-out",
-          )}
-        />
-        <circle cx="360" cy="46" r="7" className="fill-primary" />
-        <circle cx="360" cy="46" r="3" className="fill-background" />
-        <g
-          className={cn(
-            step > 0 &&
-              "transition-[offset-distance] duration-1500 ease-in-out",
-          )}
-          style={{
-            offsetPath: `path("${ROUTE}")`,
-            offsetDistance: `${frame.at}%`,
-            offsetRotate: "0deg",
-          }}
-        >
-          <circle r="14" className="fill-primary" />
-          <Truck
-            x={-8}
-            y={-8}
-            width={16}
-            height={16}
-            className="text-primary-foreground"
-          />
-        </g>
-      </svg>
-      <div
-        className={cn(
-          FLOAT_CARD,
-          "absolute inset-x-4 bottom-4 p-3 @md:left-auto @md:w-72",
-        )}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-sm font-semibold tracking-tight">
-            JOB-983 · Furnace cleaning
-          </p>
-          <span
-            key={frame.label}
-            className="animate-in fade-in zoom-in-90 shrink-0 rounded-full bg-primary px-2.5 py-0.5 text-[11px] font-medium text-primary-foreground duration-500"
-          >
-            {frame.label}
+    <Stage rootRef={ref} className="flex items-center gap-3 p-3 @md:p-4">
+      <div className={cn(FLOAT_CARD, "min-w-0 flex-1 overflow-hidden")}>
+        <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
+          <p className="text-xs font-semibold">Today&apos;s jobs</p>
+          <span className="text-[10px] text-muted-foreground">
+            <span className="font-semibold text-foreground">
+              {1 + (step === JOB_STAGES.length - 1 ? 1 : 0)}
+            </span>{" "}
+            of 4 completed
           </span>
         </div>
-        <div className="mt-2.5 flex gap-1">
-          {JOB_FRAMES.map((item, index) => (
-            <span
-              key={item.label}
-              className={cn(
-                "h-1 flex-1 rounded-full transition-colors duration-500",
-                index <= step ? "bg-primary" : "bg-primary/12",
-              )}
-            />
-          ))}
-        </div>
-        <p className="mt-2 truncate text-[11px] text-muted-foreground">
-          Tate Fischer · Olivia Hart · $237
+        <ul className="divide-y divide-border">
+          {JOB_BOARD.map((job, index) => {
+            const stage = job.stage ?? step;
+            const done = stage === JOB_STAGES.length - 1;
+            return (
+              <li
+                key={job.id}
+                className={cn(
+                  "flex items-center gap-2.5 px-3 py-2.5 transition-colors duration-500",
+                  index === 0 && "bg-primary/5",
+                )}
+              >
+                <Initials name={job.tech} className="size-7 text-[9px]" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold">
+                    {job.id} · {job.service}
+                  </p>
+                  <p className="truncate text-[10px] text-muted-foreground">
+                    {job.time} · {job.customer}
+                  </p>
+                </div>
+                <span
+                  key={stage}
+                  className={cn(
+                    "animate-in fade-in shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium duration-500",
+                    done
+                      ? "bg-primary/10 text-primary"
+                      : index === 0
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {JOB_STAGES[stage]}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <div
+        className={cn(FLOAT_CARD, "hidden w-56 shrink-0 flex-col p-4 @xl:flex")}
+      >
+        <p className="text-[11px] font-semibold text-primary">{featured.id}</p>
+        <p className="truncate text-sm font-semibold tracking-tight">
+          {featured.service}
         </p>
+        <p className="truncate text-[11px] text-muted-foreground">
+          {featured.customer} · 2217 Maple Street
+        </p>
+        <ol className="mt-3 flex flex-col">
+          {JOB_STAGES.map((label, index) => (
+            <li
+              key={label}
+              className="relative flex items-center gap-2.5 pb-2.5 last:pb-0"
+            >
+              {index < JOB_STAGES.length - 1 ? (
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "absolute top-5 bottom-0 left-2.25 w-0.5 transition-colors duration-500",
+                    index < step ? "bg-primary" : "bg-primary/12",
+                  )}
+                />
+              ) : null}
+              <span
+                className={cn(
+                  "relative flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors duration-500",
+                  index <= step
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-background text-transparent",
+                )}
+              >
+                <Check className="size-3" strokeWidth={3} aria-hidden="true" />
+              </span>
+              <span
+                className={cn(
+                  "text-[11px]",
+                  index === step
+                    ? "font-semibold"
+                    : index < step
+                      ? "font-medium"
+                      : "text-muted-foreground",
+                )}
+              >
+                {label}
+              </span>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-[11px]">
+          <span className="flex items-center gap-1.5">
+            <Initials name={featured.tech} className="size-5 text-[8px]" />
+            {featured.tech}
+          </span>
+          <span className="font-semibold">{featured.amount}</span>
+        </div>
       </div>
     </Stage>
   );
@@ -1265,10 +1480,53 @@ function JobsVisual() {
 const SCHEDULE_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"] as const;
 const SCHEDULE_LANES = [
   { name: "Open", jobs: [] },
-  { name: "Maria", jobs: [{ day: 2, label: "Estimate" }] },
-  { name: "Tate", jobs: [{ day: 0, label: "Install" }] },
-  { name: "Sam", jobs: [{ day: 3, label: "Repair" }] },
+  {
+    name: "Maria",
+    jobs: [
+      { day: 2, label: "Estimate", time: "9 AM" },
+      { day: 4, label: "Inspection", time: "2 PM" },
+    ],
+  },
+  { name: "Tate", jobs: [{ day: 0, label: "Install", time: "8 AM" }] },
+  { name: "Sam", jobs: [{ day: 3, label: "Repair", time: "11 AM" }] },
 ] as const;
+
+/** A calendar event card like the portal's: accent bar, title, and a time tag. */
+function ScheduleEvent({
+  label,
+  time,
+  className,
+  style,
+  children,
+}: {
+  label: string;
+  time: string;
+  className?: string;
+  style?: React.CSSProperties;
+  children?: ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "absolute flex w-[19%] flex-col justify-center overflow-hidden rounded-md border bg-background py-1 pr-1 pl-2.5 shadow-sm",
+        className,
+      )}
+      style={style}
+    >
+      <span
+        aria-hidden="true"
+        className="absolute inset-y-0 left-0 w-1 rounded-l-md bg-linear-to-b from-primary to-primary/70"
+      />
+      <span className="truncate text-[10px] leading-tight font-bold">
+        {label}
+      </span>
+      <span className="hidden w-fit truncate rounded-sm bg-primary/10 px-1 py-px text-[8px] leading-none font-bold tracking-wide text-primary uppercase @md:block">
+        {time}
+      </span>
+      {children}
+    </div>
+  );
+}
 const SCHEDULE_FRAMES = [
   { lane: 0, day: 1, lift: false, dropped: false },
   { lane: 0, day: 1, lift: true, dropped: false },
@@ -1314,19 +1572,21 @@ function SchedulesVisual() {
                   />
                 ))}
                 {lane.jobs.map((job) => (
-                  <span
+                  <ScheduleEvent
                     key={job.label}
-                    className="absolute inset-y-2 flex w-[19%] items-center justify-center overflow-hidden rounded-lg bg-primary/12 text-[10px] font-medium text-primary"
+                    label={job.label}
+                    time={job.time}
+                    className="inset-y-2 border-border"
                     style={{ left: `calc(${job.day * 20}% + 0.5%)` }}
-                  >
-                    <span className="hidden @md:inline">{job.label}</span>
-                  </span>
+                  />
                 ))}
               </div>
             ))}
-            <div
+            <ScheduleEvent
+              label="Job 376"
+              time={frame.lane ? "Thu 9 AM" : "Unassigned"}
               className={cn(
-                "absolute z-10 flex h-10 w-[19%] items-center justify-center rounded-lg bg-primary text-[10px] font-semibold text-primary-foreground transition-[top,left,transform,box-shadow] duration-1000 motion-reduce:transition-none",
+                "z-10 h-10 overflow-visible border-primary ring-3 ring-primary/10 transition-[top,left,transform,box-shadow] duration-1000 motion-reduce:transition-none",
                 EASE,
                 frame.lift ? "scale-110 shadow-2xl" : "shadow-md",
               )}
@@ -1335,16 +1595,14 @@ function SchedulesVisual() {
                 left: `calc(${frame.day * 20}% + 0.5%)`,
               }}
             >
-              <span className="hidden @md:inline">Job 376</span>
-              <span className="@md:hidden">376</span>
               {frame.dropped ? (
                 <span
                   aria-hidden="true"
-                  className="absolute -inset-1 animate-ping rounded-xl border-2 border-primary/50 [animation-iteration-count:1] motion-reduce:hidden"
+                  className="absolute -inset-1 animate-ping rounded-lg border-2 border-primary/50 [animation-iteration-count:1] motion-reduce:hidden"
                 />
               ) : null}
               {frame.lift ? <Cursor className="-right-2 -bottom-2" /> : null}
-            </div>
+            </ScheduleEvent>
           </div>
         </div>
       </div>
@@ -1487,6 +1745,8 @@ const PAYMENT_METHODS = [
   },
 ] as const;
 const PAYMENT_TOTAL = 3000;
+/** Collected earlier this month, before INV-874's payments. */
+const PAYMENT_MONTH = 15420;
 const PAYMENTS_MS = 1800;
 
 function PaymentsVisual() {
@@ -1551,56 +1811,73 @@ function PaymentsVisual() {
         </div>
       </div>
 
-      <ul
-        className={cn(
-          FLOAT_CARD,
-          "hidden w-64 divide-y divide-border @xl:block",
-        )}
-      >
-        {PAYMENT_METHODS.map(({ label, note, amount, icon: Icon }, index) => (
-          <li
-            key={label}
-            className={cn(
-              "flex items-center gap-2.5 px-3 py-2.5 transition-colors duration-500 first:rounded-t-2xl last:rounded-b-2xl",
-              index === step && "bg-primary/6",
-            )}
-          >
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Icon className="size-4" aria-hidden="true" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs font-semibold">
-                {label}
-              </span>
-              <span className="block truncate text-[10px] text-muted-foreground">
-                {note}
-              </span>
-            </span>
-            <span
+      <div className="hidden w-64 flex-col gap-3 @xl:flex">
+        <ul className={cn(FLOAT_CARD, "divide-y divide-border")}>
+          {PAYMENT_METHODS.map(({ label, note, amount, icon: Icon }, index) => (
+            <li
+              key={label}
               className={cn(
-                "text-xs font-medium tabular-nums transition-opacity duration-500",
-                index <= step ? "opacity-100" : "opacity-30",
+                "flex items-center gap-2.5 px-3 py-2.5 transition-colors duration-500 first:rounded-t-2xl last:rounded-b-2xl",
+                index === step && "bg-primary/6",
               )}
             >
-              {dollars(amount)}
-            </span>
-            <span
-              className={cn(
-                "flex size-4 shrink-0 items-center justify-center rounded-full transition-colors duration-500",
-                index <= step
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-primary/10 text-transparent",
-              )}
-            >
-              <Check
-                className="size-2.5"
-                strokeWidth={3.5}
-                aria-hidden="true"
-              />
-            </span>
-          </li>
-        ))}
-      </ul>
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Icon className="size-4" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold">
+                  {label}
+                </span>
+                <span className="block truncate text-[10px] text-muted-foreground">
+                  {note}
+                </span>
+              </span>
+              <span
+                className={cn(
+                  "text-xs font-medium tabular-nums transition-opacity duration-500",
+                  index <= step ? "opacity-100" : "opacity-30",
+                )}
+              >
+                {dollars(amount)}
+              </span>
+              <span
+                className={cn(
+                  "flex size-4 shrink-0 items-center justify-center rounded-full transition-colors duration-500",
+                  index <= step
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-primary/10 text-transparent",
+                )}
+              >
+                <Check
+                  className="size-2.5"
+                  strokeWidth={3.5}
+                  aria-hidden="true"
+                />
+              </span>
+            </li>
+          ))}
+        </ul>
+        <div className={cn(FLOAT_CARD, "grid grid-cols-3 gap-2 p-3")}>
+          {[
+            {
+              label: "This month",
+              value: PAYMENT_MONTH + collected,
+              format: dollars,
+            },
+            { label: "Payments", value: 41 + step + 1, format: whole },
+            { label: "Avg. days", value: 4.2, format: oneDecimal },
+          ].map((stat) => (
+            <div key={stat.label} className="min-w-0">
+              <p className="truncate text-[10px] text-muted-foreground">
+                {stat.label}
+              </p>
+              <p className="truncate text-sm font-semibold tracking-tight">
+                <CountUp value={stat.value} format={stat.format} ms={1000} />
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <ul className="flex flex-wrap justify-center gap-1.5 @xl:hidden">
         {PAYMENT_METHODS.map(({ label, icon: Icon }, index) => (
@@ -1621,16 +1898,26 @@ function PaymentsVisual() {
   );
 }
 
-/** Fixed services: a catalog grid with price tags; a booking lights up each card in turn. */
-const SERVICES = [
+/**
+ * Fixed services: a catalog grid with price tags; a booking lights up each card in turn.
+ * Cards use live public fixed services (name, category, price, first photo) from the API;
+ * the sample list below shows until they load, or if the request fails.
+ */
+type ServiceCard = {
+  name: string;
+  area: string;
+  price: string;
+  unit: string;
+  icon: LucideIcon;
+  image?: string;
+};
+const SERVICES: ServiceCard[] = [
   {
     name: "AC tune-up",
     area: "HVAC",
     price: "$129",
     unit: "visit",
     icon: Wind,
-    orders: 14,
-    slot: "Mon 11:00 AM",
   },
   {
     name: "Furnace service",
@@ -1638,8 +1925,6 @@ const SERVICES = [
     price: "$169",
     unit: "visit",
     icon: Flame,
-    orders: 22,
-    slot: "Thu 1:00 PM",
   },
   {
     name: "Water heater flush",
@@ -1647,8 +1932,6 @@ const SERVICES = [
     price: "$160",
     unit: "job",
     icon: Droplets,
-    orders: 9,
-    slot: "Fri 9:00 AM",
   },
   {
     name: "Drain cleaning",
@@ -1656,8 +1939,6 @@ const SERVICES = [
     price: "$117",
     unit: "job",
     icon: Wrench,
-    orders: 31,
-    slot: "Tue 2:00 PM",
   },
   {
     name: "Outlet repair",
@@ -1665,8 +1946,6 @@ const SERVICES = [
     price: "$95",
     unit: "job",
     icon: Plug,
-    orders: 12,
-    slot: "Wed 10:00 AM",
   },
   {
     name: "Fan install",
@@ -1674,60 +1953,147 @@ const SERVICES = [
     price: "$145",
     unit: "job",
     icon: Fan,
-    orders: 7,
-    slot: "Fri 3:00 PM",
   },
+];
+const SERVICE_SLOTS = [
+  "Mon 11:00 AM",
+  "Thu 1:00 PM",
+  "Fri 9:00 AM",
+  "Tue 2:00 PM",
+  "Wed 10:00 AM",
+  "Fri 3:00 PM",
 ] as const;
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  hvac: Wind,
+  plumbing: Droplets,
+  electrical: Plug,
+};
 const FIXED_MS = 1500;
+
+/** Live services, fetched once per page load and shared by every mount of the tab. */
+let liveServices: Promise<ServiceCard[]> | null = null;
+
+function loadLiveServices() {
+  liveServices ??= getData(
+    publicApi.fixedServices,
+    { page: 1, limit: 24 },
+    { silent: true },
+  )
+    .then((response: unknown) => {
+      const root = (response ?? {}) as { data?: unknown };
+      const list = Array.isArray(root.data) ? root.data : [];
+      const services = list
+        .map(normalizePublicFixedService)
+        .filter(
+          (item): item is PublicFixedService =>
+            Boolean(item) && Boolean(item?.images[0]) && item!.price > 0,
+        );
+      // One per category first, so the grid shows a spread of trades.
+      const seen = new Set<string>();
+      const spread = [
+        ...services.filter((item) => {
+          const key = item.category?.slug ?? item.id;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }),
+        ...services,
+      ];
+      const unique = [
+        ...new Map(spread.map((item) => [item.id, item])).values(),
+      ];
+      return unique.slice(0, SERVICES.length).map((item): ServiceCard => ({
+        name: item.servicesName,
+        area: item.category?.name ?? "Service",
+        price: dollars(item.price),
+        unit: item.unit.replace(/^per\s+/i, "") || "job",
+        icon: CATEGORY_ICONS[item.category?.slug ?? ""] ?? Wrench,
+        image: item.images[0],
+      }));
+    })
+    .catch(() => []);
+  return liveServices;
+}
+
+function useServiceCards() {
+  const [cards, setCards] = useState<ServiceCard[]>(SERVICES);
+  useEffect(() => {
+    let active = true;
+    void loadLiveServices().then((live) => {
+      if (active && live.length === SERVICES.length) setCards(live);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+  return cards;
+}
 
 function FixedServicesVisual() {
   const { ref, step } = useLoopStep(SERVICES.length, FIXED_MS);
-  const booked = SERVICES[step];
+  const cards = useServiceCards();
+  const booked = cards[step];
 
   return (
     <Stage rootRef={ref} className="flex flex-col gap-2.5 p-3 @md:p-4">
       <div className="grid min-h-0 flex-1 auto-rows-fr grid-cols-2 gap-2.5 @md:grid-cols-3">
-        {SERVICES.map(
-          ({ name, area, price, unit, icon: Icon, orders }, index) => (
-            <div
-              key={name}
-              className={cn(
-                FLOAT_CARD,
-                "flex min-h-0 flex-col justify-between gap-1 p-3 transition-[border-color,transform,box-shadow] duration-500",
-                EASE,
-                index === step &&
-                  "-translate-y-0.5 border-primary shadow-[0_18px_40px_-18px_rgba(0,63,125,0.55)]",
-              )}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span
+        {cards.map(({ name, area, price, unit, icon: Icon, image }, index) => (
+          <div
+            key={name}
+            className={cn(
+              FLOAT_CARD,
+              "flex min-h-0 flex-col overflow-hidden transition-[border-color,transform,box-shadow] duration-500",
+              EASE,
+              index === step &&
+                "-translate-y-0.5 border-primary shadow-[0_18px_40px_-18px_rgba(0,63,125,0.55)]",
+            )}
+          >
+            <div className="relative min-h-0 flex-1 bg-primary/8">
+              {image ? (
+                // eslint-disable-next-line @next/next/no-img-element -- provider upload from our storage, sized by the card
+                <img
+                  src={image}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
                   className={cn(
-                    "flex size-9 shrink-0 items-center justify-center rounded-xl transition-colors duration-500",
-                    index === step
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-primary/10 text-primary",
+                    "absolute inset-0 size-full object-cover transition-transform duration-700",
+                    EASE,
+                    index === step && "scale-105",
                   )}
-                >
-                  <Icon className="size-4" aria-hidden="true" />
+                />
+              ) : (
+                <span className="absolute inset-0 flex items-center justify-center text-primary/40">
+                  <Icon className="size-7" aria-hidden="true" />
                 </span>
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                  {price}
-                  <span className="font-normal">/{unit}</span>
-                </span>
-              </div>
+              )}
+              <span className="absolute top-2 right-2 rounded-full bg-background/95 px-2 py-0.5 text-[11px] font-semibold text-primary shadow-sm">
+                {price}
+                <span className="font-normal">/{unit}</span>
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2 px-2.5 py-2">
+              <span
+                className={cn(
+                  "flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors duration-500",
+                  index === step
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-primary/10 text-primary",
+                )}
+              >
+                <Icon className="size-3.5" aria-hidden="true" />
+              </span>
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold tracking-tight">
                   {name}
                 </p>
                 <p className="truncate text-[10px] text-muted-foreground">
-                  {area} ·{" "}
-                  <CountUp value={orders + (index <= step ? 1 : 0)} ms={400} />{" "}
-                  orders
+                  {area}
                 </p>
               </div>
             </div>
-          ),
-        )}
+          </div>
+        ))}
       </div>
       <div
         key={booked.name}
@@ -1735,7 +2101,7 @@ function FixedServicesVisual() {
       >
         <CalendarCheck className="size-4 shrink-0" aria-hidden="true" />
         <span className="truncate">
-          New booking · {booked.name} · {booked.slot}
+          New booking · {booked.name} · {SERVICE_SLOTS[step]}
         </span>
       </div>
     </Stage>
@@ -1869,7 +2235,7 @@ export const DASHBOARD_MOCKS: Record<
   },
   leads: { Mock: LeadsVisual, loopMs: LEAD_FEED.length * LEADS_MS },
   estimates: { Mock: EstimateVisual, loopMs: ESTIMATE_STEPS * ESTIMATE_MS },
-  jobs: { Mock: JobsVisual, loopMs: JOB_FRAMES.length * JOBS_MS },
+  jobs: { Mock: JobsVisual, loopMs: JOB_STAGES.length * JOBS_MS },
   schedules: {
     Mock: SchedulesVisual,
     loopMs: SCHEDULE_FRAMES.length * SCHEDULE_MS,

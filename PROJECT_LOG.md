@@ -67,6 +67,13 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-04
 
+- **/home-v3: reviews manual again, softer timeline header line** — client feedback. Customer
+  reviews no longer auto-scroll: a manual snap carousel with the arrows beside the heading and dots
+  below (edge fade and fade-up on first view kept; marquee CSS removed). The line under the
+  "Your project, step by step" header is now a faint slate hairline ·
+  `components/home-concepts/reviews-carousel.tsx`, `components/home-concepts/customer-reviews-section.tsx`,
+  `components/home-concepts/peace-of-mind-timeline.tsx`, `app/globals.css`
+
 - **/home-v3 steps timeline copy** — client asked for clearer text. Intro no longer names a
   competitor ("Find a local pro, compare written estimates, and follow the work through to payment…");
   card header reads "Your project, step by step" · "Example: water heater replacement · Aurora, IL"

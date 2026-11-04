@@ -2463,32 +2463,12 @@ body.rs-cal-dragging [data-cal-overlay] {
   }
 }
 
-/* Home-v3 customer reviews: a continuous right-to-left loop with faded edges, paused on hover. */
+/* Home-v3 customer reviews: the carousel's left and right edges fade out. */
 .rs-review-fade {
   mask-image: linear-gradient(to right, transparent, #000 1rem, #000 calc(100% - 1rem), transparent);
 }
 @media (min-width: 640px) {
   .rs-review-fade {
-    mask-image: linear-gradient(to right, transparent, #000 5rem, #000 calc(100% - 5rem), transparent);
-  }
-}
-.rs-review-marquee {
-  animation: rs-review-x 70s linear infinite;
-}
-.rs-review-fade:hover .rs-review-marquee,
-.rs-review-fade:focus-within .rs-review-marquee {
-  animation-play-state: paused;
-}
-@keyframes rs-review-x {
-  to {
-    transform: translateX(-50%);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .rs-review-marquee {
-    animation: none;
-  }
-  .rs-review-fade {
-    overflow-x: auto;
+    mask-image: linear-gradient(to right, transparent, #000 4rem, #000 calc(100% - 4rem), transparent);
   }
 }

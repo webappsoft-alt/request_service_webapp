@@ -170,8 +170,8 @@ function ReviewCard({ review }: { review: Review }) {
 }
 
 /**
- * Customer reviews: heading over a row of review cards that glides right to left in a
- * continuous loop (paused on hover).
+ * Customer reviews: heading with arrows on the right, over a manual snap carousel with dots
+ * (3 cards per view on desktop, 2 on tablet, 1 on mobile).
  */
 export function CustomerReviewsSection() {
   return (

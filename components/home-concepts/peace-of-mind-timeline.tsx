@@ -50,7 +50,7 @@ export function PeaceOfMindTimeline() {
             className="absolute -inset-y-3 inset-x-4 rounded-[2rem] bg-primary/5 sm:inset-x-6 sm:-inset-y-4"
           />
           <div className="relative overflow-hidden rounded-2xl border border-border bg-background shadow-[0_24px_60px_-36px_rgba(0,63,125,0.45)]">
-            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3.5 sm:px-6">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200/70 px-4 dark:border-border/30 py-3.5 sm:px-6">
               <div className="flex min-w-0 items-center gap-4">
                 <span
                   className="hidden items-center gap-1.5 sm:flex"

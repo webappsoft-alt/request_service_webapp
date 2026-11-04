@@ -67,6 +67,31 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-04
 
+- **/for-pros-v1 Timesheets tab: third column** — client: fill the empty space beside the phone and
+  cards. Wide stages (`@2xl`) add a "Sessions today" timeline for Tate (clocked in, started JOB-983,
+  break, clocked out — each appears as the day plays, with a "Not clocked in yet" line before the
+  shift) and a "Pay period" card (hours, overtime, to pay, pay date) that counts up with the phone;
+  same height as the phone · `components/pro-v1/pro-dashboard-mocks.tsx`
+
+- **/for-pros-v1 new tabs fill the stage like Dashboard** — client: the 10 new tab visuals were one card
+  in empty space. Each now uses the Dashboard layout (new `BoardLayout` / `StatRow` / `Panel` helpers):
+  four stat tiles (two on phones), the animated main card filling the left, and two side cards on
+  the right (e.g. Contractors: subcontractor list + assignments; Vendors: vendor terms + recent POs;
+  Tracking: crew now + arrivals; Messages: chat with composer + conversation list + technicians;
+  Service areas: ZIP chips + cities). Same per-tab animations; stats count up with them. Initials
+  capped at two letters · `components/pro-v1/pro-dashboard-mocks.tsx`
+
+- **/for-pros-v1 feature tabs: 10 more sidebar options** — client: show the sidebar items that were
+  missing. New tabs, each with its own animated visual and copy that matches the real page: Contractors
+  (compliance checklist ticks off, then assigned to a job), Vendors (purchase order fills in, Draft →
+  Sent → Received), Employee tracking (tech drives the route, geofence pulse on arrival), Reminders
+  (due reminder rings, queue gets done), Messages (chat types itself out), Tasks (checklist
+  strike-through with a progress bar), Fixed service orders (New → Accepted → Scheduled → Completed with
+  a click on Accept), Business Profile (public profile builds up piece by piece), Portfolio (photo grid
+  spotlight), Service areas (city pins drop in, ZIP codes fill the list). Tabs now follow the sidebar
+  order (24 in all); Subscription and Utilities left out as account settings, not selling points ·
+  `components/pro-v1/pro-dashboard-mocks.tsx`, `components/pro-v1/pro-feature-tabs.tsx`, `app/globals.css`
+
 - **/for-pros-v1 Customers & Timesheets tabs: aligned and balanced** — client: awkward white space.
   Customers: list and detail share one height, so the profile card lines up with the list top and
   "Recent activity" with its bottom; the activity card gets times (Today / Yesterday / Mon), a

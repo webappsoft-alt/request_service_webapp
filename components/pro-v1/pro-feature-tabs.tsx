@@ -45,6 +45,20 @@ const FEATURES = [
     alt: "Employees table with role, login, pay rate, and hours",
   },
   {
+    id: "contractors",
+    label: "Contractors",
+    title: "Subs you can trust on the job",
+    body: "Keep each subcontractor's license, insurance, and paperwork on file, assign them to jobs, and track their hours and pay.",
+    alt: "Contractor file with a compliance checklist and a job assignment",
+  },
+  {
+    id: "vendors",
+    label: "Vendors",
+    title: "Suppliers and purchase orders together",
+    body: "Keep account terms for each supply house and build purchase orders tied to the jobs they're for.",
+    alt: "Purchase order with line items, total, and status",
+  },
+  {
     id: "timesheets",
     label: "Timesheets",
     title: "Hours and pay, week by week",
@@ -52,11 +66,32 @@ const FEATURES = [
     alt: "Timesheets week board with total hours, pay, and sessions per technician",
   },
   {
+    id: "tracking",
+    label: "Employee tracking",
+    title: "See your crew in the field",
+    body: "Follow employees on a live map while they're on the clock, with on-site arrival checked against the job's location.",
+    alt: "Map with a technician driving to a job site and arriving inside its geofence",
+  },
+  {
+    id: "reminders",
+    label: "Reminders",
+    title: "Follow-ups that don't slip",
+    body: "Schedule reminders for calls, orders, and invoices and tie each one to the customer or job it's about.",
+    alt: "List of today's reminders being completed one by one",
+  },
+  {
     id: "leads",
     label: "Leads",
     title: "Every lead lands in one inbox",
     body: "Website quote requests, chat, and phone leads come to the same list. Open one to see their answers, discuss the work, and send an estimate.",
     alt: "Leads table with customer, service, address, and status",
+  },
+  {
+    id: "messages",
+    label: "Messages",
+    title: "Customer and crew chat in one inbox",
+    body: "Message customers, leads, and your technicians from one place, with each conversation kept with their file.",
+    alt: "Chat thread with a customer about an upcoming visit",
   },
   {
     id: "estimates",
@@ -73,11 +108,25 @@ const FEATURES = [
     alt: "Jobs table with customer, service, dates, team member, and total",
   },
   {
+    id: "tasks",
+    label: "Tasks",
+    title: "Your team's tasks, checked off",
+    body: "Create tasks across customers and jobs, assign them to your team, and see what's done and what's overdue.",
+    alt: "Task list with assignees and a progress bar",
+  },
+  {
     id: "schedules",
     label: "Schedules",
     title: "Plan the month, week, or day",
     body: "See jobs, estimates, site visits, invoices, and tasks on one calendar. Drag a job to any time, or pull the edge to extend it.",
     alt: "Month calendar with color-coded jobs, invoices, payments, and tasks",
+  },
+  {
+    id: "orders",
+    label: "Fixed service orders",
+    title: "Bookings for your set-price services",
+    body: "Customers book your fixed services from your profile. Accept, schedule, and complete each order from one list.",
+    alt: "Fixed service order moving from new to accepted, scheduled, and completed",
   },
   {
     id: "invoices",
@@ -94,11 +143,11 @@ const FEATURES = [
     alt: "Payments table with date, status, method, amount, and invoice number",
   },
   {
-    id: "fixed-services",
-    label: "Fixed services",
-    title: "Sell set-price work from your profile",
-    body: "List priced services that customers can request from your profile, with photos, coverage, areas, and hours for each.",
-    alt: "Fixed services catalog with photos, categories, and prices",
+    id: "profile",
+    label: "Business Profile",
+    title: "A public profile that wins the job",
+    body: "Show customers your services, hours, coverage, and license and insurance status on the page they book from.",
+    alt: "Public business profile with verification badges, services, and hours",
   },
   {
     id: "ai-receptionist",
@@ -107,6 +156,27 @@ const FEATURES = [
     title: "Answer every call, even on the job",
     body: "Your AI receptionist answers on your own number, captures the lead, drafts an estimate for you to review, and transfers callers who ask for a person.",
     alt: "AI Receptionist settings with phone number, voices, greeting, and recent calls",
+  },
+  {
+    id: "portfolio",
+    label: "Portfolio",
+    title: "Let your past work sell the next job",
+    body: "Add photos of finished projects to your profile so customers can see the quality before they ask for a quote.",
+    alt: "Grid of past project photos",
+  },
+  {
+    id: "service-areas",
+    label: "Service areas",
+    title: "Choose exactly where you take work",
+    body: "Pick the cities you serve and the ZIP codes that come with them, so you get requests from the places you want to work.",
+    alt: "Map with service cities and the ZIP codes they cover",
+  },
+  {
+    id: "fixed-services",
+    label: "Fixed services",
+    title: "Sell set-price work from your profile",
+    body: "List priced services that customers can request from your profile, with photos, coverage, areas, and hours for each.",
+    alt: "Fixed services catalog with photos, categories, and prices",
   },
   {
     id: "reports",
@@ -197,7 +267,7 @@ export function ProFeatureTabs() {
           ref={tabListRef}
           role="tablist"
           aria-label="Pro dashboard options"
-          className="relative mx-auto flex max-w-4xl flex-wrap justify-center gap-1"
+          className="relative mx-auto flex max-w-5xl flex-wrap justify-center gap-1"
         >
           {highlight ? (
             <span

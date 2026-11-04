@@ -14,6 +14,7 @@ import {
   BriefcaseBusiness,
   CalendarCheck,
   Check,
+  Clock,
   CreditCard,
   Droplets,
   Fan,
@@ -21,12 +22,17 @@ import {
   Flame,
   Globe,
   Landmark,
+  MapPin,
   MessageCircle,
   MousePointer2,
+  Navigation,
+  Package,
   Phone,
   Plug,
   Receipt,
   Search,
+  ShieldCheck,
+  Store,
   UserPlus,
   Wind,
   Wrench,
@@ -237,7 +243,8 @@ function Initials({ name, className }: { name: string; className?: string }) {
       {name
         .split(" ")
         .map((part) => part[0])
-        .join("")}
+        .join("")
+        .slice(0, 2)}
     </span>
   );
 }
@@ -938,6 +945,13 @@ const WEEK = [
 const WEEK_HOURS = 30;
 const TIMESHEETS_MS = 1700;
 const PAY_RATE = 32;
+/** Tate's day as the Timesheets frames play: label, time, and the step it appears at. */
+const TIME_SESSIONS = [
+  ["Clocked in", "7:00 AM · shop", 1],
+  ["Started JOB-983", "9:41 AM · Furnace cleaning", 1],
+  ["Break", "12:00 – 12:30 PM", 2],
+  ["Clocked out", "3:30 PM · 8.0 h", 4],
+] as const;
 
 function TimesheetsVisual() {
   const { ref, step } = useLoopStep(TIME_FRAMES.length, TIMESHEETS_MS);
@@ -1076,6 +1090,66 @@ function TimesheetsVisual() {
               </li>
             ))}
           </ul>
+        </div>
+      </div>
+      {/* Wide stages: Tate's sessions so far and the pay period. */}
+      <div className="hidden h-89 w-52 flex-col gap-3 @2xl:flex">
+        <div className={cn(FLOAT_CARD, "min-h-0 flex-1 p-4")}>
+          <p className="text-xs font-semibold">Sessions today</p>
+          {step === 0 ? (
+            <p className="mt-3 rounded-lg border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">
+              Not clocked in yet · shift starts 7:00 AM
+            </p>
+          ) : null}
+          <ol className="mt-2.5 flex flex-col gap-1.5 border-l border-border pl-3">
+            {TIME_SESSIONS.map(([label, time, from]) =>
+              step >= from ? (
+                <li
+                  key={label}
+                  className="animate-in fade-in slide-in-from-left-1 relative text-[11px] duration-500"
+                >
+                  <span className="absolute top-1 -left-[15.5px] size-2 rounded-full bg-primary ring-2 ring-background" />
+                  <span className="block font-medium">{label}</span>
+                  <span className="block text-[10px] text-muted-foreground">
+                    {time}
+                  </span>
+                </li>
+              ) : null,
+            )}
+          </ol>
+        </div>
+        <div className={cn(FLOAT_CARD, "shrink-0 p-4")}>
+          <p className="text-xs font-semibold">Pay period</p>
+          <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[11px]">
+            <div>
+              <dt className="text-[10px] text-muted-foreground">Hours</dt>
+              <dd className="font-semibold">
+                <CountUp
+                  value={WEEK_HOURS + frame.hours}
+                  format={oneDecimal}
+                  ms={1500}
+                />
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] text-muted-foreground">Overtime</dt>
+              <dd className="font-semibold">0.0</dd>
+            </div>
+            <div>
+              <dt className="text-[10px] text-muted-foreground">To pay</dt>
+              <dd className="font-semibold">
+                <CountUp
+                  value={(WEEK_HOURS + frame.hours) * PAY_RATE}
+                  format={dollars}
+                  ms={1500}
+                />
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] text-muted-foreground">Pay date</dt>
+              <dd className="font-semibold">Fri, Nov 7</dd>
+            </div>
+          </dl>
         </div>
       </div>
     </Stage>
@@ -2246,6 +2320,1441 @@ function ReportsVisual() {
   );
 }
 
+/**
+ * The Dashboard layout shared by the sidebar-option visuals below: a row of stat tiles, then a main
+ * card beside a column of smaller cards, together filling the stage. Phones keep two tiles and
+ * the main card.
+ */
+function StatRow({ stats }: { stats: { label: string; value: ReactNode }[] }) {
+  return (
+    <div className="grid shrink-0 grid-cols-2 gap-2.5 @md:grid-cols-4">
+      {stats.map((stat, index) => (
+        <div
+          key={stat.label}
+          className={cn(
+            FLOAT_CARD,
+            "px-3 py-2.5",
+            index > 1 && "hidden @md:block",
+          )}
+        >
+          <p className="truncate text-[11px] text-muted-foreground">
+            {stat.label}
+          </p>
+          <p className="truncate text-xl font-semibold tracking-tight">
+            {stat.value}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BoardLayout({
+  rootRef,
+  stats,
+  main,
+  side,
+}: {
+  rootRef: React.Ref<HTMLDivElement>;
+  stats: { label: string; value: ReactNode }[];
+  main: ReactNode;
+  side: ReactNode;
+}) {
+  return (
+    <Stage rootRef={rootRef} className="flex flex-col gap-2.5 p-3 @md:p-4">
+      <StatRow stats={stats} />
+      <div className="grid min-h-0 flex-1 gap-2.5 @md:grid-cols-[1.25fr_1fr]">
+        {main}
+        <div className="hidden min-h-0 flex-col gap-2.5 @md:flex">{side}</div>
+      </div>
+    </Stage>
+  );
+}
+
+/** A card with a title bar; `fill` lets it take the remaining height of its column. */
+function Panel({
+  title,
+  aside,
+  fill,
+  className,
+  children,
+}: {
+  title: ReactNode;
+  aside?: ReactNode;
+  fill?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        FLOAT_CARD,
+        "flex min-h-0 flex-col overflow-hidden",
+        fill && "flex-1",
+        className,
+      )}
+    >
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <p className="truncate text-xs font-semibold">{title}</p>
+        {aside ? (
+          <span className="shrink-0 text-[10px] text-muted-foreground">
+            {aside}
+          </span>
+        ) : null}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Dot({ tone }: { tone: "on" | "go" | "off" | "warn" }) {
+  return (
+    <span
+      className={cn(
+        "size-1.5 shrink-0 rounded-full transition-colors duration-500",
+        tone === "on" && "bg-emerald-500",
+        tone === "go" && "bg-primary",
+        tone === "warn" && "bg-amber-500",
+        tone === "off" && "bg-muted-foreground/40",
+      )}
+    />
+  );
+}
+
+/** Contractors: a sub's compliance checklist ticks off, then they're assigned to a job. */
+const CONTRACTOR_CHECKS = [
+  ["License on file", "EC-48211 · exp. Mar 2027"],
+  ["Insurance current", "General liability · $1M"],
+  ["W-9 received", "Uploaded Oct 12"],
+] as const;
+const SUBS = [
+  ["Ruiz Electric LLC", "Electrical"],
+  ["Peak Roofing", "Roofing"],
+  ["Clearline Drywall", "Drywall"],
+  ["Northside HVAC", "HVAC"],
+] as const;
+const CONTRACTORS_STEPS = CONTRACTOR_CHECKS.length + 2;
+const CONTRACTORS_MS = 1300;
+
+function ContractorsVisual() {
+  const { ref, step } = useLoopStep(CONTRACTORS_STEPS, CONTRACTORS_MS);
+  const assigned = step === CONTRACTORS_STEPS - 1;
+
+  return (
+    <BoardLayout
+      rootRef={ref}
+      stats={[
+        { label: "Active subs", value: "6" },
+        { label: "On jobs today", value: <CountUp value={assigned ? 3 : 2} /> },
+        {
+          label: "Hours this week",
+          value: <CountUp value={assigned ? 46.5 : 40} format={oneDecimal} />,
+        },
+        {
+          label: "Pay owed",
+          value: <CountUp value={assigned ? 3720 : 3200} format={dollars} />,
+        },
+      ]}
+      main={
+        <div className={cn(FLOAT_CARD, "flex min-h-0 flex-col p-4")}>
+          <div className="flex items-center gap-3">
+            <Initials name="Ruiz Electric" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold tracking-tight">
+                Ruiz Electric LLC
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Electrical · Subcontractor
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
+              $40/hr
+            </span>
+          </div>
+          <ul className="mt-3 flex flex-1 flex-col justify-center gap-2">
+            {CONTRACTOR_CHECKS.map(([label, detail], index) => {
+              const done = step > index;
+              return (
+                <li
+                  key={label}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-lg border px-3 py-2 text-xs transition-colors duration-500",
+                    done
+                      ? "border-emerald-500/30 bg-emerald-500/5"
+                      : "border-border",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex size-4.5 shrink-0 items-center justify-center rounded-full transition-[background-color,transform] duration-500",
+                      EASE,
+                      done
+                        ? "scale-100 bg-emerald-500 text-white"
+                        : "scale-90 bg-muted",
+                    )}
+                  >
+                    {done ? (
+                      <Check className="size-3" aria-hidden="true" />
+                    ) : null}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={cn(
+                        "block font-medium",
+                        !done && "text-muted-foreground",
+                      )}
+                    >
+                      {label}
+                    </span>
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      {detail}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <div
+            className={cn(
+              "mt-3 flex shrink-0 items-center justify-between rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground transition-[opacity,translate] duration-700",
+              EASE,
+              assigned
+                ? "translate-y-0 opacity-100"
+                : "translate-y-2 opacity-0",
+            )}
+          >
+            <span className="font-medium">JOB-376 · Panel upgrade</span>
+            <span className="text-[10px] font-semibold uppercase">
+              Assigned
+            </span>
+          </div>
+        </div>
+      }
+      side={
+        <>
+          <Panel title="Subcontractors" aside="6 total" fill>
+            <ul className="grid flex-1 auto-rows-fr divide-y divide-border">
+              {SUBS.map(([name, trade], index) => (
+                <li
+                  key={name}
+                  className="flex items-center gap-2 px-3 text-[11px]"
+                >
+                  <Initials name={name} className="size-5 text-[8px]" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{name}</span>
+                    <span className="block text-[10px] text-muted-foreground">
+                      {trade}
+                    </span>
+                  </span>
+                  <Dot
+                    tone={
+                      index === 0
+                        ? step >= CONTRACTOR_CHECKS.length
+                          ? "on"
+                          : "warn"
+                        : "on"
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+          </Panel>
+          <Panel title="Assignments" className="shrink-0">
+            <ul className="flex flex-col gap-1.5 p-3 text-[11px]">
+              <li
+                className={cn(
+                  "flex justify-between transition-colors duration-500",
+                  assigned
+                    ? "font-medium text-primary"
+                    : "text-muted-foreground",
+                )}
+              >
+                <span>JOB-376 · Ruiz Electric</span>
+                <span>{assigned ? "Today" : "Open"}</span>
+              </li>
+              <li className="flex justify-between text-muted-foreground">
+                <span>JOB-381 · Peak Roofing</span>
+                <span>Thu</span>
+              </li>
+            </ul>
+          </Panel>
+        </>
+      }
+    />
+  );
+}
+
+/** Vendors: a purchase order fills in line by line, then goes out and comes back received. */
+const PO_LINES = [
+  ["3/4 in. copper pipe × 20", 184],
+  ["Ball valve × 6", 57],
+  ["50 gal water heater", 689],
+  ["Expansion tank", 74],
+  ["Flex connectors × 4", 38],
+] as const;
+const PO_STEPS = PO_LINES.length + 2;
+const VENDORS_MS = 1000;
+
+function VendorsVisual() {
+  const { ref, step } = useLoopStep(PO_STEPS, VENDORS_MS);
+  const shown = Math.min(step, PO_LINES.length);
+  const total = PO_LINES.slice(0, shown).reduce(
+    (sum, [, cost]) => sum + cost,
+    0,
+  );
+  const status =
+    step >= PO_STEPS - 1 ? "Received" : step >= PO_STEPS - 2 ? "Sent" : "Draft";
+
+  return (
+    <BoardLayout
+      rootRef={ref}
+      stats={[
+        { label: "Vendors", value: "12" },
+        { label: "Open POs", value: status === "Received" ? "2" : "3" },
+        {
+          label: "Spent this month",
+          value: <CountUp value={7380 + total} format={dollars} />,
+        },
+        { label: "Due this week", value: "$1,260" },
+      ]}
+      main={
+        <div className={cn(FLOAT_CARD, "flex min-h-0 flex-col p-4")}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold tracking-tight">PO-1042</p>
+              <p className="text-xs text-muted-foreground">
+                Metro Supply Co. · for JOB-376
+              </p>
+            </div>
+            <span
+              className={cn(
+                "rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors duration-500",
+                status === "Received"
+                  ? "bg-emerald-500/10 text-emerald-700"
+                  : status === "Sent"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground",
+              )}
+            >
+              {status}
+            </span>
+          </div>
+          <ul className="mt-3 flex flex-1 flex-col gap-2 border-t border-border pt-3">
+            {PO_LINES.slice(0, shown).map(([label, cost]) => (
+              <li
+                key={label}
+                className="animate-in fade-in slide-in-from-left-2 flex items-center justify-between text-xs duration-500"
+              >
+                <span className="flex items-center gap-2">
+                  <Package
+                    className="size-3.5 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  {label}
+                </span>
+                <span className="tabular-nums">{dollars(cost)}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3 flex shrink-0 items-center justify-between border-t border-border pt-3 text-sm font-semibold">
+            <span>Total</span>
+            <CountUp value={total} format={dollars} />
+          </div>
+        </div>
+      }
+      side={
+        <>
+          <Panel title="Metro Supply Co." className="shrink-0">
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-2 p-3 text-[11px]">
+              {[
+                ["Terms", "Net 30"],
+                ["Account", "#40-2291"],
+                ["Contact", "Dana Ruiz"],
+                ["Balance", "$1,260"],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-[10px] text-muted-foreground">{label}</dt>
+                  <dd className="font-semibold">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </Panel>
+          <Panel title="Recent POs" fill>
+            <ul className="grid flex-1 auto-rows-fr divide-y divide-border">
+              {[
+                ["PO-1041", "Received", "$412"],
+                ["PO-1040", "Paid", "$1,180"],
+                ["PO-1039", "Paid", "$96"],
+              ].map(([number, state, amount]) => (
+                <li
+                  key={number}
+                  className="flex items-center gap-2 px-3 text-[11px]"
+                >
+                  <span className="font-medium">{number}</span>
+                  <span className="flex-1 text-muted-foreground">{state}</span>
+                  <span className="tabular-nums">{amount}</span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        </>
+      }
+    />
+  );
+}
+
+/** Employee tracking: a tech drives the route to the job; the geofence confirms arrival. */
+const ROUTE = [
+  [12, 78],
+  [30, 70],
+  [46, 48],
+  [66, 40],
+  [82, 24],
+] as const;
+const TRACKING_STEPS = ROUTE.length + 1;
+const TRACKING_MS = 1100;
+
+function TrackingVisual() {
+  const { ref, step } = useLoopStep(TRACKING_STEPS, TRACKING_MS);
+  const at = ROUTE[Math.min(step, ROUTE.length - 1)];
+  const arrived = step >= ROUTE.length - 1;
+  const minutes = Math.max(0, (ROUTE.length - 1 - step) * 3);
+
+  return (
+    <BoardLayout
+      rootRef={ref}
+      stats={[
+        { label: "On the clock", value: "5" },
+        { label: "On site", value: <CountUp value={arrived ? 4 : 3} /> },
+        { label: "En route", value: <CountUp value={arrived ? 0 : 1} /> },
+        { label: "Miles today", value: <CountUp value={30 + step * 3} /> },
+      ]}
+      main={
+        <div
+          className={cn(
+            FLOAT_CARD,
+            "relative min-h-0 overflow-hidden bg-[radial-gradient(circle,rgba(0,63,125,0.08)_1px,transparent_1px)] bg-size-[14px_14px]",
+          )}
+        >
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            className="absolute inset-0 size-full"
+            aria-hidden="true"
+          >
+            <path
+              d="M0 60 H100 M0 30 H100 M40 0 V100 M72 0 V100"
+              className="stroke-primary/10"
+              strokeWidth="3"
+              fill="none"
+            />
+            <polyline
+              points={ROUTE.map(([x, y]) => `${x},${y}`).join(" ")}
+              className="stroke-primary/40"
+              strokeWidth="1.2"
+              strokeDasharray="3 2"
+              fill="none"
+            />
+          </svg>
+          {/* Geofence around the job site */}
+          <span
+            className="absolute size-14 -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-500/50 bg-emerald-500/10"
+            style={{ left: "82%", top: "24%" }}
+          >
+            {arrived ? (
+              <span className="absolute inset-0 animate-ping rounded-full bg-emerald-500/20" />
+            ) : null}
+          </span>
+          <MapPin
+            className="absolute size-5 -translate-x-1/2 -translate-y-full fill-background text-emerald-600"
+            style={{ left: "82%", top: "24%" }}
+            aria-hidden="true"
+          />
+          <span
+            className={cn(
+              "absolute flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-4 ring-primary/20 transition-[left,top] duration-1000",
+              EASE,
+            )}
+            style={{ left: `${at[0]}%`, top: `${at[1]}%` }}
+          >
+            <Navigation className="size-3.5 fill-current" aria-hidden="true" />
+          </span>
+          <div className="absolute inset-x-3 bottom-3 flex items-center justify-between rounded-xl bg-background/95 px-3 py-2 text-xs shadow-sm">
+            <span className="font-medium">Tate Fischer · JOB-983</span>
+            <span
+              className={cn(
+                "font-semibold transition-colors duration-500",
+                arrived ? "text-emerald-600" : "text-primary",
+              )}
+            >
+              {arrived ? "Arrived · on site" : `${minutes} min away`}
+            </span>
+          </div>
+        </div>
+      }
+      side={
+        <>
+          <Panel title="Crew now" aside="Live" className="shrink-0">
+            <ul className="flex flex-col gap-2 p-3 text-[11px]">
+              {[
+                ["Tate Fischer", arrived ? "On site" : "En route"],
+                ["Maria Lee", "On site"],
+                ["Jordan Burt", "On site"],
+                ["Sam Ortiz", "Clocked out"],
+              ].map(([name, state]) => (
+                <li key={name} className="flex items-center gap-2">
+                  <Initials name={name} className="size-5 text-[8px]" />
+                  <span className="min-w-0 flex-1 truncate font-medium">
+                    {name}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {state}
+                  </span>
+                  <Dot
+                    tone={
+                      state === "On site"
+                        ? "on"
+                        : state === "En route"
+                          ? "go"
+                          : "off"
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+          </Panel>
+          <Panel title="Arrivals today" fill>
+            <ul className="flex flex-col gap-1.5 p-3 text-[11px]">
+              {arrived ? (
+                <li className="animate-in fade-in slide-in-from-top-2 flex justify-between font-medium text-emerald-700 duration-500">
+                  <span>Tate · JOB-983</span>
+                  <span>9:41 AM ✓</span>
+                </li>
+              ) : null}
+              <li className="flex justify-between text-muted-foreground">
+                <span>Jordan · JOB-372</span>
+                <span>8:30 AM ✓</span>
+              </li>
+              <li className="flex justify-between text-muted-foreground">
+                <span>Maria · JOB-376</span>
+                <span>8:02 AM ✓</span>
+              </li>
+            </ul>
+          </Panel>
+        </>
+      }
+    />
+  );
+}
+
+/** Reminders: the next follow-up rings, gets done, and the queue moves on. */
+const REMINDERS = [
+  ["Call Olivia about EST-584", "9:00 AM"],
+  ["Order parts for JOB-376", "11:30 AM"],
+  ["Follow up on INV-874", "2:00 PM"],
+  ["Confirm Friday's site visit", "4:15 PM"],
+] as const;
+const REMINDERS_STEPS = REMINDERS.length + 1;
+const REMINDERS_MS = 1400;
+
+function RemindersVisual() {
+  const { ref, step } = useLoopStep(REMINDERS_STEPS, REMINDERS_MS);
+  const done = Math.min(step, REMINDERS.length);
+
+  return (
+    <BoardLayout
+      rootRef={ref}
+      stats={[
+        {
+          label: "Due today",
+          value: <CountUp value={REMINDERS.length - done} />,
+        },
+        { label: "Done today", value: <CountUp value={done} /> },
+        { label: "This week", value: "11" },
+        { label: "Overdue", value: "0" },
+      ]}
+      main={
+        <Panel
+          title="Today's reminders"
+          aside={`${done}/${REMINDERS.length} done`}
+        >
+          <ul className="grid flex-1 auto-rows-fr gap-2 p-3">
+            {REMINDERS.map(([label, time], index) => {
+              const finished = index < step;
+              const ringing = index === step;
+              return (
+                <li
+                  key={label}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl border px-3 text-xs transition-[border-color,background-color,opacity] duration-500",
+                    ringing
+                      ? "border-primary/40 bg-primary/5"
+                      : "border-border",
+                    finished && "opacity-55",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex size-7 shrink-0 items-center justify-center rounded-full transition-colors duration-500",
+                      finished
+                        ? "bg-emerald-500 text-white"
+                        : ringing
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {finished ? (
+                      <Check className="size-3.5" aria-hidden="true" />
+                    ) : (
+                      <Bell
+                        className={cn("size-3.5", ringing && "rs-bell-ring")}
+                        aria-hidden="true"
+                      />
+                    )}
+                  </span>
+                  <span
+                    className={cn(
+                      "min-w-0 flex-1 truncate font-medium",
+                      finished && "line-through",
+                    )}
+                  >
+                    {label}
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 text-[11px] tabular-nums",
+                      ringing
+                        ? "font-semibold text-primary"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {ringing ? "Due now" : time}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Panel>
+      }
+      side={
+        <>
+          <Panel title="Tomorrow" aside="3" className="shrink-0">
+            <ul className="flex flex-col gap-1.5 p-3 text-[11px] text-muted-foreground">
+              {[
+                ["Send EST-590 to Grace", "9:00"],
+                ["Check JOB-381 photos", "1:00"],
+                ["Renew Peak Roofing COI", "3:30"],
+              ].map(([label, time]) => (
+                <li key={label} className="flex justify-between gap-2">
+                  <span className="truncate">{label}</span>
+                  <span className="tabular-nums">{time}</span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+          <Panel title="Linked to" fill>
+            <ul className="flex flex-1 flex-col justify-center gap-2.5 p-3 text-[11px]">
+              {[
+                ["Customers", 5],
+                ["Jobs", 4],
+                ["Invoices", 2],
+              ].map(([label, count]) => (
+                <li key={label} className="flex items-center gap-2">
+                  <span className="w-16 text-muted-foreground">{label}</span>
+                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-primary/10">
+                    <span
+                      className="block h-full rounded-full bg-primary"
+                      style={{ width: `${(Number(count) / 5) * 100}%` }}
+                    />
+                  </span>
+                  <span className="w-4 text-right tabular-nums">{count}</span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        </>
+      }
+    />
+  );
+}
+
+/** Messages: a customer conversation types itself out, bubble by bubble. */
+const CHAT = [
+  { from: "customer", text: "Hi! Is Thursday morning still good?" },
+  { from: "pro", text: "Yes, Tate will be there at 9 AM." },
+  { from: "customer", text: "Great. Can he check the water heater too?" },
+  { from: "pro", text: "Sure, I've added it to the job." },
+] as const;
+const THREADS = [
+  ["Olivia Hart", "Thanks, see you then!", 0],
+  ["Ava Mitchell", "Can you send the estimate?", 2],
+  ["Liam Foster", "Photos attached", 1],
+] as const;
+const MESSAGES_MS = 1500;
+
+function MessagesVisual() {
+  const { ref, step } = useLoopStep(CHAT.length + 1, MESSAGES_MS);
+  const typing = step < CHAT.length ? CHAT[step] : null;
+
+  return (
+    <BoardLayout
+      rootRef={ref}
+      stats={[
+        { label: "Unread", value: <CountUp value={Math.max(1, 4 - step)} /> },
+        { label: "Open chats", value: "18" },
+        { label: "Avg. reply", value: "12 min" },
+        { label: "Team chats", value: "4" },
+      ]}
+      main={
+        <div className={cn(FLOAT_CARD, "flex min-h-0 flex-col p-3")}>
+          <div className="flex shrink-0 items-center gap-2 border-b border-border pb-2.5">
+            <Initials name="Noah Bennett" className="size-7 text-[10px]" />
+            <div className="leading-tight">
+              <p className="text-xs font-semibold">Noah Bennett</p>
+              <p className="text-[10px] text-emerald-600">Online · JOB-376</p>
+            </div>
+          </div>
+          <ul className="flex min-h-0 flex-1 flex-col justify-end gap-2 overflow-hidden pt-2">
+            {CHAT.slice(0, step).map((message) => (
+              <li
+                key={message.text}
+                className={cn(
+                  "animate-in fade-in slide-in-from-bottom-2 max-w-[85%] rounded-2xl px-3 py-2 text-[11px] leading-snug duration-500",
+                  message.from === "pro"
+                    ? "self-end rounded-br-md bg-primary text-primary-foreground"
+                    : "self-start rounded-bl-md bg-muted",
+                )}
+              >
+                {message.text}
+              </li>
+            ))}
+            {typing ? (
+              <li
+                key={`typing-${step}`}
+                className={cn(
+                  "animate-in fade-in flex gap-1 rounded-2xl px-3 py-2.5 duration-300",
+                  typing.from === "pro"
+                    ? "self-end bg-primary/15"
+                    : "self-start bg-muted",
+                )}
+                aria-hidden="true"
+              >
+                {[0, 1, 2].map((dot) => (
+                  <span
+                    key={dot}
+                    className="size-1.5 animate-bounce rounded-full bg-foreground/40"
+                    style={{ animationDelay: `${dot * 150}ms` }}
+                  />
+                ))}
+              </li>
+            ) : null}
+          </ul>
+          <p className="mt-2 shrink-0 rounded-lg border border-border px-3 py-2 text-[11px] text-muted-foreground">
+            Write a message…
+          </p>
+        </div>
+      }
+      side={
+        <>
+          <Panel title="Customers & leads" aside="18" fill>
+            <ul className="grid flex-1 auto-rows-fr divide-y divide-border">
+              {THREADS.map(([name, last, unread]) => (
+                <li
+                  key={name}
+                  className="flex items-center gap-2 px-3 text-[11px]"
+                >
+                  <Initials name={name} className="size-6 text-[9px]" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{name}</span>
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      {last}
+                    </span>
+                  </span>
+                  {unread ? (
+                    <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground">
+                      {unread}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </Panel>
+          <Panel title="Technicians" className="shrink-0">
+            <ul className="flex flex-col gap-1.5 p-3 text-[11px]">
+              <li className="flex justify-between gap-2">
+                <span className="font-medium">Tate Fischer</span>
+                <span className="truncate text-muted-foreground">
+                  On my way
+                </span>
+              </li>
+              <li className="flex justify-between gap-2">
+                <span className="font-medium">Maria Lee</span>
+                <span className="truncate text-muted-foreground">
+                  Done at JOB-376
+                </span>
+              </li>
+            </ul>
+          </Panel>
+        </>
+      }
+    />
+  );
+}
+
+/** Tasks: the day's list gets checked off and the progress bar fills. */
+const TASKS = [
+  ["Pick up permit for JOB-376", "Tate Fischer", "Today"],
+  ["Upload site photos", "Maria Lee", "Today"],
+  ["Send revised estimate EST-588", "Jordan Burt", "Wed"],
+  ["Return unused fittings", "Sam Ortiz", "Thu"],
+  ["Book follow-up visit", "Maria Lee", "Fri"],
+] as const;
+const TASKS_MS = 1200;
+
+function TasksVisual() {
+  const { ref, step } = useLoopStep(TASKS.length + 1, TASKS_MS);
+  const done = Math.min(step, TASKS.length);
+  const percent = (done / TASKS.length) * 100;
+
+  return (
+    <BoardLayout
+      rootRef={ref}
+      stats={[
+        {
+          label: "Open tasks",
+          value: <CountUp value={TASKS.length - done + 7} />,
+        },
+        { label: "Done this week", value: <CountUp value={done + 9} /> },
+        { label: "Overdue", value: <CountUp value={done >= 2 ? 0 : 1} /> },
+        { label: "Assigned", value: "4 people" },
+      ]}
+      main={
+        <Panel
+          title="Tasks · this week"
+          aside={
+            <span className="font-semibold text-primary">
+              <CountUp value={percent} />%
+            </span>
+          }
+        >
+          <div className="px-3 pt-2.5">
+            <span className="block h-1.5 overflow-hidden rounded-full bg-primary/10">
+              <span
+                className={cn(
+                  "block h-full rounded-full bg-primary transition-[width] duration-700",
+                  EASE,
+                )}
+                style={{ width: `${percent}%` }}
+              />
+            </span>
+          </div>
+          <ul className="grid flex-1 auto-rows-fr px-2 pb-1">
+            {TASKS.map(([label, owner, due], index) => {
+              const checked = index < done;
+              return (
+                <li
+                  key={label}
+                  className="flex items-center gap-3 px-1 text-xs"
+                >
+                  <span
+                    className={cn(
+                      "flex size-4.5 shrink-0 items-center justify-center rounded-md border transition-colors duration-300",
+                      checked
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-input",
+                    )}
+                  >
+                    {checked ? (
+                      <Check className="size-3" aria-hidden="true" />
+                    ) : null}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-medium">
+                    <span className="relative">
+                      {label}
+                      <span
+                        className={cn(
+                          "absolute inset-x-0 top-1/2 h-px origin-left bg-muted-foreground transition-transform duration-500",
+                          checked ? "scale-x-100" : "scale-x-0",
+                        )}
+                      />
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                    {due}
+                  </span>
+                  <Initials name={owner} className="size-5 text-[8px]" />
+                </li>
+              );
+            })}
+          </ul>
+        </Panel>
+      }
+      side={
+        <>
+          <Panel title="By person" fill>
+            <ul className="flex flex-1 flex-col justify-center gap-2.5 p-3 text-[11px]">
+              {[
+                ["Maria Lee", 2],
+                ["Tate Fischer", 1],
+                ["Jordan Burt", 1],
+                ["Sam Ortiz", 1],
+              ].map(([name, total], index) => {
+                const owned = TASKS.filter(([, owner]) => owner === name);
+                const closed = owned.filter(
+                  (task) => TASKS.indexOf(task) < done,
+                ).length;
+                return (
+                  <li key={name} className="flex items-center gap-2">
+                    <Initials
+                      name={String(name)}
+                      className="size-5 text-[8px]"
+                    />
+                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-primary/10">
+                      <span
+                        className="block h-full rounded-full bg-primary transition-[width] duration-700"
+                        style={{
+                          width: `${(closed / Number(total)) * 100}%`,
+                          transitionDelay: `${index * 60}ms`,
+                        }}
+                      />
+                    </span>
+                    <span className="w-7 text-right tabular-nums">
+                      {closed}/{total}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </Panel>
+          <Panel title="Next up" className="shrink-0">
+            <p className="p-3 text-[11px]">
+              <span className="font-medium">
+                {done < TASKS.length ? TASKS[done][0] : "All caught up"}
+              </span>
+              <span className="block text-[10px] text-muted-foreground">
+                {done < TASKS.length
+                  ? `${TASKS[done][1]} · ${TASKS[done][2]}`
+                  : "Nothing left this week"}
+              </span>
+            </p>
+          </Panel>
+        </>
+      }
+    />
+  );
+}
+
+/** Fixed service orders: a booking comes in, gets accepted, scheduled, and completed. */
+const ORDER_STAGES = ["New", "Accepted", "Scheduled", "Completed"] as const;
+const ORDERS_MS = 1500;
+
+function OrdersVisual() {
+  const { ref, step } = useLoopStep(ORDER_STAGES.length, ORDERS_MS);
+
+  return (
+    <BoardLayout
+      rootRef={ref}
+      stats={[
+        { label: "New orders", value: <CountUp value={step === 0 ? 4 : 3} /> },
+        {
+          label: "This month",
+          value: <CountUp value={step === 3 ? 2940 : 2811} format={dollars} />,
+        },
+        { label: "Scheduled", value: <CountUp value={step >= 2 ? 6 : 5} /> },
+        { label: "Avg. order", value: "$118" },
+      ]}
+      main={
+        <div className={cn(FLOAT_CARD, "relative flex min-h-0 flex-col p-4")}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold tracking-tight">
+                AC tune-up · $129
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Olivia Hart · Thu, 9:00 AM
+              </p>
+            </div>
+            <span
+              key={step}
+              className="animate-in zoom-in-90 fade-in rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary duration-300"
+            >
+              {ORDER_STAGES[step]}
+            </span>
+          </div>
+          <ol className="mt-4 grid grid-cols-4 gap-1.5">
+            {ORDER_STAGES.map((stage, index) => (
+              <li key={stage} className="flex flex-col gap-1.5">
+                <span
+                  className={cn(
+                    "h-1.5 rounded-full transition-colors duration-500",
+                    index <= step ? "bg-primary" : "bg-primary/10",
+                  )}
+                />
+                <span
+                  className={cn(
+                    "text-[10px]",
+                    index <= step ? "font-medium" : "text-muted-foreground",
+                  )}
+                >
+                  {stage}
+                </span>
+              </li>
+            ))}
+          </ol>
+          <dl className="mt-4 grid flex-1 grid-cols-2 content-center gap-x-3 gap-y-2.5 rounded-xl bg-primary/4 p-3 text-[11px]">
+            {[
+              ["Address", "2217 Maple St, Aurora"],
+              ["Payment", step === 3 ? "Paid · card" : "Card on file"],
+              ["Technician", step >= 2 ? "Tate Fischer" : "Not assigned"],
+              ["Note", "Gate code 4417"],
+            ].map(([label, value]) => (
+              <div key={label} className="min-w-0">
+                <dt className="text-[10px] text-muted-foreground">{label}</dt>
+                <dd className="truncate font-medium">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="mt-3 grid shrink-0 grid-cols-2 gap-2 text-xs font-semibold">
+            <span className="rounded-lg border border-border py-2 text-center text-muted-foreground">
+              Decline
+            </span>
+            <span
+              className={cn(
+                "rounded-lg py-2 text-center transition-colors duration-500",
+                step === 0
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-emerald-500/10 text-emerald-700",
+              )}
+            >
+              {step === 0 ? "Accept" : "Accepted"}
+            </span>
+          </div>
+          <Cursor
+            className={cn(
+              "transition-[right,bottom,opacity] duration-700",
+              step === 0
+                ? "right-14 bottom-5 opacity-100"
+                : "right-6 bottom-1 opacity-0",
+            )}
+          />
+        </div>
+      }
+      side={
+        <>
+          <Panel title="New orders" aside="3" fill>
+            <ul className="grid flex-1 auto-rows-fr divide-y divide-border">
+              {[
+                ["Drain cleaning", "Ava Mitchell", "$149"],
+                ["Outlet install", "Liam Foster", "$95"],
+                ["Furnace check", "Grace Kim", "$110"],
+              ].map(([service, customer, price]) => (
+                <li
+                  key={service}
+                  className="flex items-center gap-2 px-3 text-[11px]"
+                >
+                  <Dot tone="go" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">
+                      {service}
+                    </span>
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      {customer}
+                    </span>
+                  </span>
+                  <span className="tabular-nums">{price}</span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+          <Panel title="Today" className="shrink-0">
+            <ul className="flex flex-col gap-1.5 p-3 text-[11px] text-muted-foreground">
+              <li className="flex justify-between">
+                <span>Water heater flush</span>
+                <span>10:30</span>
+              </li>
+              <li className="flex justify-between">
+                <span>Leak check</span>
+                <span>2:00</span>
+              </li>
+            </ul>
+          </Panel>
+        </>
+      }
+    />
+  );
+}
+
+/** Business Profile: the public profile builds itself up, piece by piece. */
+const PROFILE_STEPS = 5;
+const PROFILE_MS = 1100;
+const PROFILE_CHECKLIST = [
+  "Logo and cover",
+  "License and insurance",
+  "Services listed",
+  "Hours and areas",
+  "Quote button live",
+] as const;
+
+function ProfileVisual() {
+  const { ref, step } = useLoopStep(PROFILE_STEPS, PROFILE_MS);
+  const piece = (from: number) =>
+    cn(
+      "transition-[opacity,translate] duration-700",
+      EASE,
+      step >= from ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
+    );
+
+  return (
+    <BoardLayout
+      rootRef={ref}
+      stats={[
+        { label: "Profile views", value: <CountUp value={1180 + step * 23} /> },
+        { label: "Quote requests", value: <CountUp value={16 + step} /> },
+        { label: "Services listed", value: "9" },
+        { label: "Service areas", value: "4" },
+      ]}
+      main={
+        <div
+          className={cn(FLOAT_CARD, "flex min-h-0 flex-col overflow-hidden")}
+        >
+          <div className="h-12 shrink-0 bg-linear-to-r from-primary to-sky-500" />
+          <div className="-mt-6 flex min-h-0 flex-1 flex-col px-4 pb-4">
+            <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl border-4 border-background bg-primary text-primary-foreground">
+              <Store className="size-5" aria-hidden="true" />
+            </span>
+            <div className={cn("mt-1.5", piece(0))}>
+              <p className="flex items-center gap-1.5 text-sm font-semibold tracking-tight">
+                Summit Plumbing Co.
+                <BadgeCheck
+                  className="size-4 text-primary"
+                  aria-hidden="true"
+                />
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Plumbing · Aurora, IL
+              </p>
+            </div>
+            <div className={cn("mt-2.5 flex flex-wrap gap-1.5", piece(1))}>
+              {["Licensed", "Insured", "Verified"].map((label) => (
+                <span
+                  key={label}
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700"
+                >
+                  <ShieldCheck className="size-3" aria-hidden="true" />
+                  {label}
+                </span>
+              ))}
+            </div>
+            <div className={cn("mt-2.5 flex flex-wrap gap-1.5", piece(2))}>
+              {[
+                "Water heaters",
+                "Drain cleaning",
+                "Leak repair",
+                "Repiping",
+              ].map((label) => (
+                <span
+                  key={label}
+                  className="rounded-full border border-border px-2 py-0.5 text-[10px]"
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+            <p
+              className={cn(
+                "mt-2.5 flex items-center gap-1.5 text-[11px] text-muted-foreground",
+                piece(3),
+              )}
+            >
+              <Clock className="size-3.5" aria-hidden="true" />
+              Mon–Sat · 7:00 AM – 6:00 PM · Aurora, Naperville +2
+            </p>
+            <span
+              className={cn(
+                "mt-auto block rounded-lg bg-primary py-2 text-center text-xs font-semibold text-primary-foreground",
+                piece(4),
+              )}
+            >
+              Request a quote
+            </span>
+          </div>
+        </div>
+      }
+      side={
+        <>
+          <Panel
+            title="Profile checklist"
+            aside={`${Math.min(step + 1, PROFILE_CHECKLIST.length)}/${PROFILE_CHECKLIST.length}`}
+            fill
+          >
+            <ul className="grid flex-1 auto-rows-fr px-3 py-1">
+              {PROFILE_CHECKLIST.map((label, index) => {
+                const ready = index <= step;
+                return (
+                  <li
+                    key={label}
+                    className="flex items-center gap-2 text-[11px]"
+                  >
+                    <span
+                      className={cn(
+                        "flex size-4 shrink-0 items-center justify-center rounded-full transition-colors duration-500",
+                        ready ? "bg-emerald-500 text-white" : "bg-muted",
+                      )}
+                    >
+                      {ready ? (
+                        <Check className="size-2.5" aria-hidden="true" />
+                      ) : null}
+                    </span>
+                    <span className={cn(!ready && "text-muted-foreground")}>
+                      {label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </Panel>
+          <div
+            className={cn(
+              FLOAT_CARD,
+              "flex shrink-0 items-center gap-2 px-3 py-2.5 text-[11px] font-medium",
+            )}
+          >
+            <Dot tone={step >= PROFILE_STEPS - 1 ? "on" : "off"} />
+            {step >= PROFILE_STEPS - 1
+              ? "Live on Request Service"
+              : "Draft · not public yet"}
+          </div>
+        </>
+      }
+    />
+  );
+}
+
+/** Portfolio: past-work photos, with the spotlight moving from one project to the next. */
+const PORTFOLIO = [
+  [
+    "Kitchen remodel",
+    "Aurora · 18 photos",
+    "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&w=400&q=70",
+  ],
+  [
+    "Bathroom refresh",
+    "Naperville · 12 photos",
+    "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?auto=format&fit=crop&w=400&q=70",
+  ],
+  [
+    "Panel upgrade",
+    "Batavia · 6 photos",
+    "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=400&q=70",
+  ],
+  [
+    "Deck build",
+    "Oswego · 22 photos",
+    "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=400&q=70",
+  ],
+  [
+    "Interior paint",
+    "Aurora · 9 photos",
+    "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&w=400&q=70",
+  ],
+  [
+    "Roof repair",
+    "Naperville · 14 photos",
+    "https://images.unsplash.com/photo-1632759145351-1d592919f522?auto=format&fit=crop&w=400&q=70",
+  ],
+] as const;
+const PORTFOLIO_MS = 1400;
+
+function PortfolioVisual() {
+  const { ref, step } = useLoopStep(PORTFOLIO.length, PORTFOLIO_MS);
+  const [title, meta] = PORTFOLIO[step];
+
+  return (
+    <BoardLayout
+      rootRef={ref}
+      stats={[
+        { label: "Projects", value: "24" },
+        { label: "Photos", value: "186" },
+        { label: "Added this month", value: "5" },
+        { label: "Categories", value: "6" },
+      ]}
+      main={
+        <div className={cn(FLOAT_CARD, "min-h-0 p-2.5")}>
+          <div className="grid size-full grid-cols-3 grid-rows-2 gap-2">
+            {PORTFOLIO.map(([label, , src], index) => (
+              <div
+                key={label}
+                className={cn(
+                  "relative min-h-0 overflow-hidden rounded-xl transition-[transform,box-shadow,opacity] duration-700",
+                  EASE,
+                  index === step
+                    ? "z-10 scale-[1.04] opacity-100 shadow-lg ring-2 ring-primary"
+                    : "opacity-70",
+                )}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- small sample photo inside the mock */}
+                <img
+                  src={src}
+                  alt=""
+                  loading="lazy"
+                  className="size-full object-cover"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      }
+      side={
+        <>
+          <Panel title="Selected project" fill>
+            <div
+              key={step}
+              className="animate-in fade-in slide-in-from-bottom-1 flex flex-1 flex-col justify-center gap-1 p-3 duration-500"
+            >
+              <p className="text-sm font-semibold tracking-tight">{title}</p>
+              <p className="text-[11px] text-muted-foreground">{meta}</p>
+              <p className="mt-2 text-[11px]">
+                <span className="text-muted-foreground">Shown on</span>{" "}
+                <span className="font-medium">your public profile</span>
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                {step + 1} of {PORTFOLIO.length} featured projects
+              </p>
+            </div>
+          </Panel>
+          <Panel title="Categories" className="shrink-0">
+            <div className="flex flex-wrap gap-1.5 p-3">
+              {[
+                "Kitchens",
+                "Baths",
+                "Electrical",
+                "Outdoor",
+                "Paint",
+                "Roofing",
+              ].map((label, index) => (
+                <span
+                  key={label}
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors duration-500",
+                    index === step
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-primary/10 text-primary",
+                  )}
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          </Panel>
+        </>
+      }
+    />
+  );
+}
+
+/** Service areas: cities drop onto the map and their ZIP codes fill the coverage list. */
+const AREAS = [
+  { city: "Aurora", x: 34, y: 42, zips: ["60502", "60504", "60505"] },
+  { city: "Naperville", x: 62, y: 60, zips: ["60540", "60563"] },
+  { city: "Oswego", x: 28, y: 78, zips: ["60543"] },
+  { city: "Batavia", x: 58, y: 24, zips: ["60510"] },
+] as const;
+const AREAS_MS = 1300;
+
+function ServiceAreasVisual() {
+  const { ref, step } = useLoopStep(AREAS.length + 1, AREAS_MS);
+  const shown = AREAS.slice(0, Math.min(step + 1, AREAS.length));
+  const zips = shown.flatMap((area) => area.zips);
+
+  return (
+    <BoardLayout
+      rootRef={ref}
+      stats={[
+        { label: "Cities", value: <CountUp value={shown.length} /> },
+        { label: "ZIP codes", value: <CountUp value={zips.length} /> },
+        { label: "Requests this month", value: "37" },
+        {
+          label: "From new areas",
+          value: <CountUp value={shown.length * 3} />,
+        },
+      ]}
+      main={
+        <div
+          className={cn(
+            FLOAT_CARD,
+            "relative min-h-0 overflow-hidden bg-[radial-gradient(circle,rgba(0,63,125,0.08)_1px,transparent_1px)] bg-size-[14px_14px]",
+          )}
+        >
+          <span
+            className={cn(
+              "absolute top-1/2 left-1/2 size-56 rounded-full border border-dashed border-primary/40 bg-primary/5 transition-transform duration-1000",
+              EASE,
+            )}
+            style={{
+              transform: `translate(-50%, -50%) scale(${0.5 + shown.length * 0.13})`,
+            }}
+          />
+          {AREAS.map((area, index) => (
+            <span
+              key={area.city}
+              className={cn(
+                "absolute flex -translate-x-1/2 -translate-y-full flex-col items-center transition-[opacity,scale] duration-500",
+                EASE,
+                index < shown.length
+                  ? "scale-100 opacity-100"
+                  : "scale-50 opacity-0",
+              )}
+              style={{ left: `${area.x}%`, top: `${area.y}%` }}
+            >
+              <span className="rounded-md bg-background px-1.5 py-0.5 text-[10px] font-medium shadow-sm">
+                {area.city}
+              </span>
+              <MapPin
+                className="size-5 fill-primary text-background"
+                aria-hidden="true"
+              />
+            </span>
+          ))}
+        </div>
+      }
+      side={
+        <>
+          <Panel title="ZIP codes covered" aside={String(zips.length)} fill>
+            <div className="flex flex-wrap content-start gap-1.5 p-3">
+              {zips.map((zip) => (
+                <span
+                  key={zip}
+                  className="animate-in fade-in zoom-in-90 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary tabular-nums duration-300"
+                >
+                  {zip}
+                </span>
+              ))}
+            </div>
+          </Panel>
+          <Panel title="Cities" className="shrink-0">
+            <ul className="flex flex-col gap-1.5 p-3 text-[11px]">
+              {AREAS.map((area, index) => (
+                <li
+                  key={area.city}
+                  className={cn(
+                    "flex justify-between transition-opacity duration-500",
+                    index < shown.length ? "opacity-100" : "opacity-35",
+                  )}
+                >
+                  <span className="font-medium">{area.city}</span>
+                  <span className="text-muted-foreground">
+                    {area.zips.length} ZIP{area.zips.length > 1 ? "s" : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        </>
+      }
+    />
+  );
+}
+
 /** Each tab's visual, and how long one pass takes (the tabs wait this long before moving on). */
 export const DASHBOARD_MOCKS: Record<
   string,
@@ -2261,17 +3770,27 @@ export const DASHBOARD_MOCKS: Record<
     loopMs: CUSTOMER_CARDS.length * CUSTOMERS_MS,
   },
   employees: { Mock: EmployeesVisual, loopMs: CREW.length * EMPLOYEES_MS },
+  contractors: {
+    Mock: ContractorsVisual,
+    loopMs: CONTRACTORS_STEPS * CONTRACTORS_MS,
+  },
+  vendors: { Mock: VendorsVisual, loopMs: PO_STEPS * VENDORS_MS },
+  tracking: { Mock: TrackingVisual, loopMs: TRACKING_STEPS * TRACKING_MS },
+  reminders: { Mock: RemindersVisual, loopMs: REMINDERS_STEPS * REMINDERS_MS },
   timesheets: {
     Mock: TimesheetsVisual,
     loopMs: TIME_FRAMES.length * TIMESHEETS_MS,
   },
   leads: { Mock: LeadsVisual, loopMs: LEAD_FEED.length * LEADS_MS },
+  messages: { Mock: MessagesVisual, loopMs: (CHAT.length + 1) * MESSAGES_MS },
   estimates: { Mock: EstimateVisual, loopMs: ESTIMATE_STEPS * ESTIMATE_MS },
   jobs: { Mock: JobsVisual, loopMs: JOB_STAGES.length * JOBS_MS },
+  tasks: { Mock: TasksVisual, loopMs: (TASKS.length + 1) * TASKS_MS },
   schedules: {
     Mock: SchedulesVisual,
     loopMs: SCHEDULE_FRAMES.length * SCHEDULE_MS,
   },
+  orders: { Mock: OrdersVisual, loopMs: ORDER_STAGES.length * ORDERS_MS },
   invoices: {
     Mock: InvoicesVisual,
     loopMs: INVOICE_FRAMES.length * INVOICES_MS,
@@ -2280,10 +3799,16 @@ export const DASHBOARD_MOCKS: Record<
     Mock: PaymentsVisual,
     loopMs: PAYMENT_METHODS.length * PAYMENTS_MS,
   },
+  profile: { Mock: ProfileVisual, loopMs: PROFILE_STEPS * PROFILE_MS },
   "fixed-services": {
     Mock: FixedServicesVisual,
     loopMs: SERVICES.length * FIXED_MS,
   },
   "ai-receptionist": { Mock: AiReceptionistVisual, loopMs: CALL_LOOP_MS },
+  portfolio: { Mock: PortfolioVisual, loopMs: PORTFOLIO.length * PORTFOLIO_MS },
+  "service-areas": {
+    Mock: ServiceAreasVisual,
+    loopMs: (AREAS.length + 1) * AREAS_MS,
+  },
   reports: { Mock: ReportsVisual, loopMs: REPORTS_STEPS * REPORTS_MS },
 };

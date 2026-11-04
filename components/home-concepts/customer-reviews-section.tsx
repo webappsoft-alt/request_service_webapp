@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, Star } from "lucide-react";
-import { Container } from "@/components/layout/container";
+import { ArrowRight, BadgeCheck, Quote, Star } from "lucide-react";
+import { Container, Section } from "@/components/layout/container";
 import { cn } from "@/lib/utils";
 import { ReviewsCarousel } from "./reviews-carousel";
 
@@ -104,7 +104,7 @@ function Stars({ value, className }: { value: number; className?: string }) {
         const fill = Math.max(0, Math.min(1, value - index));
         return (
           <span key={index} className="relative size-[1em]" aria-hidden="true">
-            <Star className="absolute inset-0 size-full text-white/20" />
+            <Star className="absolute inset-0 size-full text-slate-200 dark:text-white/15" />
             <span
               className="absolute inset-0 overflow-hidden"
               style={{ width: `${fill * 100}%` }}
@@ -128,35 +128,39 @@ function initials(name: string) {
 }
 
 function ReviewCard({ review }: { review: Review }) {
+  const pro = review.audience === "pro";
   return (
-    <figure className="flex w-full flex-col gap-6 rounded-3xl border border-white/10 bg-white/[0.05] p-7 shadow-[0_24px_48px_-32px_rgba(0,0,0,0.9)] backdrop-blur-md transition-colors duration-300 hover:border-white/20 hover:bg-white/[0.08]">
+    <figure className="group relative flex w-full flex-col gap-5 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-20px_rgba(0,63,125,0.25)] transition-all duration-300 hover:-translate-y-1 hover:border-primary/20 hover:shadow-[0_1px_2px_rgba(15,23,42,0.04),0_24px_48px_-24px_rgba(0,63,125,0.35)] dark:border-border dark:bg-card">
       <div className="flex items-center justify-between gap-3">
-        <Stars value={review.rating} className="text-base" />
-        <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs font-medium text-emerald-300 ring-1 ring-emerald-400/20">
-          <BadgeCheck className="size-3.5" aria-hidden="true" />
-          {review.audience === "pro" ? "Verified pro" : "Verified job"}
+        <span className="flex size-10 items-center justify-center rounded-xl bg-primary/[0.07] text-primary">
+          <Quote className="size-4.5 fill-current" aria-hidden="true" />
         </span>
+        <Stars value={review.rating} className="text-sm" />
       </div>
-      <blockquote className="flex-1 text-base leading-7 text-white/85 md:text-[1.05rem] md:leading-8">
-        “{review.quote}”
+      <blockquote className="relative flex-1 text-[0.95rem] leading-7 text-slate-700 dark:text-foreground/85">
+        {review.quote}
       </blockquote>
-      <figcaption className="flex items-center gap-3">
+      <figcaption className="relative flex items-center gap-3 border-t border-slate-100 pt-5 dark:border-border">
         <span
           className={cn(
-            "flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white ring-1 ring-white/20",
-            review.audience === "pro"
-              ? "bg-linear-to-br from-emerald-400/80 to-teal-600/80"
-              : "bg-linear-to-br from-sky-400/80 to-primary",
+            "flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white shadow-sm ring-2 ring-white dark:ring-card",
+            pro
+              ? "bg-linear-to-br from-emerald-500 to-teal-600"
+              : "bg-linear-to-br from-sky-500 to-primary",
           )}
           aria-hidden="true"
         >
           {initials(review.name)}
         </span>
-        <span className="min-w-0 leading-tight">
-          <span className="block truncate text-sm font-semibold text-white">
-            {review.name}
+        <span className="min-w-0 flex-1 leading-tight">
+          <span className="flex items-center gap-1 text-sm font-semibold text-slate-900 dark:text-foreground">
+            <span className="truncate">{review.name}</span>
+            <BadgeCheck
+              className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400"
+              aria-label={pro ? "Verified pro" : "Verified job"}
+            />
           </span>
-          <span className="mt-0.5 block text-xs leading-snug text-white/55">
+          <span className="mt-0.5 block text-xs leading-snug text-slate-500 dark:text-muted-foreground">
             {review.meta} · {review.service}
           </span>
         </span>
@@ -166,42 +170,42 @@ function ReviewCard({ review }: { review: Review }) {
 }
 
 /**
- * Customer reviews: a centered heading over a calm snap carousel (3 cards per view on desktop,
- * 2 on tablet, 1 on mobile) with arrows and dots.
+ * Customer reviews: heading over a row of review cards that glides right to left in a
+ * continuous loop (paused on hover).
  */
 export function CustomerReviewsSection() {
   return (
-    <section className="section-space relative isolate overflow-hidden bg-[#071C35] text-white">
+    <Section
+      density="tight"
+      className="relative isolate overflow-hidden bg-slate-50 text-slate-900 dark:bg-muted/30 dark:text-foreground"
+    >
       <div
         aria-hidden="true"
-        className="absolute inset-0 -z-10 bg-[radial-gradient(56rem_28rem_at_50%_0%,rgba(56,140,230,0.22),transparent_65%)]"
+        className="absolute inset-0 -z-10 bg-[radial-gradient(48rem_20rem_at_0%_0%,rgba(0,63,125,0.07),transparent_60%),radial-gradient(40rem_20rem_at_100%_100%,rgba(56,189,248,0.08),transparent_60%)]"
       />
-      <Container className="flex flex-col gap-12 md:gap-14">
-        <div className="mx-auto flex max-w-2xl flex-col items-center gap-4 text-center">
-          <p className="eyebrow text-sky-300">Customer reviews</p>
-          <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-[2.75rem] md:leading-[1.1]">
-            Loved by homeowners.{" "}
-            <span className="text-sky-300">Trusted by local pros.</span>
-          </h2>
-          <Link
-            href="/find-a-professional"
-            className="group mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-white/80 transition-colors hover:text-white"
-          >
-            Find a reviewed pro
-            <ArrowRight
-              className="size-4 transition-transform duration-200 group-hover:translate-x-0.5"
-              aria-hidden="true"
-            />
-          </Link>
-        </div>
-
+      <Container>
         <ReviewsCarousel
           label="Customer reviews"
+          header={
+            <div className="flex flex-col gap-2">
+              <p className="eyebrow text-primary">Customer reviews</p>
+              <h2 className="text-balance text-2xl font-semibold tracking-tight md:text-3xl">
+                Loved by homeowners. Trusted by local pros.
+              </h2>
+              <Link
+                href="/find-a-professional"
+                className="inline-flex w-fit items-center gap-1 text-sm font-medium text-primary hover:underline"
+              >
+                Find a reviewed pro
+                <ArrowRight className="size-3.5" aria-hidden="true" />
+              </Link>
+            </div>
+          }
           slides={REVIEWS.map((review) => (
             <ReviewCard key={review.name} review={review} />
           ))}
         />
       </Container>
-    </section>
+    </Section>
   );
 }

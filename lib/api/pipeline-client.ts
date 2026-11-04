@@ -22,10 +22,20 @@ export type PipelineCard = {
   status: string;
   /** Which status labels apply — "opportunity" for an estimate workspace without an estimate yet. */
   statusOf: PipelineCardKind | "opportunity";
+  /**
+   * Estimates only: why it can't move on to Scheduled jobs yet (no estimate, no line items,
+   * not sent, declined), or null when it can. The server enforces the same rule.
+   */
+  blocker?: PipelineBlocker | null;
   value: number;
   date: string | null;
   updatedAt: string;
   href: string;
+};
+
+export type PipelineBlocker = {
+  code: "no_estimate" | "no_items" | "not_sent" | "declined";
+  message: string;
 };
 
 export type PipelineGroup = {

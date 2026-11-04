@@ -67,6 +67,48 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-04
 
+- **/home-v3 steps timeline copy** — client asked for clearer text. Intro no longer names a
+  competitor ("Find a local pro, compare written estimates, and follow the work through to payment…");
+  card header reads "Your project, step by step" · "Example: water heater replacement · Aurora, IL"
+  with an "All in one place" badge (was "Your project file" / "One record") ·
+  `components/home-concepts/peace-of-mind-timeline.tsx`
+
+- **/home-v3 customer reviews: continuous loop** — client: smooth, nonstop right-to-left scrolling
+  instead of stepping. The card row now glides in an endless loop (list drawn twice, CSS
+  `rs-review-x`, ~46 px/s), pauses on hover / focus, fades out at the left and right edges, and
+  fades up on first view; reduced motion stands still and scrolls by hand. Arrows removed (the row
+  moves itself); hover accent line removed · `components/home-concepts/reviews-carousel.tsx`,
+  `components/home-concepts/customer-reviews-section.tsx`, `app/globals.css`
+
+- **/home-v3 customer reviews: polish on the compact layout** — client: the plain version looked
+  too basic. Cards get a quote-mark chip, rounded-2xl corners, a soft blue shadow, a hover lift with
+  a blue accent line, and gradient initials avatars with a green verified check by the name; round
+  arrows fill blue on hover; faint blue glow in the background. Spacing stays tight ·
+  `components/home-concepts/customer-reviews-section.tsx`, `components/home-concepts/reviews-carousel.tsx`
+
+- **/home-v3 customer reviews: tighter and plainer** — client feedback: too much space above and
+  below, wanted a basic look. Tight section spacing (as the steps timeline), left-aligned heading on
+  one line with the arrows beside it (dots row removed; phones swipe), and simple cards: smaller
+  radius and text, light border, small shadow, plain verified label, initials avatar ·
+  `components/home-concepts/customer-reviews-section.tsx`, `components/home-concepts/reviews-carousel.tsx`
+
+- **/home-v3 customer reviews: light theme** — client feedback, better contrast. Section is now
+  light (slate-50) with white cards (subtle border, soft shadow), dark headings and text, and
+  primary-blue accents; carousel arrows and dots restyled to match. Layout and carousel unchanged;
+  dark mode uses the site tokens · `components/home-concepts/customer-reviews-section.tsx`,
+  `components/home-concepts/reviews-carousel.tsx`
+
+- **/home-v3: steps timeline restored, reviews moved down** — client feedback: the reviews had taken
+  the timeline's slot. "You stay in control at every step" is back right after Browse services;
+  Customer reviews now sits after the AI designer, before the FAQ · `app/(marketing)/home-v3/page.tsx`
+
+- **Pipeline: unfinished estimates can't be booked** — client rule. An estimate card without
+  line items, not yet sent, or never built shows an amber hint ("Add line items to book it",
+  full reason on hover); while it is dragged, the Scheduled jobs groups show a dashed amber
+  outline and the reason, and dropping there leaves it in place with a warning and an "Open
+  estimate" button. The server enforces the same rule; other moves unchanged ·
+  `components/portal/pipeline/pipeline-board.tsx`, `lib/api/pipeline-client.ts`
+
 - **/home-v3 customer reviews simplified** — client feedback: less crowded. Removed the 4.9
   rating / star-breakdown box, the subtitle paragraph and the trust points; the heading is now
   centered over a snap carousel (3 cards per view on desktop, 2 on tablet, 1 on mobile) with

@@ -11,7 +11,7 @@ import {
   type DragStart,
   type DropResult,
 } from "@hello-pangea/dnd";
-import { CalendarDays, Loader2, RefreshCw, Search } from "lucide-react";
+import { CalendarDays, Loader2, Lock, RefreshCw, Search, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { BookProjectDialog } from "@/components/portal/pipeline/book-project-dialog";
 import { usePipelineBoard } from "@/components/portal/pipeline/use-pipeline-board";
@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type {
   PipelineAccent,
+  PipelineBlocker,
   PipelineCard,
   PipelineCardKind,
   PipelineGroup,
@@ -72,6 +73,19 @@ const FLOW_NOTES: Partial<Record<PipelineCardKind, string>> = {
   invoice: "Opening the invoice — send it from there.",
 };
 
+/** The short line an estimate card shows while it can't move on to Scheduled jobs. */
+const BLOCKER_HINTS: Record<PipelineBlocker["code"], string> = {
+  no_estimate: "Build the estimate to book it",
+  no_items: "Add line items to book it",
+  not_sent: "Send the estimate to book it",
+  declined: "Declined · reopen to book it",
+};
+
+/** An estimate dropped on a job group is the move to Scheduled jobs (accept → job). */
+function bookingBlocker(card: { kind: PipelineCardKind; blocker?: PipelineBlocker | null }, group: PipelineGroup) {
+  return card.kind === "estimate" && group.kind === "job" ? (card.blocker ?? null) : null;
+}
+
 const compactMoney = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -101,7 +115,11 @@ export function PipelineBoard({ className }: { className?: string }) {
   const { board, loading, error, reload, moveCard, loadMore, loadingMore, search, setSearch, searching } = usePipelineBoard();
   // Starts from the search the board was left with (kept in the store).
   const [query, setQuery] = useState(search);
-  const [dragging, setDragging] = useState<{ kind: PipelineCardKind; groupId: string } | null>(null);
+  const [dragging, setDragging] = useState<{
+    kind: PipelineCardKind;
+    groupId: string;
+    blocker: PipelineBlocker | null;
+  } | null>(null);
   const [booking, setBooking] = useState<PendingBooking | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -141,7 +159,7 @@ export function PipelineBoard({ className }: { className?: string }) {
   const onDragStart = useCallback(
     (start: DragStart) => {
       const card = cardsByKey.get(start.draggableId);
-      if (card) setDragging({ kind: card.kind, groupId: card.groupId });
+      if (card) setDragging({ kind: card.kind, groupId: card.groupId, blocker: card.blocker ?? null });
     },
     [cardsByKey],
   );
@@ -157,6 +175,15 @@ export function PipelineBoard({ className }: { className?: string }) {
       if (!card || !target) return;
       if (!target.accepts.includes(card.kind)) {
         toast.error(`That card can't move to ${target.title}.`);
+        return;
+      }
+      // An unfinished estimate (no line items, not sent…) stays put; offer to finish it.
+      const blocker = bookingBlocker(card, target);
+      if (blocker) {
+        toast.warning(blocker.message, {
+          description: `${card.number || "This estimate"} stays in Estimates until then.`,
+          action: { label: "Open estimate", onClick: () => router.push(card.href) },
+        });
         return;
       }
       // Steps the app already has a flow for (estimate wizard, send, invoice) open that page.
@@ -316,6 +343,8 @@ export function PipelineBoard({ className }: { className?: string }) {
                   {column.groups.map((group) => {
                     const blocked =
                       dragging !== null && dragging.groupId !== group.id && !group.accepts.includes(dragging.kind);
+                    // Accepts estimates, but not this one yet: still droppable, so the drop explains why.
+                    const locked = dragging !== null && !blocked ? bookingBlocker(dragging, group) : null;
                     const shown = group.cards;
                     return (
                       <div
@@ -324,6 +353,7 @@ export function PipelineBoard({ className }: { className?: string }) {
                           "rounded-lg border border-input/70 p-1.5 transition-opacity",
                           accent.tint,
                           blocked && "opacity-40",
+                          locked && "border-dashed border-amber-400/80",
                         )}
                       >
                         <div className="flex items-baseline justify-between gap-2 px-1.5 pt-0.5 pb-1.5">
@@ -338,6 +368,12 @@ export function PipelineBoard({ className }: { className?: string }) {
                             {group.value > 0 ? ` · ${money(group.value)}` : ""}
                           </span>
                         </div>
+                        {locked ? (
+                          <p className="mx-1.5 mb-1.5 flex items-start gap-1.5 rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+                            <Lock className="mt-px size-3 shrink-0" aria-hidden />
+                            {locked.message}
+                          </p>
+                        ) : null}
                         <Droppable droppableId={group.id} isDropDisabled={blocked}>
                           {(provided, snapshot) => (
                             <div
@@ -345,7 +381,8 @@ export function PipelineBoard({ className }: { className?: string }) {
                               {...provided.droppableProps}
                               className={cn(
                                 "min-h-11 space-y-1.5 rounded-md transition-colors",
-                                snapshot.isDraggingOver && cn("ring-2", accent.over),
+                                snapshot.isDraggingOver &&
+                                  (locked ? "bg-amber-500/10 ring-2 ring-amber-400/70" : cn("ring-2", accent.over)),
                               )}
                             >
                               {shown.map((card, index) => (
@@ -455,6 +492,16 @@ const PipelineCardItem = memo(function PipelineCardItem({ card, index }: { card:
               </span>
               {date ? <span className="shrink-0 tabular-nums">{date}</span> : null}
             </div>
+          ) : null}
+          {/* What's left before this estimate can be booked (the card opens the estimate). */}
+          {card.blocker && card.blocker.code !== "declined" ? (
+            <p
+              className="mt-1.5 flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10.5px] font-medium text-amber-800 dark:text-amber-200"
+              title={card.blocker.message}
+            >
+              <TriangleAlert className="size-3 shrink-0" aria-hidden />
+              <span className="truncate">{BLOCKER_HINTS[card.blocker.code]}</span>
+            </p>
           ) : null}
         </Link>
         );

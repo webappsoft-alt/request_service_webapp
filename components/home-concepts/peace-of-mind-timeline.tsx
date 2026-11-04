@@ -37,9 +37,9 @@ export function PeaceOfMindTimeline() {
             You stay in control at every step.
           </h2>
           <p className="max-w-xl text-sm leading-7 text-muted-foreground md:text-base">
-            Thumbtack-simple for finding help. Contractor-grade clarity once the
-            work is quoted. Request Service keeps both sides on the same project
-            file.
+            Find a local pro, compare written estimates, and follow the work
+            through to payment. Every step stays in one place and in writing,
+            for you and your pro.
           </p>
         </div>
 
@@ -62,15 +62,15 @@ export function PeaceOfMindTimeline() {
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">
-                    Your project file
+                    Your project, step by step
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
-                    Water heater replacement · Aurora
+                    Example: water heater replacement · Aurora, IL
                   </p>
                 </div>
               </div>
               <span className="shrink-0 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
-                One record
+                All in one place
               </span>
             </div>
 

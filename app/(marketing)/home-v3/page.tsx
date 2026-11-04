@@ -5,7 +5,7 @@ import { HomeSearchDock } from "@/components/home/home-search-dock";
 import { HomeMotion } from "@/components/home/home-motion";
 import { ServicesSection } from "@/components/home/services-section";
 import { HomeFaqSection } from "@/components/home/faq-section";
-// import { PeaceOfMindTimeline } from "@/components/home-concepts/peace-of-mind-timeline";
+import { PeaceOfMindTimeline } from "@/components/home-concepts/peace-of-mind-timeline";
 import { CustomerReviewsSection } from "@/components/home-concepts/customer-reviews-section";
 import { RedesignerSection } from "@/components/ai-redesigner/redesigner-section";
 // Hidden for now (client feedback); see the commented sections below.
@@ -29,7 +29,7 @@ export const metadata = buildMetadata({
 
 /**
  * Keeps the complete v1 header, hero, search, and Browse Services composition unchanged.
- * Flow: customer reviews (replaces the peace of mind timeline, commented out) → real pros (two rows) → AI designer (v1's dark version) → FAQ.
+ * Flow: peace of mind steps timeline → real pros (two rows) → AI designer (v1's dark version) → customer reviews → FAQ.
  * "Three ways to start", proof of control, trust strip, and closing CTA are commented out for now.
  */
 export default async function HomeV3Page() {
@@ -45,8 +45,7 @@ export default async function HomeV3Page() {
         </div>
 
         {/* <NextStepWays /> */}
-        {/* <PeaceOfMindTimeline /> */}
-        <CustomerReviewsSection />
+        <PeaceOfMindTimeline />
         <DeferredHydration>
           <FeaturedProvidersSection variant="homeowners" />
         </DeferredHydration>
@@ -56,6 +55,7 @@ export default async function HomeV3Page() {
         {/* <ProofOfControl /> */}
         {/* <TrustStrip /> */}
         {/* <ReadyToSolve /> */}
+        <CustomerReviewsSection />
         <DeferredHydration>
           <HomeFaqSection />
         </DeferredHydration>

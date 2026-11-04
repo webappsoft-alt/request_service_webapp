@@ -622,24 +622,30 @@ const CUSTOMER_EXTRAS = [
   "Chloe Ramos",
 ] as const;
 const CUSTOMERS_MS = 2200;
+/** When each "Recent activity" line happened, newest first. */
+const ACTIVITY_TIMES = ["Today", "Yesterday", "Mon"] as const;
 
 function CustomersVisual() {
   const { ref, step } = useLoopStep(CUSTOMER_CARDS.length, CUSTOMERS_MS);
 
   return (
-    <Stage rootRef={ref} className="flex items-center justify-center gap-4 p-4">
-      <div
-        className={cn(
-          FLOAT_CARD,
-          "hidden w-44 shrink-0 flex-col self-stretch overflow-hidden @xl:flex",
-        )}
-      >
-        <p className="flex items-center gap-2 border-b border-border px-3 py-2.5 text-[11px] text-muted-foreground">
-          <Search className="size-3.5" aria-hidden="true" /> Search customers
-        </p>
-        <ul className="p-1.5">
-          {[...CUSTOMER_CARDS.map((card) => card.name), ...CUSTOMER_EXTRAS].map(
-            (name, index) => (
+    <Stage rootRef={ref} className="flex items-center justify-center p-4">
+      {/* List and detail share one height (from @xl) so their tops and bottoms line up. */}
+      <div className="flex w-full max-w-[38rem] items-stretch justify-center gap-4 @xl:h-[21rem]">
+        <div
+          className={cn(
+            FLOAT_CARD,
+            "hidden w-44 shrink-0 flex-col overflow-hidden @xl:flex",
+          )}
+        >
+          <p className="flex items-center gap-2 border-b border-border px-3 py-2.5 text-[11px] text-muted-foreground">
+            <Search className="size-3.5" aria-hidden="true" /> Search customers
+          </p>
+          <ul className="p-1.5">
+            {[
+              ...CUSTOMER_CARDS.map((card) => card.name),
+              ...CUSTOMER_EXTRAS,
+            ].map((name, index) => (
               <li
                 key={name}
                 className={cn(
@@ -650,95 +656,103 @@ function CustomersVisual() {
                 <Initials name={name} className="size-6 text-[9px]" />
                 <span className="truncate">{name}</span>
               </li>
-            ),
-          )}
-        </ul>
-        <p className="mt-auto border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
-          <span className="font-semibold text-foreground">248</span> customers ·
-          12 this month
-        </p>
-      </div>
-      <div className="flex w-full max-w-sm flex-col gap-3">
-        <div className="relative h-48 w-full">
-          {CUSTOMER_CARDS.map((customer, index) => {
-            const position =
-              (index - step + CUSTOMER_CARDS.length) % CUSTOMER_CARDS.length;
-            return (
-              <div
-                key={customer.name}
-                className={cn(
-                  FLOAT_CARD,
-                  "absolute inset-x-0 top-0 p-5 transition-[transform,opacity] duration-1000",
-                  EASE,
-                )}
-                style={{
-                  transform: `translateY(${position * 18}px) scale(${1 - position * 0.06})`,
-                  opacity: 1 - position * 0.28,
-                  zIndex: CUSTOMER_CARDS.length - position,
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <Initials name={customer.name} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold tracking-tight">
-                      {customer.name}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {customer.address}
-                    </p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
-                    {customer.source}
-                  </span>
-                </div>
-                <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                  {[
-                    [customer.jobs, "Jobs"],
-                    [customer.estimates, "Estimates"],
-                    [customer.owing, "Owing"],
-                  ].map(([value, label]) => (
-                    <div key={label} className="rounded-xl bg-primary/6 py-2.5">
-                      <p className="text-base font-semibold tabular-nums">
-                        {value}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {label}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div
-          key={CUSTOMER_CARDS[step].name}
-          className={cn(
-            FLOAT_CARD,
-            "animate-in fade-in hidden p-3 duration-500 @md:block",
-          )}
-        >
-          <p className="text-xs font-semibold">Recent activity</p>
-          <ul className="mt-2 flex flex-col gap-1.5">
-            {CUSTOMER_CARDS[step].activity.map((item, index) => (
-              <li key={item} className="flex items-center gap-2 text-[11px]">
-                <span
-                  className={cn(
-                    "size-1.5 shrink-0 rounded-full",
-                    index === 0 ? "bg-primary" : "bg-primary/25",
-                  )}
-                />
-                <span
-                  className={cn(
-                    "truncate",
-                    index === 0 ? "font-medium" : "text-muted-foreground",
-                  )}
-                >
-                  {item}
-                </span>
-              </li>
             ))}
           </ul>
+          <p className="mt-auto border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
+            <span className="font-semibold text-foreground">248</span> customers
+            · 12 this month
+          </p>
+        </div>
+        <div className="flex w-full max-w-sm flex-col gap-3 @xl:justify-between">
+          <div className="relative h-44 w-full">
+            {CUSTOMER_CARDS.map((customer, index) => {
+              const position =
+                (index - step + CUSTOMER_CARDS.length) % CUSTOMER_CARDS.length;
+              return (
+                <div
+                  key={customer.name}
+                  className={cn(
+                    FLOAT_CARD,
+                    "absolute inset-x-0 top-0 p-5 transition-[transform,opacity] duration-1000",
+                    EASE,
+                  )}
+                  style={{
+                    transform: `translateY(${position * 18}px) scale(${1 - position * 0.06})`,
+                    opacity: 1 - position * 0.28,
+                    zIndex: CUSTOMER_CARDS.length - position,
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <Initials name={customer.name} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold tracking-tight">
+                        {customer.name}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {customer.address}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
+                      {customer.source}
+                    </span>
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                    {[
+                      [customer.jobs, "Jobs"],
+                      [customer.estimates, "Estimates"],
+                      [customer.owing, "Owing"],
+                    ].map(([value, label]) => (
+                      <div
+                        key={label}
+                        className="rounded-xl bg-primary/6 py-2.5"
+                      >
+                        <p className="text-base font-semibold tabular-nums">
+                          {value}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {label}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div
+            key={CUSTOMER_CARDS[step].name}
+            className={cn(FLOAT_CARD, "animate-in fade-in p-4 duration-500")}
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold">Recent activity</p>
+              <p className="text-[10px] text-muted-foreground">
+                {CUSTOMER_CARDS[step].name.split(" ")[0]}&apos;s file
+              </p>
+            </div>
+            <ul className="mt-3 flex flex-col gap-2.5">
+              {CUSTOMER_CARDS[step].activity.map((item, index) => (
+                <li key={item} className="flex items-center gap-2 text-[11px]">
+                  <span
+                    className={cn(
+                      "size-1.5 shrink-0 rounded-full",
+                      index === 0 ? "bg-primary" : "bg-primary/25",
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "truncate",
+                      index === 0 ? "font-medium" : "text-muted-foreground",
+                    )}
+                  >
+                    {item}
+                  </span>
+                  <span className="ml-auto shrink-0 pl-2 text-[10px] text-muted-foreground tabular-nums">
+                    {ACTIVITY_TIMES[index]}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
     </Stage>
@@ -931,8 +945,8 @@ function TimesheetsVisual() {
   const finished = step === TIME_FRAMES.length - 1;
 
   return (
-    <Stage rootRef={ref} className="flex items-center justify-center gap-6 p-3">
-      <PhoneFrame className="h-82 w-44 shrink-0">
+    <Stage rootRef={ref} className="flex items-center justify-center gap-5 p-3">
+      <PhoneFrame className="h-82 w-44 shrink-0 @md:h-89">
         <div className="flex h-full flex-col items-center gap-3 px-3 pt-8 pb-3">
           <p className="text-xs font-semibold tracking-tight">Tate Fischer</p>
           <Ring
@@ -956,9 +970,27 @@ function TimesheetsVisual() {
             />{" "}
             earned
           </p>
+          <div className="mt-auto w-full rounded-xl border border-border px-2.5 py-2 text-[10px]">
+            <p className="flex items-center gap-1.5 font-medium">
+              <span
+                className={cn(
+                  "size-1.5 rounded-full transition-colors duration-500",
+                  frame.on ? "bg-emerald-500" : "bg-muted-foreground/40",
+                )}
+              />
+              {frame.on
+                ? "On the clock"
+                : finished
+                  ? "Day done"
+                  : "Not started"}
+            </p>
+            <p className="mt-0.5 truncate text-muted-foreground">
+              JOB-983 · Furnace cleaning
+            </p>
+          </div>
           <span
             className={cn(
-              "mt-auto w-full rounded-xl py-2.5 text-center text-xs font-semibold transition-colors duration-500",
+              "w-full rounded-xl py-2.5 text-center text-xs font-semibold transition-colors duration-500",
               frame.on
                 ? "bg-primary/10 text-primary"
                 : "bg-primary text-primary-foreground",
@@ -968,7 +1000,7 @@ function TimesheetsVisual() {
           </span>
         </div>
       </PhoneFrame>
-      <div className="hidden w-56 flex-col gap-3 @md:flex">
+      <div className="hidden h-89 w-56 flex-col justify-between gap-3 @md:flex">
         <div className={cn(FLOAT_CARD, "p-4")}>
           <p className="text-xs font-semibold">This week</p>
           <ul className="mt-3 flex flex-col gap-2.5">
@@ -1011,9 +1043,9 @@ function TimesheetsVisual() {
             />
           </p>
         </div>
-        <div className={cn(FLOAT_CARD, "p-3")}>
+        <div className={cn(FLOAT_CARD, "p-4")}>
           <p className="text-xs font-semibold">Crew today</p>
-          <ul className="mt-2 flex flex-col gap-1.5">
+          <ul className="mt-3 flex flex-col gap-2">
             {[
               { name: "Tate Fischer", on: frame.on, note: "JOB-983" },
               { name: "Maria Lee", on: true, note: "JOB-376" },

@@ -67,6 +67,14 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-04
 
+- **/for-pros-v1 Customers & Timesheets tabs: aligned and balanced** — client: awkward white space.
+  Customers: list and detail share one height, so the profile card lines up with the list top and
+  "Recent activity" with its bottom; the activity card gets times (Today / Yesterday / Mon), a
+  "<name>'s file" label, matching padding, and now shows on phones too. Timesheets: phone and cards
+  share one height (tops and bottoms line up); the phone's empty middle shows the current job
+  ("On the clock · JOB-983 · Furnace cleaning"); both cards use the same padding ·
+  `components/pro-v1/pro-dashboard-mocks.tsx`
+
 - **/home-v3: reviews manual again, softer timeline header line** — client feedback. Customer
   reviews no longer auto-scroll: a manual snap carousel with the arrows beside the heading and dots
   below (edge fade and fade-up on first view kept; marquee CSS removed). The line under the

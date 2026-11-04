@@ -67,6 +67,13 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-04
 
+- **/home-v3 customer reviews simplified** — client feedback: less crowded. Removed the 4.9
+  rating / star-breakdown box, the subtitle paragraph and the trust points; the heading is now
+  centered over a snap carousel (3 cards per view on desktop, 2 on tablet, 1 on mobile) with
+  arrows and dots, replacing the scrolling columns. Larger, roomier glass cards. Unused marquee
+  CSS removed · `components/home-concepts/customer-reviews-section.tsx`,
+  `components/home-concepts/reviews-carousel.tsx` (new), `app/globals.css`
+
 - **/for-pros-v1 feature tabs: fuller mockups, new Jobs board, live fixed services** — client
   feedback. Dashboard shows 5 important actions; Pipeline columns get a third card with amounts,
   a live count, and a column total; Customers adds a per-customer "Recent activity" card and a

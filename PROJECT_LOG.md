@@ -67,6 +67,19 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-05
 
+- **/home-v3 customer reviews: whole cards only** — client: a neighbouring card stuck out, half cut and faded.
+  Removed the edge fade and the track overhang, so the carousel is exactly the content width: 3 cards on
+  desktop, 2 on tablet, and 1 full-width card on phones (was 85% with the next one peeking). Arrows, dots,
+  and swipe unchanged · `components/home-concepts/reviews-carousel.tsx`, `app/globals.css`
+
+- **Blog SEO, end to end** — admin create and edit dialogs get one optional SEO section (custom slug with
+  URL preview, meta title, meta description, focus keywords); empty fields fall back to the title and
+  summary, and the create dialog no longer overwrites saved SEO with the title and summary on every save.
+  Metadata now renders in `<head>` for browsers too: `htmlLimitedBots: /.*/` turns off Next's streaming of
+  metadata into `<body>` **site-wide**. `admin/src/pages/blog-editor.jsx` has no route and is unused ·
+  `next.config.ts`, `admin/src/components/shared/blog-seo-fields.jsx` (new), `admin/src/lib/blog-seo.js` (new),
+  `admin/src/pages/blog-posts.jsx`, `admin/src/pages/blog-detail.jsx`
+
 - **/home-v3: outer frames removed from two sections** — client request. "Hire With Confidence" and
   the "Your project, step by step" timeline now sit directly on the page background: outer border,
   shadow, card background, and the timeline's soft layer are gone, and the content lines up with the

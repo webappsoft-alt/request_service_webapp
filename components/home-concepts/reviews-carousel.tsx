@@ -125,10 +125,10 @@ export function ReviewsCarousel({
           </button>
         </div>
       </div>
-      {/* The track runs a little past the content on both sides, where its edges fade out. */}
+      {/* Exactly the content width, so only whole cards show. The 2px gutter keeps card edges from being clipped. */}
       <ul
         ref={trackRef}
-        className="rs-review-fade no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 pt-2 pb-6 sm:-mx-16 sm:scroll-px-16 sm:px-16"
+        className="no-scrollbar -mx-0.5 flex snap-x snap-mandatory scroll-px-0.5 gap-4 overflow-x-auto px-0.5 pt-2 pb-6"
       >
         {slides.map((slide, index) => (
           <li
@@ -136,7 +136,7 @@ export function ReviewsCarousel({
             aria-roledescription="slide"
             aria-label={`${index + 1} of ${slides.length}`}
             className={cn(
-              "flex w-[85%] shrink-0 snap-start sm:w-[calc((100%-1rem)/2)] lg:w-[calc((100%-2rem)/3)]",
+              "flex w-full shrink-0 snap-start sm:w-[calc((100%-1rem)/2)] lg:w-[calc((100%-2rem)/3)]",
               "motion-safe:transition-[opacity,translate] motion-safe:duration-700 motion-safe:ease-out",
               !revealed && "motion-safe:translate-y-6 motion-safe:opacity-0",
             )}

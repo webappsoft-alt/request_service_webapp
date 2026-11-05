@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 import { OPTIMIZED_IMAGE_HOSTS } from "./lib/image-hosts";
 
 const nextConfig: NextConfig = {
+  // Metadata in the <head> of every response, not streamed into <body> for browsers, so each
+  // article's title, description, and keywords are in the page source.
+  htmlLimitedBots: /.*/,
   transpilePackages: ["ckeditor5", "@ckeditor/ckeditor5-react"],
   images: {
     // AVIF first (smaller hero/LCP bytes), WebP fallback; source URLs are unchanged.

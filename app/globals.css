@@ -2463,28 +2463,6 @@ body.rs-cal-dragging [data-cal-overlay] {
   }
 }
 
-/* Home-v3 customer reviews: the carousel's left and right edges fade out. */
-.rs-review-fade {
-  mask-image: linear-gradient(
-    to right,
-    transparent,
-    #000 1rem,
-    #000 calc(100% - 1rem),
-    transparent
-  );
-}
-@media (min-width: 640px) {
-  .rs-review-fade {
-    mask-image: linear-gradient(
-      to right,
-      transparent,
-      #000 4rem,
-      #000 calc(100% - 4rem),
-      transparent
-    );
-  }
-}
-
 /* For-pros-v1 Reminders mock: the due reminder's bell rings. */
 .rs-bell-ring {
   animation: rs-bell-ring 1.2s ease-in-out infinite;

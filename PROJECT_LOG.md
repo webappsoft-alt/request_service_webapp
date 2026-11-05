@@ -65,6 +65,15 @@ Modules, layout, notification channels and API conventions: see
 
 Newest first. Format: **what** — why · files.
 
+### 2026-11-05
+
+- **/home-v3: outer frames removed from two sections** — client request. "Hire With Confidence" and
+  the "Your project, step by step" timeline now sit directly on the page background: outer border,
+  shadow, card background, and the timeline's soft layer are gone, and the content lines up with the
+  section heading. Steps, icons, inner cards, and the line under the timeline header are unchanged ·
+  `components/home-concepts/hire-with-confidence-section.tsx`,
+  `components/home-concepts/peace-of-mind-timeline.tsx`
+
 ### 2026-11-04
 
 - **/home-v3 header: brand slogan** — client request. "Find the Right Pro. Get the Job Done." sits under

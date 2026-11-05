@@ -43,82 +43,75 @@ export function PeaceOfMindTimeline() {
           </p>
         </div>
 
-        <div className="relative">
-          {/* Soft layer behind the card, like a stack of files. */}
-          <div
-            aria-hidden="true"
-            className="absolute -inset-y-3 inset-x-4 rounded-[2rem] bg-primary/5 sm:inset-x-6 sm:-inset-y-4"
-          />
-          <div className="relative overflow-hidden rounded-2xl border border-border bg-background shadow-[0_24px_60px_-36px_rgba(0,63,125,0.45)]">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200/70 px-4 dark:border-border/30 py-3.5 sm:px-6">
-              <div className="flex min-w-0 items-center gap-4">
-                <span
-                  className="hidden items-center gap-1.5 sm:flex"
-                  aria-hidden="true"
-                >
-                  <span className="size-2 rounded-full bg-muted-foreground/25" />
-                  <span className="size-2 rounded-full bg-muted-foreground/25" />
-                  <span className="size-2 rounded-full bg-muted-foreground/25" />
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">
-                    Your project, step by step
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    Example: water heater replacement · Aurora, IL
-                  </p>
-                </div>
-              </div>
-              <span className="shrink-0 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
-                All in one place
+        <div>
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200/70 pb-3.5 dark:border-border/30">
+            <div className="flex min-w-0 items-center gap-4">
+              <span
+                className="hidden items-center gap-1.5 sm:flex"
+                aria-hidden="true"
+              >
+                <span className="size-2 rounded-full bg-muted-foreground/25" />
+                <span className="size-2 rounded-full bg-muted-foreground/25" />
+                <span className="size-2 rounded-full bg-muted-foreground/25" />
               </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">
+                  Your project, step by step
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  Example: water heater replacement · Aurora, IL
+                </p>
+              </div>
             </div>
-
-            <ol className="grid gap-0 p-4 sm:p-6 xl:grid-cols-7 xl:gap-4">
-              {customerWorkflow.map((item, index) => {
-                const { icon: Icon, status } = STEP_DETAILS[index];
-                const last = index === customerWorkflow.length - 1;
-                return (
-                  <li
-                    key={item.step}
-                    className="relative flex gap-4 pb-6 last:pb-0 xl:flex-col xl:gap-3 xl:pb-0"
-                  >
-                    {!last ? (
-                      <span
-                        aria-hidden="true"
-                        className="absolute top-11 bottom-0 left-5 w-0.5 bg-primary/80 xl:top-5 xl:right-[-1rem] xl:bottom-auto xl:left-10 xl:h-0.5 xl:w-auto"
-                      />
-                    ) : null}
-                    <span className="relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground ring-4 ring-background">
-                      <Icon className="size-4.5" aria-hidden="true" />
-                    </span>
-                    <div className="flex min-w-0 flex-1 flex-col gap-2">
-                      <div>
-                        <p className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground">
-                          {String(item.step).padStart(2, "0")}
-                        </p>
-                        <h3 className="text-base font-semibold tracking-tight xl:min-h-10 xl:text-[0.95rem] xl:leading-5">
-                          {item.title}
-                        </h3>
-                      </div>
-                      <div
-                        className={cn(
-                          "rounded-xl bg-muted/70 px-3 py-2.5 xl:flex-1",
-                        )}
-                      >
-                        <p className="text-xs font-medium text-primary">
-                          {status}
-                        </p>
-                        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                          {item.body}
-                        </p>
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
+            <span className="shrink-0 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
+              All in one place
+            </span>
           </div>
+
+          <ol className="grid gap-0 pt-4 sm:pt-6 xl:grid-cols-7 xl:gap-4">
+            {customerWorkflow.map((item, index) => {
+              const { icon: Icon, status } = STEP_DETAILS[index];
+              const last = index === customerWorkflow.length - 1;
+              return (
+                <li
+                  key={item.step}
+                  className="relative flex gap-4 pb-6 last:pb-0 xl:flex-col xl:gap-3 xl:pb-0"
+                >
+                  {!last ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute top-11 bottom-0 left-5 w-0.5 bg-primary/80 xl:top-5 xl:right-[-1rem] xl:bottom-auto xl:left-10 xl:h-0.5 xl:w-auto"
+                    />
+                  ) : null}
+                  <span className="relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground ring-4 ring-background">
+                    <Icon className="size-4.5" aria-hidden="true" />
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <div>
+                      <p className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground">
+                        {String(item.step).padStart(2, "0")}
+                      </p>
+                      <h3 className="text-base font-semibold tracking-tight xl:min-h-10 xl:text-[0.95rem] xl:leading-5">
+                        {item.title}
+                      </h3>
+                    </div>
+                    <div
+                      className={cn(
+                        "rounded-xl bg-muted/70 px-3 py-2.5 xl:flex-1",
+                      )}
+                    >
+                      <p className="text-xs font-medium text-primary">
+                        {status}
+                      </p>
+                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                        {item.body}
+                      </p>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
         </div>
       </Container>
     </Section>

@@ -1,16 +1,14 @@
 import { HomeCategoryFilterProvider } from "@/components/home/home-category-filter";
 import { FeaturedProvidersSection } from "@/components/home/featured-providers-section";
-import { CustomerTrustSection } from "@/components/home/customer-trust-section";
-// Customer journey ("From the first question to the final invoice") — parked; kept for restore.
-// import { CustomerJourneySection } from "@/components/home/customer-journey-section";
-import { CustomerAssuranceSection } from "@/components/home/customer-assurance-section";
 import { HeroSection } from "@/components/home/hero-section";
 import { RedesignerSection } from "@/components/ai-redesigner/redesigner-section";
 import { HomeSearchDock } from "@/components/home/home-search-dock";
 import { HomeMotion } from "@/components/home/home-motion";
 import { ServicesSection } from "@/components/home/services-section";
 import { HomeFaqSection } from "@/components/home/faq-section";
-import { WorkflowSection } from "@/components/home/workflow-section";
+import { PeaceOfMindTimeline } from "@/components/home-concepts/peace-of-mind-timeline";
+import { CustomerReviewsSection } from "@/components/home-concepts/customer-reviews-section";
+import { HireWithConfidenceSection } from "@/components/home-concepts/hire-with-confidence-section";
 import { JsonLd } from "@/components/seo/json-ld";
 import { DeferredHydration } from "@/components/shared/deferred-hydration";
 import { fetchParentCategoriesForSeo } from "@/lib/data/public-categories-seo";
@@ -25,6 +23,11 @@ export const metadata = buildMetadata({
   keywords: defaultKeywords,
 });
 
+/**
+ * Home page — the client-approved layout (formerly the /home-v3 concept).
+ * Flow: hero + search + Browse Services → peace of mind steps timeline → featured pros (two rows,
+ * with logos) → hire with confidence → AI designer showcase → customer reviews → FAQ.
+ */
 export default async function HomePage() {
   // Server-render the first "Browse services" tiles — they are the mobile LCP element.
   const initialCategories = await fetchParentCategoriesForSeo();
@@ -42,25 +45,19 @@ export default async function HomePage() {
             <ServicesSection initialParents={initialCategories} />
           </div>
 
-          <CustomerTrustSection />
-          {/* 4 business profiles from the API + "See all professionals" link. */}
+          <PeaceOfMindTimeline />
+          {/* Business profiles from the API + "See all professionals" link. */}
           <DeferredHydration>
-            <FeaturedProvidersSection />
+            <FeaturedProvidersSection variant="homeowners" />
           </DeferredHydration>
-          {/*
-            Customer journey section parked — restore by swapping it back in:
-            <CustomerJourneySection />
-          */}
-          <CustomerAssuranceSection />
+          <HireWithConfidenceSection />
 
           {/* Below the fold: server HTML stays crawlable, hydration waits until it scrolls near. */}
+          {/* AI Kitchen & Bath Redesigner showcase — renders only once the admin turns it on. */}
           <DeferredHydration>
-            <WorkflowSection />
+            <RedesignerSection variant="showcase" />
           </DeferredHydration>
-          {/* AI Kitchen & Bath Redesigner banner — renders only once the admin turns it on. */}
-          <DeferredHydration>
-            <RedesignerSection />
-          </DeferredHydration>
+          <CustomerReviewsSection />
           <DeferredHydration>
             <HomeFaqSection />
           </DeferredHydration>

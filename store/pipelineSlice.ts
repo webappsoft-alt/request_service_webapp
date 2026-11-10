@@ -1,4 +1,9 @@
-import { createAsyncThunk, createSlice, current, type PayloadAction } from "@reduxjs/toolkit";
+import {
+  createAsyncThunk,
+  createSlice,
+  current,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import {
   getPipelineBoard,
@@ -29,9 +34,18 @@ type PipelineState = {
   search: string;
   /** Search the shown board answers (differs from `search` while a new one loads). */
   appliedSearch: string;
+  /**
+   * Until this time (ms), the server's "something changed" signal is skipped: a card we just
+   * added from the create response is already on the board, so a full reload isn't needed.
+   */
+  quietUntil: number;
 };
 
+/** How long our own create's echo (server coalesces ~300ms, plus the socket trip) is skipped. */
+export const PIPELINE_QUIET_MS = 3000;
+
 const initialState: PipelineState = {
+  quietUntil: 0,
   data: null,
   loading: false,
   error: null,
@@ -63,7 +77,10 @@ function withTotals(board: PipelineBoard): PipelineBoard {
 }
 
 /** Takes a card off the board (with its group's count / value); returns the card if found. */
-function removeCard(board: PipelineBoard, key: string): [PipelineBoard, PipelineCard | null] {
+function removeCard(
+  board: PipelineBoard,
+  key: string,
+): [PipelineBoard, PipelineCard | null] {
   let found: PipelineCard | null = null;
   const columns = board.columns.map((column) => ({
     ...column,
@@ -82,7 +99,11 @@ function removeCard(board: PipelineBoard, key: string): [PipelineBoard, Pipeline
   return [found ? { ...board, columns } : board, found];
 }
 
-function insertCard(board: PipelineBoard, card: PipelineCard, index = 0): PipelineBoard {
+function insertCard(
+  board: PipelineBoard,
+  card: PipelineCard,
+  index = 0,
+): PipelineBoard {
   return {
     ...board,
     columns: board.columns.map((column) => ({
@@ -91,7 +112,12 @@ function insertCard(board: PipelineBoard, card: PipelineCard, index = 0): Pipeli
         if (group.id !== card.groupId) return group;
         const cards = [...group.cards];
         cards.splice(Math.min(Math.max(index, 0), cards.length), 0, card);
-        return { ...group, count: group.count + 1, value: round(group.value + card.value), cards };
+        return {
+          ...group,
+          count: group.count + 1,
+          value: round(group.value + card.value),
+          cards,
+        };
       }),
     })),
   };
@@ -111,7 +137,10 @@ function findCard(board: PipelineBoard, key: string) {
  * A move's outcome (from our PATCH or another session's socket event). Idempotent: the card keeps
  * its spot when it is already where the server says, so the echo of our own move is a no-op.
  */
-function settle(board: PipelineBoard, result: PipelineMoveResult): PipelineBoard {
+function settle(
+  board: PipelineBoard,
+  result: PipelineMoveResult,
+): PipelineBoard {
   const card = result.card;
   const at = card ? findCard(board, card.key) : null;
   let next = board;
@@ -126,9 +155,16 @@ function settle(board: PipelineBoard, result: PipelineMoveResult): PipelineBoard
 }
 
 /** "See more" on a column: each group gets its new cards appended and its current count / value. */
-function appendPage(board: PipelineBoard, page: PipelineColumnPage): PipelineBoard {
+function appendPage(
+  board: PipelineBoard,
+  page: PipelineColumnPage,
+): PipelineBoard {
   // Cards already on the board (moved here meanwhile) aren't added twice.
-  const seen = new Set(board.columns.flatMap((column) => column.groups.flatMap((group) => group.cards.map((card) => card.key))));
+  const seen = new Set(
+    board.columns.flatMap((column) =>
+      column.groups.flatMap((group) => group.cards.map((card) => card.key)),
+    ),
+  );
   const updates = new Map(page.groups.map((group) => [group.id, group]));
   return withTotals({
     ...board,
@@ -144,7 +180,10 @@ function appendPage(board: PipelineBoard, page: PipelineColumnPage): PipelineBoa
                 ...group,
                 count: next.count,
                 value: next.value,
-                cards: [...group.cards, ...next.cards.filter((card) => !seen.has(card.key))],
+                cards: [
+                  ...group.cards,
+                  ...next.cards.filter((card) => !seen.has(card.key)),
+                ],
               };
             }),
           },
@@ -210,7 +249,11 @@ export type MovePipelineCardArgs = {
 };
 
 /** Moves a card: shown at once, confirmed by the server, rolled back if refused. */
-export const movePipelineCardThunk = createAsyncThunk<PipelineMoveResult, MovePipelineCardArgs, { state: RootLike; rejectValue: string }>(
+export const movePipelineCardThunk = createAsyncThunk<
+  PipelineMoveResult,
+  MovePipelineCardArgs,
+  { state: RootLike; rejectValue: string }
+>(
   "pipeline/move",
   async ({ card, toGroupId, schedule }, { rejectWithValue }) => {
     try {
@@ -223,13 +266,23 @@ export const movePipelineCardThunk = createAsyncThunk<PipelineMoveResult, MovePi
 );
 
 /** "See more": appends a column's next 10 cards (across its groups) in place. */
-export const fetchPipelineColumnPage = createAsyncThunk<PipelineColumnPage, string, { state: RootLike; rejectValue: string }>(
+export const fetchPipelineColumnPage = createAsyncThunk<
+  PipelineColumnPage,
+  string,
+  { state: RootLike; rejectValue: string }
+>(
   "pipeline/columnPage",
   async (columnId, { getState, rejectWithValue }) => {
     try {
       const column = findColumn(getState().pipeline.data, columnId);
-      const loaded = Object.fromEntries((column?.groups ?? []).map((group) => [group.id, group.cards.length]));
-      return await getPipelineColumnPage(columnId, loaded, getState().pipeline.appliedSearch);
+      const loaded = Object.fromEntries(
+        (column?.groups ?? []).map((group) => [group.id, group.cards.length]),
+      );
+      return await getPipelineColumnPage(
+        columnId,
+        loaded,
+        getState().pipeline.appliedSearch,
+      );
     } catch (error) {
       return rejectWithValue(extractErrorMessage(error));
     }
@@ -238,7 +291,11 @@ export const fetchPipelineColumnPage = createAsyncThunk<PipelineColumnPage, stri
     condition: (columnId, { getState }) => {
       const state = getState().pipeline;
       const column = findColumn(state.data, columnId);
-      return Boolean(column && columnShown(column) < column.count && !state.loadingMore.includes(columnId));
+      return Boolean(
+        column &&
+        columnShown(column) < column.count &&
+        !state.loadingMore.includes(columnId),
+      );
     },
   },
 );
@@ -252,6 +309,25 @@ const pipelineSlice = createSlice({
     /** Another session moved a card (PIPELINE_UPDATED). */
     pipelineCardSettled(state, action: PayloadAction<PipelineMoveResult>) {
       if (state.data) state.data = settle(current(state.data), action.payload);
+    },
+    /**
+     * A record created here (e.g. a lead from "+ Create new"), built from the create response: it
+     * goes to the top of its group with totals updated, with no reload. Skipped while a search is
+     * shown (the card may not match it); the next refresh picks it up then.
+     */
+    pipelineCardAdded(
+      state,
+      action: PayloadAction<{ card: PipelineCard; at: number }>,
+    ) {
+      if (!state.data || state.appliedSearch) return;
+      const { card, at } = action.payload;
+      state.data = settle(current(state.data), {
+        removed: [],
+        card,
+        by: "",
+        at: new Date(at).toISOString(),
+      });
+      state.quietUntil = at + PIPELINE_QUIET_MS;
     },
     /** A refresh is due but something is in flight — remember it. */
     pipelineRefetchWanted(state) {
@@ -267,7 +343,8 @@ const pipelineSlice = createSlice({
         // Soft loading: only show loading when there is no cached board.
         state.loading = state.data == null;
         state.error = null;
-        if (action.meta.arg?.search !== undefined) state.search = action.meta.arg.search.trim();
+        if (action.meta.arg?.search !== undefined)
+          state.search = action.meta.arg.search.trim();
       })
       .addCase(fetchPipelineBoard.fulfilled, (state, action) => {
         state.loading = false;
@@ -294,12 +371,16 @@ const pipelineSlice = createSlice({
         state.pending += 1;
         state.rollback[action.meta.requestId] = board;
         const [without, found] = removeCard(board, card.key);
-        if (found) state.data = withTotals(insertCard(without, { ...found, groupId: toGroupId }, index));
+        if (found)
+          state.data = withTotals(
+            insertCard(without, { ...found, groupId: toGroupId }, index),
+          );
       })
       .addCase(movePipelineCardThunk.fulfilled, (state, action) => {
         state.pending = Math.max(0, state.pending - 1);
         delete state.rollback[action.meta.requestId];
-        if (state.data) state.data = settle(current(state.data), action.payload);
+        if (state.data)
+          state.data = settle(current(state.data), action.payload);
       })
       .addCase(movePipelineCardThunk.rejected, (state, action) => {
         state.pending = Math.max(0, state.pending - 1);
@@ -314,17 +395,27 @@ const pipelineSlice = createSlice({
       })
       .addCase(fetchPipelineColumnPage.fulfilled, (state, action) => {
         state.pending = Math.max(0, state.pending - 1);
-        state.loadingMore = state.loadingMore.filter((id) => id !== action.meta.arg);
-        if (state.data) state.data = appendPage(current(state.data), action.payload);
+        state.loadingMore = state.loadingMore.filter(
+          (id) => id !== action.meta.arg,
+        );
+        if (state.data)
+          state.data = appendPage(current(state.data), action.payload);
       })
       .addCase(fetchPipelineColumnPage.rejected, (state, action) => {
         state.pending = Math.max(0, state.pending - 1);
-        state.loadingMore = state.loadingMore.filter((id) => id !== action.meta.arg);
+        state.loadingMore = state.loadingMore.filter(
+          (id) => id !== action.meta.arg,
+        );
       });
   },
 });
 
-export const { pipelineCardSettled, pipelineRefetchWanted, pipelineRefetchStarted } = pipelineSlice.actions;
+export const {
+  pipelineCardAdded,
+  pipelineCardSettled,
+  pipelineRefetchWanted,
+  pipelineRefetchStarted,
+} = pipelineSlice.actions;
 
 export const selectPipeline = (state: RootLike) => state.pipeline;
 

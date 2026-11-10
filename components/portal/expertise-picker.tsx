@@ -24,22 +24,13 @@ export function tradeFromExpertise(expertise: string[]) {
 }
 
 /**
- * Searchable multi-select of the business's own sub-services (Business Profile → services),
- * each labelled with its category. Values already on the member that the business no longer
- * lists stay selectable, so editing never silently drops them.
+ * The business's own sub-services (Business Profile → services) as picker options, each labelled
+ * with its category. `keep` values not listed any more stay selectable, so editing never drops them.
  */
-export function ExpertisePicker({
-  id,
-  value,
-  onChange,
-}: {
-  id?: string;
-  value: string[];
-  onChange: (value: string[]) => void;
-}) {
+export function useOfferedServiceOptions(keep: string[] = []): SearchableSelectOption[] {
   const provider = useAppSelector(selectAuthProvider);
 
-  const options = useMemo<SearchableSelectOption[]>(() => {
+  return useMemo<SearchableSelectOption[]>(() => {
     const services = provider?.services;
     const categories = (Array.isArray(services?.categoryIds) ? services.categoryIds : [])
       .map((categoryId) => getServiceCategoryById(categoryId))
@@ -59,13 +50,30 @@ export function ExpertisePicker({
       rows.push({ value: job, label: job, description: categoryOf(job) });
     }
     rows.sort((a, b) => (a.description || "").localeCompare(b.description || "") || a.label.localeCompare(b.label));
-    for (const item of value) {
+    for (const item of keep) {
       if (seen.has(item.toLowerCase())) continue;
       seen.add(item.toLowerCase());
       rows.push({ value: item, label: item, description: "Not in your listed services" });
     }
     return rows;
-  }, [provider?.services, value]);
+  }, [provider?.services, keep]);
+}
+
+/**
+ * Searchable multi-select of the business's own sub-services (Business Profile → services),
+ * each labelled with its category. Values already on the member that the business no longer
+ * lists stay selectable, so editing never silently drops them.
+ */
+export function ExpertisePicker({
+  id,
+  value,
+  onChange,
+}: {
+  id?: string;
+  value: string[];
+  onChange: (value: string[]) => void;
+}) {
+  const options = useOfferedServiceOptions(value);
 
   return (
     <SearchableMultiSelect

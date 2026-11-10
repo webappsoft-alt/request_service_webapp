@@ -15,7 +15,40 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import type { PipelineCard } from "@/lib/api/pipeline-client";
+import type { PortalRequest } from "@/lib/data/portal";
 import { cn } from "@/lib/utils";
+import { useAppDispatch } from "@/store/hooks";
+import { pipelineCardAdded } from "@/store/pipelineSlice";
+
+/** A new lead as the board's "New leads" card (same fields the server's card builder fills). */
+function leadCard(request: PortalRequest): PipelineCard {
+  const cityState = [request.city, request.state].filter(Boolean).join(" ");
+  const address = [request.address, cityState, request.zip]
+    .map((part) => String(part || "").trim())
+    .filter((part) => part.length > 1)
+    .join(", ");
+  const now = new Date().toISOString();
+  return {
+    key: `request:${request.id}`,
+    kind: "request",
+    id: request.id,
+    groupId: "leads_new",
+    number: request.number,
+    title: request.serviceName || "New lead",
+    category: "",
+    customerName: request.customerName || "No customer",
+    address,
+    status: request.status || "new",
+    statusOf: "request",
+    blocker: null,
+    source: request.source || "phone",
+    value: 0,
+    date: request.createdAt || now,
+    updatedAt: request.updatedAt || now,
+    href: `/pro/dashboard/requests/${request.id}`,
+  };
+}
 
 type Choice = "lead" | "estimate" | "schedule";
 
@@ -51,6 +84,7 @@ const CHOICES: {
  */
 export function CreateNewMenu({ className }: { className?: string }) {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const [chooserOpen, setChooserOpen] = useState(false);
   const [leadOpen, setLeadOpen] = useState(false);
   const [jobOpen, setJobOpen] = useState(false);
@@ -110,7 +144,16 @@ export function CreateNewMenu({ className }: { className?: string }) {
 
       {/* Mounted only while open: each dialog loads its customer lists when it mounts. */}
       {leadOpen ? (
-        <CreateLeadDialog open={leadOpen} onOpenChange={setLeadOpen} />
+        <CreateLeadDialog
+          open={leadOpen}
+          onOpenChange={setLeadOpen}
+          // Stay on the board: the saved lead goes straight into Leads, no reload.
+          onCreated={(request) =>
+            dispatch(
+              pipelineCardAdded({ card: leadCard(request), at: Date.now() }),
+            )
+          }
+        />
       ) : null}
       {jobOpen ? (
         <CreateJobDialog open={jobOpen} onOpenChange={setJobOpen} />

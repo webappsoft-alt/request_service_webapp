@@ -71,17 +71,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Textarea } from "@/components/ui/textarea";
+import { useOfferedServiceOptions } from "@/components/portal/expertise-picker";
 import { CRM_API_EVENT } from "@/components/portal/crm-data-provider";
 import { crmCustomerName, type PortalCustomerCrm } from "@/lib/data/crm-people";
 import {
@@ -2139,6 +2137,9 @@ function LineEditor({
   );
 }
 
+/** Stable empty list: the lead form keeps no unlisted service. */
+const NO_KEEP: string[] = [];
+
 const LEAD_WINDOWS: { value: PortalTimeWindow; label: string }[] = [
   { value: "morning", label: "Morning" },
   { value: "afternoon", label: "Afternoon" },
@@ -2148,9 +2149,15 @@ const LEAD_WINDOWS: { value: PortalTimeWindow; label: string }[] = [
 export function CreateLeadDialog({
   open,
   onOpenChange,
+  onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Gets the saved lead (with the picked customer's name) instead of opening its page, e.g. the
+   * Pipeline adds it to the Leads column straight from this response.
+   */
+  onCreated?: (request: PortalRequest) => void;
 }) {
   const router = useRouter();
   const auth = useAppSelector(selectAuth);
@@ -2173,6 +2180,7 @@ export function CreateLeadDialog({
   const [details, setDetails] = useState("");
   const [preferredDate, setPreferredDate] = useState("");
   const [preferredTimeWindow, setPreferredTimeWindow] = useState<PortalTimeWindow>("morning");
+  const serviceOptions = useOfferedServiceOptions(NO_KEEP);
   const [preferredStartTime, setPreferredStartTime] = useState("");
   const [createCustomerOpen, setCreateCustomerOpen] = useState(false);
   const customer = customers.find((item) => item.id === customerId) ?? first;
@@ -2294,7 +2302,8 @@ export function CreateLeadDialog({
       }
       toast.success(`${request.number} added to leads.`);
       onOpenChange(false);
-      router.push(`/pro/dashboard/requests/${request.id}`);
+      if (onCreated) onCreated({ ...request, customerName: displayName || request.customerName });
+      else router.push(`/pro/dashboard/requests/${request.id}`);
     } finally {
       setSubmitting(false);
     }
@@ -2337,11 +2346,27 @@ export function CreateLeadDialog({
             />
           </Field>
           <Field label={<>Service <span className="text-destructive">*</span></>}>
-            <Input
-              value={serviceName}
-              placeholder="Leak detection and repair"
-              onChange={(event) => setServiceName(event.target.value)}
-            />
+            {/* The services this business offers (Business Profile → Services). With none listed yet, type it. */}
+            {serviceOptions.length ? (
+              <SearchableSelect
+                options={serviceOptions}
+                value={serviceName || null}
+                onChange={(value) => setServiceName(value ?? "")}
+                placeholder="Select a service"
+                emptyMessage="No matching services. Add more under Business Profile → Services."
+              />
+            ) : (
+              <>
+                <Input
+                  value={serviceName}
+                  placeholder="Leak detection and repair"
+                  onChange={(event) => setServiceName(event.target.value)}
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Add your services under Business Profile → Services to pick from a list.
+                </p>
+              </>
+            )}
           </Field>
           <Field label={<>What they asked for <span className="text-destructive">*</span></>}>
             <Textarea
@@ -2374,17 +2399,26 @@ export function CreateLeadDialog({
               />
             </Field>
             <Field label={<>Window <span className="text-destructive">*</span></>}>
-              <NativeSelect
-                className="w-full"
+              {/* The app's dropdown, not the browser's native list (it opened unstyled, over the dialog edge). */}
+              <Select
                 value={preferredTimeWindow}
-                onChange={(event) => setPreferredTimeWindow(event.target.value as PortalTimeWindow)}
+                onValueChange={(value) => setPreferredTimeWindow(value as PortalTimeWindow)}
               >
-                {LEAD_WINDOWS.map((item) => (
-                  <NativeSelectOption key={item.value} value={item.value}>
-                    {item.label}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+                <SelectTrigger className="w-full" aria-label="Preferred time window">
+                  <SelectValue placeholder="Select a window" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  align="start"
+                  className="z-100 w-(--radix-select-trigger-width)"
+                >
+                  {LEAD_WINDOWS.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
           </div>
         </div>

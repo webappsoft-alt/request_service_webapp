@@ -21,7 +21,8 @@ const STALE_AFTER_MS = 30_000;
 /** Search waits for a pause in typing. */
 const SEARCH_DEBOUNCE_MS = 350;
 
-export type PipelineMoveOutcome = { ok: true; warning?: string | null } | { ok: false; error: string };
+export type PipelineMoveOutcome =
+  { ok: true; warning?: string | null } | { ok: false; error: string };
 
 /**
  * Pipeline board on the `pipeline` slice: the cached board shows at once when the page opens and
@@ -30,15 +31,27 @@ export type PipelineMoveOutcome = { ok: true; warning?: string | null } | { ok: 
  */
 export function usePipelineBoard() {
   const dispatch = useAppDispatch();
-  const { data: board, loading, error, fetchedAt, loadingMore, pending, refetchWanted, search, appliedSearch } =
-    useAppSelector(selectPipeline);
+  const {
+    data: board,
+    loading,
+    error,
+    fetchedAt,
+    loadingMore,
+    pending,
+    refetchWanted,
+    search,
+    appliedSearch,
+    quietUntil,
+  } = useAppSelector(selectPipeline);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef(pending);
   const fetchedAtRef = useRef(fetchedAt);
+  const quietUntilRef = useRef(quietUntil);
   useEffect(() => {
     pendingRef.current = pending;
     fetchedAtRef.current = fetchedAt;
-  }, [pending, fetchedAt]);
+    quietUntilRef.current = quietUntil;
+  }, [pending, fetchedAt, quietUntil]);
 
   const reload = useCallback(() => {
     if (pendingRef.current > 0) {
@@ -67,13 +80,27 @@ export function usePipelineBoard() {
   useEffect(() => {
     // Cached board stays on screen; this refresh is silent.
     reload();
-    const offUpdated = onSocketEvent("PIPELINE_UPDATED", (result) => dispatch(pipelineCardSettled(result)));
-    const offInvalidate = onSocketEvent("PIPELINE_INVALIDATE", scheduleLoad);
+    const offUpdated = onSocketEvent("PIPELINE_UPDATED", (result) =>
+      dispatch(pipelineCardSettled(result)),
+    );
+    // The echo of a record we just added from its create response is skipped (already on the board).
+    const offInvalidate = onSocketEvent("PIPELINE_INVALIDATE", () => {
+      if (Date.now() < quietUntilRef.current) return;
+      scheduleLoad();
+    });
     const onRealtime = (event: Event) => {
-      if ((event as CustomEvent<{ type?: string }>).detail?.type === "SOCKET_RECONNECTED") scheduleLoad();
+      if (
+        (event as CustomEvent<{ type?: string }>).detail?.type ===
+        "SOCKET_RECONNECTED"
+      )
+        scheduleLoad();
     };
     const onVisible = () => {
-      if (document.visibilityState === "visible" && Date.now() - (fetchedAtRef.current ?? 0) > STALE_AFTER_MS) scheduleLoad();
+      if (
+        document.visibilityState === "visible" &&
+        Date.now() - (fetchedAtRef.current ?? 0) > STALE_AFTER_MS
+      )
+        scheduleLoad();
     };
     window.addEventListener("rs-realtime", onRealtime);
     document.addEventListener("visibilitychange", onVisible);
@@ -87,10 +114,21 @@ export function usePipelineBoard() {
   }, [dispatch, reload, scheduleLoad]);
 
   const moveCard = useCallback(
-    async (card: PipelineCard, toGroupId: string, index: number, schedule?: PipelineSchedule | null): Promise<PipelineMoveOutcome> => {
-      const action = await dispatch(movePipelineCardThunk({ card, toGroupId, index, schedule }));
-      if (movePipelineCardThunk.fulfilled.match(action)) return { ok: true, warning: action.payload.warning };
-      return { ok: false, error: action.payload || "The board is still loading." };
+    async (
+      card: PipelineCard,
+      toGroupId: string,
+      index: number,
+      schedule?: PipelineSchedule | null,
+    ): Promise<PipelineMoveOutcome> => {
+      const action = await dispatch(
+        movePipelineCardThunk({ card, toGroupId, index, schedule }),
+      );
+      if (movePipelineCardThunk.fulfilled.match(action))
+        return { ok: true, warning: action.payload.warning };
+      return {
+        ok: false,
+        error: action.payload || "The board is still loading.",
+      };
     },
     [dispatch],
   );
@@ -99,7 +137,10 @@ export function usePipelineBoard() {
   const loadMore = useCallback(
     async (columnId: string): Promise<string | null> => {
       const action = await dispatch(fetchPipelineColumnPage(columnId));
-      return fetchPipelineColumnPage.rejected.match(action) && !action.meta.condition ? action.payload || "Couldn't load more cards." : null;
+      return fetchPipelineColumnPage.rejected.match(action) &&
+        !action.meta.condition
+        ? action.payload || "Couldn't load more cards."
+        : null;
     },
     [dispatch],
   );

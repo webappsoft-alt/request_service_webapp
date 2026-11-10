@@ -67,6 +67,27 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-10
 
+- **Pipeline: new lead lands on the board instantly** — client: after "+ Create new → New lead", stay on the
+  Pipeline and add the lead from the create response, with no navigation and no full reload.
+  - `CreateLeadDialog` takes an optional `onCreated`; when it's set, the dialog hands back the saved lead (with the
+    picked customer's name) instead of opening its page. The dashboard and Leads tab still navigate.
+  - `CreateNewMenu` turns the response into a "New leads" card (`leadCard`) and dispatches the new
+    `pipelineCardAdded`. It reuses `settle`, so the card goes on top with group and column totals updated. It's
+    skipped while a search is shown.
+  - `pipelineCardAdded` also sets `quietUntil` (3s). `usePipelineBoard` ignores `PIPELINE_INVALIDATE` until then,
+    because the server's "something changed" echo for our own save would otherwise reload every column.
+  - Checked in Chrome: POST sent, dialog closed, URL unchanged, Leads 5→6, REQ-2001 under "Added by you", 0 extra
+    board loads.
+  · `components/portal/create-work-dialogs.tsx`, `components/portal/pipeline/create-new-menu.tsx`,
+  `store/pipelineSlice.ts`, `components/portal/pipeline/use-pipeline-board.ts`
+
+- **Create lead form: proper dropdowns** — client: the Window field opened the browser's unstyled list, and Service
+  should be picked from the services the business offers. Window now uses the app's `Select` (popper, inside the
+  dialog). Service is a searchable list of the business's own sub-services (Business Profile → Services), labelled
+  by category. If none are listed yet, it falls back to the text box with a hint. That list now comes from a shared
+  `useOfferedServiceOptions` hook, also used by the team-member `ExpertisePicker`. Checked in Chrome: options listed,
+  a pick fills the field · `components/portal/create-work-dialogs.tsx`, `components/portal/expertise-picker.tsx`
+
 - **Pipeline: fewer colours** — client: the board looked too busy and colourful. The refresh button and the
   lead colour key are commented out (the board already updates itself live). Column underlines, group boxes, the
   drop highlight and the "Move to" dots are now neutral grey. Removed the lead cards' coloured left edge, the 24-hour

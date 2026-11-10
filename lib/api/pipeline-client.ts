@@ -1,4 +1,8 @@
-import { getData, invalidateGetCache, patchData } from "@/components/api/apiFuntions";
+import {
+  getData,
+  invalidateGetCache,
+  patchData,
+} from "@/components/api/apiFuntions";
 import { providerCrmApi } from "@/components/api/ApiRoutesFile";
 
 export type PipelineCardKind = "request" | "estimate" | "job" | "invoice";
@@ -27,6 +31,8 @@ export type PipelineCard = {
    * not sent, declined), or null when it can. The server enforces the same rule.
    */
   blocker?: PipelineBlocker | null;
+  /** Leads only: how the lead came in (quote_request, phone, ai_phone_call…); older servers omit it. */
+  source?: string | null;
   value: number;
   date: string | null;
   updatedAt: string;
@@ -111,13 +117,20 @@ function depthParam(depths: Record<string, number>) {
  * The board — 10 cards per column at first. `depths` ({ groupId: cardsShown }) keeps columns
  * opened with "See more" at their size, so a refresh replaces cards in place, never collapsing.
  */
-export async function getPipelineBoard(depths: Record<string, number> = {}, search = ""): Promise<PipelineBoard> {
+export async function getPipelineBoard(
+  depths: Record<string, number> = {},
+  search = "",
+): Promise<PipelineBoard> {
   const depth = depthParam(depths);
   const params = { ...(depth ? { depth } : {}), ...(search ? { search } : {}) };
-  const response = await getData(providerCrmApi.pipeline, Object.keys(params).length ? params : undefined, {
-    force: true,
-    silent: true,
-  });
+  const response = await getData(
+    providerCrmApi.pipeline,
+    Object.keys(params).length ? params : undefined,
+    {
+      force: true,
+      silent: true,
+    },
+  );
   return unwrapData<PipelineBoard>(response);
 }
 
@@ -128,10 +141,18 @@ export type PipelineColumnPage = {
 };
 
 /** "See more": a column's next 10 cards across its groups (`loaded` = cards each group shows). */
-export async function getPipelineColumnPage(columnId: string, loaded: Record<string, number>, search = "") {
+export async function getPipelineColumnPage(
+  columnId: string,
+  loaded: Record<string, number>,
+  search = "",
+) {
   const response = await getData(
     providerCrmApi.pipelineColumn(columnId),
-    { loaded: depthParam(loaded), limit: PIPELINE_PAGE_SIZE, ...(search ? { search } : {}) },
+    {
+      loaded: depthParam(loaded),
+      limit: PIPELINE_PAGE_SIZE,
+      ...(search ? { search } : {}),
+    },
     { force: true, silent: true },
   );
   return unwrapData<PipelineColumnPage>(response);
@@ -148,7 +169,15 @@ export async function movePipelineCard(
     { silent: true },
   );
   // A move converts / books / invoices records, so the list pages refetch next time.
-  for (const root of ["provider/requests", "provider/estimates", "provider/estimate-v2", "provider/jobs", "provider/invoices", "provider/schedule", "provider/dashboard"]) {
+  for (const root of [
+    "provider/requests",
+    "provider/estimates",
+    "provider/estimate-v2",
+    "provider/jobs",
+    "provider/invoices",
+    "provider/schedule",
+    "provider/dashboard",
+  ]) {
     invalidateGetCache(root);
   }
   return unwrapData<PipelineMoveResult>(response);

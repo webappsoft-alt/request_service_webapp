@@ -65,6 +65,35 @@ Modules, layout, notification channels and API conventions: see
 
 Newest first. Format: **what** — why · files.
 
+### 2026-11-10
+
+- **Pipeline: fewer colours** — client: the board looked too busy and colourful. The refresh button and the
+  lead colour key are commented out (the board already updates itself live). Column underlines, group boxes, the
+  drop highlight and the "Move to" dots are now neutral grey. Removed the lead cards' coloured left edge, the 24-hour
+  pulsing dot and the section dots. Source badges (Web / AI call / Manual) are plain grey. Status pills and the amber
+  "can't book yet" warning are unchanged. The sample-board test passes again · `components/portal/pipeline/pipeline-board.tsx`
+
+- **Pipeline UI, Bolster-style** — client asked for a "+ Create new" menu, a "⋯" menu on cards, and clearer lead and
+  estimate sub-stages. Frontend only; the routes, schemas and move rules are unchanged.
+  - **"+ Create new"** next to search: a chooser (New lead / New estimate / Schedule a job) that opens the existing
+    flows: `CreateLeadDialog`, the estimate wizard (`/pro/dashboard/new-estimate/new`), and `CreateJobDialog`.
+  - **"⋯" on every card**: Open, plus "Move to" any group that takes the card. It runs the same `dropCard` rules as
+    dragging: the blocker toast for unfinished estimates, flows that open a page, and the booking dialog for Booked.
+    Lock, calendar and arrow icons show which of those applies.
+  - **Leads** split into "Incoming · web & calls" and "Added by you", using the lead's `source`. Each card has a
+    coloured left edge (sky for incoming, slate for added by you) and a badge (Web / Message / AI call / From RS /
+    Manual / Walk-in). Incoming leads from the last 24 hours get a live dot, and lead cards show the received date.
+  - **Sent estimates** split into "Waiting on customer" and "Accepted · ready to book".
+  - Column headers have a coloured underline and bold totals; group borders take the column colour. A key for the
+    lead colours sits on the left of the toolbar.
+  - The split is display only: group counts and paging still come from the server. Lead sections hide when the API
+    doesn't send `source`. The card is now a draggable `div` holding the link and the menu button side by side, since
+    a button inside a link is invalid.
+  - Verified in Chrome against a sample board: chooser, job dialog, blocked move (no request sent), booking dialog,
+    a menu move (PATCH sent), keyboard drag, and 390px with no overflow. `tsc` and eslint are clean.
+  · `components/portal/pipeline/pipeline-board.tsx`, `components/portal/pipeline/create-new-menu.tsx` (new),
+  `lib/api/pipeline-client.ts`, `components/portal/views/pipeline-view.tsx`
+
 ### 2026-11-05
 
 - **/home-v3 customer reviews: whole cards only** — client: a neighbouring card stuck out, half cut and faded.

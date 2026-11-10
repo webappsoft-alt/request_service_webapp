@@ -8,7 +8,7 @@ export function PipelineView() {
     <PortalPage
       eyebrow="Sales & work"
       title="Pipeline"
-      description="Drag a card to move it forward. Customers and crew are notified automatically."
+      description="Drag a card, or use its ⋯ menu, to move it forward. Customers and crew are notified automatically."
     >
       <PipelineBoard />
     </PortalPage>

@@ -1,4 +1,5 @@
 import { jobMoneySheet, jobCostMix, lineTotal, type JobCostLine } from "@/components/portal/use-job-costing";
+import { lineExtras } from "@/lib/estimate-line-extras";
 import type { Estimate, EstimateItem, EstimateSiteVisitRecord, Invoice, InvoiceItem, Job, JobItem, ServiceAddress } from "@/lib/types";
 
 export function todayISO() {
@@ -64,6 +65,7 @@ export function linesToEstimateItems(
     taxRate: rate,
     discount: 0,
     total: lineTotal(line),
+    ...lineExtras(line),
     ...(line.kind === "materials"
       ? {
           images: (line.images ?? []).filter((src) =>
@@ -78,7 +80,8 @@ export function linesToEstimateItems(
 }
 
 export function linesToJobItems(jobId: string, lines: JobCostLine[]): JobItem[] {
-  return lines.map((line) => ({
+  // Optional add-ons / alternatives weren't part of the accepted price.
+  return lines.filter((line) => !line.optional).map((line) => ({
     id: line.id,
     jobId,
     source: "estimate",
@@ -102,7 +105,7 @@ export function linesToJobItems(jobId: string, lines: JobCostLine[]): JobItem[] 
 }
 
 export function linesToInvoiceItems(invoiceId: string, lines: JobCostLine[]): InvoiceItem[] {
-  return lines.map((line) => {
+  return lines.filter((line) => !line.optional).map((line) => {
     const kind: InvoiceItem["kind"] =
       line.kind === "labor" ? "labor" : "materials";
     return {

@@ -151,6 +151,12 @@ export interface EstimateItem {
   images?: string[];
   /** Named work section (e.g. Plumbing, Electrical). Empty = General. */
   section?: string;
+  /** Spreadsheet: cost per unit and profit % (unitPrice stays what the customer pays). */
+  unitCost?: number;
+  profitPercent?: number;
+  /** Optional add-on / alternative: shown, but not in the total and not carried to the job. */
+  optional?: boolean;
+  optionGroup?: string;
 }
 
 export interface EstimateSitePhoto {

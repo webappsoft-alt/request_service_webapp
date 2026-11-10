@@ -67,6 +67,206 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-10
 
+- **Estimate page: project menu never scrolls inside** — client: on a smaller screen the menu had its own
+  scrollbar.
+  - No inner scroll: the card is at least the screen height (`lg:min-h-[calc(100dvh-72px)]`) and grows with
+    its items; rows, group gaps and header padding tightened.
+  - Follow-up folds into one "Follow-up" row at the bottom (click to open the date / notes / Save form) on
+    desktop too, so it no longer pushes the menu past the screen.
+  - Measured: no scrolling element inside the menu; a sent estimate fits a 1366×620 screen.
+  - Files: `estimate-v2/project-lifecycle-nav.tsx`, `new-estimate-workspace-view.tsx`.
+
+- **Estimate page: project menu sticks properly and fills the screen** — client: while scrolling, the menu's
+  top went under the header and it ended short of the bottom.
+  - The rail's sticky offset never applied (`lg:top-4` / `lg:top-[61px]` computed to `top: auto`, so it just
+    scrolled away). Now `lg:top-15` (60px, below the 49px header), and the card is exactly
+    `lg:h-[calc(100dvh-72px)]` tall; its item list scrolls inside if it's ever taller.
+  - Verified: after scrolling, the menu stays 11px under the header and ends 12px above the bottom.
+  - Files: `estimate-v2/project-lifecycle-nav.tsx`, `new-estimate-workspace-view.tsx` (rail + loading skeleton).
+
+- **Estimate page on phones: project menu is a swipeable row of tabs** — client: on mobile the menu stacked
+  top to bottom and filled the screen.
+  - Below `lg`, the menu is one horizontal, scrollable row of pill tabs (icon, label, count); the open tab
+    scrolls into view. Desktop keeps the full-height sidebar.
+  - The follow-up form folds into a "Follow-up" disclosure under the tabs on phones.
+  - `min-w-0` on the rail so the row scrolls inside the screen (no sideways page scroll at 390px).
+  - Files: `estimate-v2/project-lifecycle-nav.tsx`, `new-estimate-workspace-view.tsx`.
+
+- **Estimate summary: Total is a ruled line, not a filled block** — client: the solid blue Total looked like a
+  button. Now a dark rule above "Total" with the amount large in the brand blue (no fill). Files:
+  `estimate-v2/new-estimate-workspace-view.tsx`.
+
+- **Estimate summary card redesigned (CRM style)** — client asked for a pro-level summary; same data and logic.
+  - Left: cost breakdown with a stacked bar (labour / material / equipment, shades of the brand blue) and
+    three tiles with amount and share; Terms below.
+  - Right: totals ledger (subtotal, discount input, tax) ending in a solid primary Total block, plus a line
+    for optional add-ons that aren't in the total.
+  - Project stages summary still sits under the header when the estimate has stages.
+  - Files: `estimate-v2/new-estimate-workspace-view.tsx`.
+
+- **Estimate page: cleaner menu top, full-length Activity** — client: the menu's top looked shadowed with a
+  missing border; Activity had a fixed-height inner scroll.
+  - Menu: header tint removed, clear card border (`slate-300`), the active accent bar that stuck out past
+    the card edge removed (active item keeps its filled icon and tint).
+  - Activity tab lists every entry on the page (no max-height scroll, no Show more / less).
+  - Files: `estimate-v2/project-lifecycle-nav.tsx`, `new-estimate-workspace-view.tsx`.
+
+- **Send estimate: working company confirmation checkbox** — client: the "I have read pages 1 and 2…"
+  box did nothing on the pro side. That box is the customer's consent (works on their signing page), so
+  instead the company side gets its own:
+  - Under Company authorization: "I confirm this estimate is accurate and authorize sending it to
+    {customer} for {total}" — must be ticked (with the signature) before Send; otherwise it scrolls to it and
+    explains. It gates sending only; nothing new is stored.
+  - The customer's box shows "The customer ticks this box when they sign." in the pro preview
+    (`customerBoxNote`; hidden in print).
+  - Files: `components/portal/send-approval-dialog.tsx`, `components/estimate/estimate-pdf.tsx`.
+
+- **Estimate page: Estimate summary and Notes & updates are their own cards; loading skeleton matches the
+  layout** — client: they were inside the line-items card; the skeleton still showed the removed
+  "Work / Estimate" header.
+  - Summary (with Terms) and Notes & updates moved out of the estimate card into separate cards below it
+    (same content and logic; shown when the sheet is).
+  - Loading state: headerless, a full-height menu card with item placeholders, the estimate card and a
+    summary card.
+  - Files: `estimate-v2/new-estimate-workspace-view.tsx`.
+
+- **Estimate page: full-height project menu, no shadow, follow-up back in the sidebar** — client: the white
+  menu card stopped halfway down; no shadow; Follow-up wasn't a page before.
+  - The menu card fills the screen height below the header (`lg:min-h-[calc(100dvh-5.75rem)]`), shadows removed.
+  - Follow-up is no longer a tab: a compact date + notes + Save form is pinned to the bottom of the menu
+    (new `footer` slot on `ProjectLifecycleNav`), shown while the estimate is sent and not accepted.
+  - Files: `estimate-v2/project-lifecycle-nav.tsx`, `new-estimate-workspace-view.tsx`.
+
+- **Estimate page: map on the Customer tab, Print only where the document is, restyled project menu; header
+  record tabs removed** — client feedback.
+  - Customer tab ends with the route map (business → job site), the same `RouteLocationMapInner` as the
+    "View on map" dialog, loaded lazily.
+  - Print / PDF sits on the Estimate card and the Preview card only; the floating toolbar no longer shows on
+    other tabs (it stays on the Estimate tab before an estimate exists).
+  - Project menu restyle: tinted header, icon tiles, accent bar + filled icon for the active item, count pills.
+  - Portal header: the recently-opened records tab bar (Dashboard · REQ-… · JOB-…) is off everywhere
+    (`SHOW_RECORD_TABS = false` in `portal-shell.tsx`; code kept).
+  - Files: `estimate-v2/project-panels.tsx`, `project-lifecycle-nav.tsx`, `new-estimate-workspace-view.tsx`,
+    `components/portal/portal-shell.tsx`.
+
+- **Estimate page: real Schedule calendar, sidebar lists only sections with data, Customer tab, no dialogs,
+  panels in the page's card style** — client: Schedule wasn't the project's schedule; empty tabs (Invoices,
+  Change orders…) shouldn't show; Work request / Preparation should be in the page, not a modal; bring back a
+  Customer tab instead of the identity card; the panels didn't match the app's UI.
+  - **Schedule** is the company calendar (`EventCalendar`, same as Schedules) with only this project's rows
+    (lead, estimate and job). Drag to move (`updateSchedule`), click to reschedule / assign (`AssignEventDialog`).
+    New `listRecordSchedule(recordId)` reads the API's own rows for one record (no company-wide merges).
+  - **Dynamic sidebar** (`projectNavGroups`): Preview / Budget only with line items, Selections only with
+    optional items, Progress only with a job, Change orders / Schedule / Invoices / Project files only when
+    they have entries (with counts); empty groups disappear. A hidden section falls back to the estimate.
+  - `useProjectData` loads the job, the customer's request photos and the calendar rows once per project.
+  - **Customer tab** (name, email, phone, property + map, Customer profile) and **Work request** (with the
+    quote answers) render in the centre; Preparation too. The Work request / Preparation dialog is removed.
+  - The identity card is gone: number, title and status head the menu; customer and address are the Customer tab.
+  - Panels use the estimate page's own card (`RAIL_CARD` surface) and uppercase section labels.
+  - Files: `components/portal/estimate-v2/project-panels.tsx`, `project-lifecycle-nav.tsx`,
+    `new-estimate-workspace-view.tsx`, `lib/api/crm-client.ts`.
+
+- **Estimate page: every sidebar section renders in the page; details in dialogs; approval status** — client: the
+  sidebar still sent people to other pages, and details cluttered the centre.
+  - **No page changes.** Each project menu item renders in the centre (`project-panels.tsx`):
+    - **Preview** shows the customer document inline (from `buildPrintJob`, split out of `printEstimate`).
+    - **Selections** lists optional items by "Option for", with included vs optional totals and "Include in total".
+    - **Budget** shows price, cost, profit and margin per section from the line items (internal only), plus
+      approved change orders.
+    - **Progress** shows the job status steps, stages and latest activity.
+    - **Change orders** and **Schedule** (start, due and stage dates) come from the job.
+    - **Invoices** shows the linked invoice (total, paid, balance, due) and change-order invoices.
+    - **Project files** is a labelled grid; see below.
+    - The job loads only when a production panel opens (`getJob`). Panels that need it say so until it exists.
+  - **Centre clean-up.** "Customer & property" is gone; the sidebar title card already shows the customer, address
+    and map. Work request and Preparation open as dialogs. Preparation still shows inline as the first step when
+    nothing is chosen yet.
+  - **Accepted / converted.** No send action anywhere: the card row was already accept-aware, and Preview shows
+    "Review and send" only before acceptance. `ApprovalStatus` sits on top of the estimate and in Preview: who
+    signed for the customer and the company, when, and that signed estimates are locked.
+  - **Project files.** Each file is labelled by source: Uploaded by customer (the original request's photos, loaded
+    when the tab opens), Added by company (Existing information and estimate attachments), Site visit, and Job. It
+    is a compact 2–4 column grid with thumbnails, PDFs as icons, and each file opening in a new tab.
+  - Checked in Chrome with an accepted estimate, job, change order and files:
+    - Every menu item rendered with the URL unchanged, and no send button was visible.
+    - The approval strip shows both signatures.
+    - Budget: $990 price, $500 cost, $150 profit.
+    - Files: customer 1, company 2, job 1.
+    - Work request opened as a dialog.
+    - `tsc` and eslint are clean.
+  · `components/portal/estimate-v2/project-panels.tsx` (new), `project-lifecycle-nav.tsx`,
+  `new-estimate-workspace-view.tsx`
+
+- **Estimate page: no "Work / Estimate" header; Print moves into the estimate card** — client: the header card was
+  still there. `PortalPage` takes `headerless` (the title stays as an sr-only `<h1>`).
+  - The estimate number, title, status, customer and address (with View on map) are now a compact card at the
+    top of the project sidebar, with the back arrow.
+  - The header buttons moved into the estimate card: **Print / PDF** sits next to Save draft / Preview & send /
+    More. Assign or change contractor and technician, and In-person presentation, are in More.
+  - The header's "Save changes ▾" is dropped; it duplicated Save draft and Preview & send.
+  - With no estimate card on screen (site-visit path, or a Details panel open), the crew buttons and Print show
+    in a small toolbar above the centre. The print document renders at page level.
+  - Checked in Chrome: no eyebrow on the page, Print in the card and enabled, More lists the crew and in-person
+    options. `tsc` and eslint are clean · `components/portal/portal-page.tsx`,
+  `components/portal/estimate-v2/new-estimate-workspace-view.tsx`
+
+- **Estimate page: details move into the sidebar, centre is the sheet; Work tabs desktop-hidden everywhere** —
+  client: the first pass still cluttered the page.
+  - **Work tabs** (`Leads | Messages | Estimate | Jobs…`) are now `lg:hidden` on every Work page, not just the
+    estimate. The main sidebar has the same links, and phones and tablets keep the bar · `portal-shell.tsx`
+  - **Left rail is only the project menu:** 232px and sticky. Its new **Details** group holds Customer & property,
+    Work request and Preparation, plus Follow-up and Activity when they apply. These cards are no longer stacked
+    on the page.
+  - **Centre:** each Details tab opens its card there, with "Back to estimate". Picking a preparation option
+    returns to the sheet. The estimate column stays mounted (hidden) under a panel, so drafts, auto-save and
+    dialogs keep running. The page opens on Preparation only when nothing is chosen and no estimate exists yet.
+    The change-request notice moved to the top of the centre.
+  - Checked in Chrome: no Work tabs on desktop (estimate and Jobs) and still there at 390px. Nav 232px, centre
+    about 1,090px at 1600. Each tab hides the sheet and shows its card; Back restores the sheet and its inputs.
+    `tsc` and eslint are clean.
+  · `components/portal/estimate-v2/new-estimate-workspace-view.tsx`,
+  `components/portal/estimate-v2/project-lifecycle-nav.tsx`, `components/portal/portal-shell.tsx`
+
+- **Estimate page, Bolster-style: project menu, spreadsheet line items, optional add-ons, Review and send** —
+  client asked for a cleaner estimate detail view. Leads → Estimates → Jobs → Invoices is unchanged. The user
+  approved adding optional item fields; the backend change is additive (see the backend log).
+  - **Top Work tabs** are hidden on desktop on the estimate detail page only (`/pro/dashboard/new-estimate/:id`).
+    Phones keep them · `portal-shell.tsx`
+  - **Project menu** (`ProjectLifecycleNav`, top of the left rail):
+    - Pre-production: Estimate scrolls to the sheet, Preview opens the existing preview & send, Selections scrolls
+      to the line items and shows the optional count.
+    - Production (Budget, Progress, Change orders, Schedule, Invoices) is locked with a reason until the job
+      exists, then opens the job's tabs (`?tab=materials`, `?tab=change-orders`), the schedule, and the invoice.
+    - Project: Project files (Existing information, or the job's attachments) and Project details.
+  - **Spreadsheet line items** (`LineItemsEditor` with the opt-in `spreadsheet` prop; jobs and invoices unchanged):
+    - Cost and Profit % columns. Profit sets the price. Editing cost or price keeps the price and recalculates
+      profit, which is safe while typing digit by digit.
+    - An Optional switch with an "Option for…" field. Optional lines are tinted, in italics, and left out of the
+      line, section and estimate totals (`jobCostMix`, `groupLinesBySection`).
+    - Unit (each / ft / sq ft / hr) is now sent to the API; before, it was dropped on save.
+  - **Fields end to end:** `unitCost`, `profitPercent`, `optional` and `optionGroup` on `JobCostLine` and
+    `EstimateItem` (`lib/estimate-line-extras.ts`). They go through the mapper and the API payload, the sheet
+    change signature (so edits auto-save), and the estimate items builder. `linesToJobItems` and
+    `linesToInvoiceItems` drop optional lines.
+  - **Customer copy:** snapshots use `optionExtras` (optional flag and group only), so cost and profit never
+    reach the customer. The customer document lists included work as before, then a dashed "Optional add-ons"
+    table marked "Not included in the total" · `estimate-pdf.tsx`, `customer-estimate.tsx`, `use-estimate-share.ts`
+  - **Header:** "Save changes" plus a menu with Review and send (the existing preview → company signature →
+    email flow), In-person presentation (confirm, then open the customer's signing link in a new tab on this
+    device), and Print / PDF. E-signatures already existed and are unchanged.
+  - Checked in Chrome with a sample estimate:
+    - The menu locks Production; the columns appear.
+    - Cost 60 on an $85 line gives 41.7%, and 50% gives $90.
+    - The optional toggle drops the total; the auto-save PUT carries unit, cost, profit, optional and group.
+    - The preview shows the add-ons box with no cost; the phone width keeps the tabs with no overflow.
+  · `components/portal/estimate-v2/project-lifecycle-nav.tsx` (new), `lib/estimate-line-extras.ts` (new),
+  `components/portal/line-items-editor.tsx`, `components/portal/estimate-v2/sectioned-line-items-editor.tsx`,
+  `components/portal/estimate-v2/new-estimate-workspace-view.tsx`, `components/portal/estimate-v2/line-sections.ts`,
+  `components/portal/use-job-costing.ts`, `components/portal/work-builders.ts`, `components/portal/use-estimate-share.ts`,
+  `components/estimate/estimate-pdf.tsx`, `components/estimate/customer-estimate.tsx`, `lib/api/crm-client.ts`,
+  `lib/api/crm-mappers.ts`, `lib/types/index.ts`, `components/portal/portal-shell.tsx`
+
 - **Pipeline: new lead lands on the board instantly** — client: after "+ Create new → New lead", stay on the
   Pipeline and add the lead from the create response, with no navigation and no full reload.
   - `CreateLeadDialog` takes an optional `onCreated`; when it's set, the dialog hands back the saved lead (with the

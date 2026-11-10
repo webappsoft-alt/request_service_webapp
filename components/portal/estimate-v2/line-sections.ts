@@ -38,7 +38,8 @@ export function groupLinesBySection(lines: JobCostLine[]): LineSectionGroup[] {
       key,
       label: key || "General",
       lines: sectionLines,
-      total: sectionLines.reduce((sum, line) => sum + lineTotal(line), 0),
+      // Optional lines aren't in the total.
+      total: sectionLines.reduce((sum, line) => sum + (line.optional ? 0 : lineTotal(line)), 0),
     };
   });
 }

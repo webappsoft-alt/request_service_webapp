@@ -30,6 +30,7 @@ export function SectionedLineItemsEditor({
   showPricing = true,
   sectionActions,
   soft = false,
+  spreadsheet = false,
 }: {
   lines: JobCostLine[];
   /** Shadowed cards with light dividers instead of the dark section borders. */
@@ -40,6 +41,8 @@ export function SectionedLineItemsEditor({
   sectionActions?: (section: { key: string; label: string }) => React.ReactNode;
   /** Price / Total columns and section totals (default true). */
   showPricing?: boolean;
+  /** Estimate spreadsheet: Cost / Profit % columns and the Optional toggle. */
+  spreadsheet?: boolean;
 }) {
   const groups = useMemo(() => groupLinesBySection(lines), [lines]);
   const [draftSection, setDraftSection] = useState("");
@@ -285,6 +288,7 @@ export function SectionedLineItemsEditor({
               onChange={(next) => replaceGroupLines(group.key, next)}
               locked={locked}
               showPricing={showPricing}
+              spreadsheet={spreadsheet}
               className={cn(
                 "rounded-none border-0",
                 soft &&
@@ -301,6 +305,9 @@ export function SectionedLineItemsEditor({
             >
               <span className="font-medium text-slate-600">
                 {group.label} total
+                {spreadsheet && group.lines.some((line) => line.optional) ? (
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">(optional items not included)</span>
+                ) : null}
               </span>
               <span className="font-semibold tabular-nums text-slate-900">
                 {formatMoney(group.total)}

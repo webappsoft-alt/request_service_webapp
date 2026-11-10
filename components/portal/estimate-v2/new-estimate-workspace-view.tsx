@@ -5,7 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { AiGeneratedBadge, isAiGenerated } from "@/components/portal/estimate-v2/ai-generated-badge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, CheckCircle2, ChevronDown, ChevronUp, Handshake, HardHat, LayoutTemplate, Link2, Loader2, MapPin, MoreHorizontal, Pencil, Printer, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Handshake, HardHat, LayoutTemplate, Link2, Loader2, MapPin, MoreHorizontal, Pencil, Presentation, Printer, Route, Trash2, FileText, History, UserRound } from "lucide-react";
+import { ProjectLifecycleNav, projectNavGroups } from "@/components/portal/estimate-v2/project-lifecycle-nav";
+import { ApprovalStatus, isProjectPanelView, ProjectPanel, projectFiles, useProjectData } from "@/components/portal/estimate-v2/project-panels";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -103,6 +105,7 @@ import {
   updateEstimate,
 } from "@/lib/api/crm-client";
 import { formatDate, formatMoney, visitWallClock } from "@/lib/format";
+import { lineExtras, optionExtras } from "@/lib/estimate-line-extras";
 import type { Estimate, EstimateChangeRequest, EstimateCustomerUpdate, Invoice } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { NotesPanel } from "@/components/portal/notes-panel";
@@ -444,6 +447,7 @@ function estimateToLines(estimate: Estimate | null): JobCostLine[] {
       ...(String(item.section || "").trim()
         ? { section: String(item.section).trim() }
         : {}),
+      ...lineExtras(item),
     };
   });
 }
@@ -464,7 +468,7 @@ function filledSheetLines(lines: JobCostLine[]) {
 
 /** Estimate part of the sheet only (scope, terms, discount, line items). */
 function estimateSheetSignature(sheet: SheetDraft) {
-  return JSON.stringify(JSON.parse(sheetSignature(sheet)), ["scopeOfWork", "terms", "discount", "lines", "description", "kind", "quantity", "unit", "unitPrice", "images", "section"]);
+  return JSON.stringify(JSON.parse(sheetSignature(sheet)), ["scopeOfWork", "terms", "discount", "lines", "description", "kind", "quantity", "unit", "unitPrice", "images", "section", "unitCost", "profitPercent", "optional", "optionGroup"]);
 }
 
 /** Existing-information part of the sheet only. */
@@ -1181,17 +1185,14 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
    * and "Ready to send" too (e.g. the customer is standing there). Nothing is saved or sent,
    * and the user stays on this page: the browser's print dialog opens in place.
    */
-  function printEstimate() {
-    if (!opportunity) return;
-    if (!filledLines.length) {
-      toast.error("Add at least one line item to print the estimate.");
-      return;
-    }
+  /** The customer document from what is on screen (print and the inline Preview). */
+  function buildPrintJob() {
+    if (!opportunity || !filledLines.length) return null;
     const property = opportunity.propertyAddress;
     const contact = customerContactFromOpportunity(opportunity);
     const companySig = estimate?.companySignature;
     const customerSig = estimate?.signature;
-    setPrintJob({
+    return {
       snapshot: {
         token: estimate?.shareToken || "",
         estimateId: estimate?.id || opportunity.id,
@@ -1228,6 +1229,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           total: lineTotal(line),
           ...(line.kind === "materials" && line.images?.length ? { images: line.images } : {}),
           ...(line.section ? { section: line.section } : {}),
+          // Customer copy: optional flag only (cost / profit stay internal).
+          ...optionExtras(line),
         })),
         subtotal,
         discount: Math.max(0, Number(discount) || 0) || undefined,
@@ -1248,7 +1251,17 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             signatureDataUrl: customerSig.imageBase64 || "",
           }
         : undefined,
-    });
+    };
+  }
+
+  function printEstimate() {
+    if (!opportunity) return;
+    if (!filledLines.length) {
+      toast.error("Add at least one line item to print the estimate.");
+      return;
+    }
+    const job = buildPrintJob();
+    if (job) setPrintJob(job);
   }
 
   /** Site visits only for the assessment path — never when user already has information. */
@@ -1751,6 +1764,16 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   /** The customer accepted: converting / invoicing are the next steps, sending is secondary. */
   const accepted = estimate?.status === "accepted" || estimate?.status === "converted_to_job";
 
+  const [presentOpen, setPresentOpen] = useState(false);
+  /** Centre panel: the estimate sheet, or a details tab from the sidebar ("auto" = sheet, or Preparation when nothing is chosen yet). */
+  const [view, setView] = useState("auto");
+  /** Job, customer photos and calendar rows: what the sidebar lists and the panels show. */
+  const projectData = useProjectData({
+    estimateId: estimate?.id,
+    jobId: estimate?.jobId,
+    requestId: opportunity?.requestId,
+  });
+
   function saveDraftNow() {
     void saveEstimateDraft().then((saved) => {
       if (saved) offerSaveTemplate();
@@ -1802,7 +1825,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
    * Public customer link `/e/{shareToken}` — works for registered and outside customers.
    * Creates the token (without emailing) when needed, then copies to clipboard.
    */
-  async function copyShareLink() {
+  async function copyShareLink(present?: Window | null): Promise<boolean> {
     try {
       // Persist latest line items / notes before minting a public link.
       const saved = await saveEstimateDraft();
@@ -1810,7 +1833,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       if (!current?.id) current = await ensureEstimate();
       if (!current?.id) {
         toast.error("Save the estimate first.");
-        return;
+        return false;
       }
 
       setSaving(true);
@@ -1829,14 +1852,14 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
         if (!estimateCanShare(current.status) && current.status !== "finalized") {
           toast.error("Finalize or send the estimate before sharing a customer link.");
-          return;
+          return false;
         }
 
         const shared = await shareEstimate(current.id, { skipEmail: true });
         token = String(shared.shareToken || "").trim();
         if (!token) {
           toast.error("Could not create a customer share link.");
-          return;
+          return false;
         }
         const nextStatus =
           (shared.status as Estimate["status"]) ||
@@ -1861,10 +1884,16 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       const linkUrl = shareUrlFor(token);
       if (!linkUrl) {
         toast.error("Could not create a customer share link.");
-        return;
+        return false;
+      }
+      if (present) {
+        present.location.href = linkUrl;
+        toast.success("Customer view opened in a new tab — hand the device to the customer to review and sign.");
+        return true;
       }
       await navigator.clipboard.writeText(linkUrl);
       toast.success("Customer link copied — send it to anyone. No account needed.");
+      return true;
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Could not copy the customer link.",
@@ -1872,6 +1901,16 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     } finally {
       setSaving(false);
     }
+    return false;
+  }
+
+  /** In-person presentation: open the customer's signing view on this device (tab opened on the click). */
+  function presentInPerson() {
+    const tab = window.open("", "_blank");
+    setPresentOpen(false);
+    void copyShareLink(tab).then((ok) => {
+      if (!ok) tab?.close();
+    });
   }
 
   async function saveFollowUp() {
@@ -1957,68 +1996,74 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         backHref="/pro/dashboard/new-estimate"
         backLabel="Back to all estimates"
         eyebrow="Work / Estimate"
-        title={<Skeleton className="h-6 w-64 max-w-full" />}
-        description={<Skeleton className="h-4 w-80 max-w-full" />}
-        actions={
-          <>
-            <Skeleton className="h-8 w-36" />
-            <Skeleton className="h-8 w-36" />
-            <Skeleton className="h-8 w-28" />
-          </>
-        }
+        title="Opening estimate"
+        headerless
       >
-        <div
-          className="grid gap-5 lg:grid-cols-[minmax(240px,0.58fr)_minmax(0,2.42fr)]"
-          role="status"
-          aria-label="Opening estimate…"
-        >
-          <section className="space-y-3.5">
-            {[3, 3, 4].map((rows, card) => (
-              <div key={card} className={RAIL_CARD}>
-                <Skeleton className="h-3 w-28" />
-                <div className="mt-3 space-y-2">
+        <div className="grid gap-5 lg:grid-cols-[232px_minmax(0,1fr)]" role="status" aria-label="Opening estimate…">
+          {/* Same shape as the project menu: one full-height card. */}
+          <section className="flex flex-col rounded-2xl border border-slate-200/70 bg-white lg:h-[calc(100dvh-72px)] dark:border-border dark:bg-card">
+            <div className="flex items-start gap-2 border-b border-slate-100 px-3.5 pt-3.5 pb-3 dark:border-border-soft">
+              <Skeleton className="size-7 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-20 rounded-full" />
+              </div>
+            </div>
+            <div className="space-y-4 p-2.5">
+              {[3, 2, 3].map((rows, group) => (
+                <div key={group} className="space-y-2">
+                  <Skeleton className="mx-2 h-2.5 w-20" />
                   {Array.from({ length: rows }, (_, row) => (
-                    <Skeleton key={row} className={cn("h-4", row === 0 ? "w-3/4" : row % 2 ? "w-full" : "w-5/6")} />
+                    <div key={row} className="flex items-center gap-2.5 px-2 py-1">
+                      <Skeleton className="size-7 rounded-lg" />
+                      <Skeleton className={cn("h-3.5", row % 2 ? "w-24" : "w-28")} />
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </section>
+          <div className="min-w-0 space-y-4">
+            <div className={MAIN_CARD}>
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4 dark:border-border-soft">
+                <div className="space-y-2">
+                  <Skeleton className="h-5 w-44" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+                <div className="flex gap-2">
+                  <Skeleton className="h-8 w-24" />
+                  <Skeleton className="h-8 w-24" />
+                  <Skeleton className="h-8 w-28" />
+                </div>
+              </div>
+              <div className="mt-5 space-y-2">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-[88px] w-full rounded-lg" />
+              </div>
+              <div className="mt-5 space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-3 w-64 max-w-full" />
+              </div>
+              <div className="mt-3 overflow-hidden rounded-xl border border-[#94a3b8] dark:border-border">
+                <div className="border-b border-slate-200 bg-[#f7f8fa] px-3 py-3 dark:border-border-soft dark:bg-muted/40">
+                  <Skeleton className="h-4 w-24 bg-slate-200/70" />
+                </div>
+                <div className="divide-y divide-slate-100 dark:divide-border-soft">
+                  {[0, 1, 2].map((row) => (
+                    <div key={row} className="flex items-center gap-3 px-3 py-2.5">
+                      <Skeleton className="h-8 flex-1" />
+                      <Skeleton className="hidden h-8 w-24 sm:block" />
+                      <Skeleton className="h-8 w-12" />
+                      <Skeleton className="hidden h-8 w-20 sm:block" />
+                      <Skeleton className="h-8 w-16" />
+                    </div>
                   ))}
                 </div>
               </div>
-            ))}
-          </section>
-          <div className={MAIN_CARD}>
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4 dark:border-border-soft">
-              <div className="space-y-2">
-                <Skeleton className="h-5 w-44" />
-                <Skeleton className="h-4 w-20" />
-              </div>
-              <div className="flex gap-2">
-                <Skeleton className="h-8 w-24" />
-                <Skeleton className="h-8 w-24" />
-                <Skeleton className="h-8 w-28" />
-              </div>
             </div>
-            <div className="mt-5 space-y-2">
-              <Skeleton className="h-4 w-28" />
-              <Skeleton className="h-[88px] w-full rounded-lg" />
-            </div>
-            <div className="mt-5 space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-3 w-64 max-w-full" />
-            </div>
-            <div className="mt-3 overflow-hidden rounded-xl border border-[#94a3b8] dark:border-border">
-              <div className="border-b border-slate-200 bg-[#f7f8fa] px-3 py-3 dark:border-border-soft dark:bg-muted/40">
-                <Skeleton className="h-4 w-24 bg-slate-200/70" />
-              </div>
-              <div className="divide-y divide-slate-100 dark:divide-border-soft">
-                {[0, 1, 2].map((row) => (
-                  <div key={row} className="flex items-center gap-3 px-3 py-2.5">
-                    <Skeleton className="h-8 flex-1" />
-                    <Skeleton className="hidden h-8 w-24 sm:block" />
-                    <Skeleton className="h-8 w-12" />
-                    <Skeleton className="hidden h-8 w-20 sm:block" />
-                    <Skeleton className="h-8 w-16" />
-                  </div>
-                ))}
-              </div>
+            <div className={cn(MAIN_CARD, "space-y-3")}>
+              <Skeleton className="h-3.5 w-36" />
+              <Skeleton className="h-24 w-full rounded-lg" />
             </div>
           </div>
         </div>
@@ -2056,13 +2101,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         ? "Send again"
         : "Preview & send";
 
-  return (
-    <PortalPage
-      backHref="/pro/dashboard/new-estimate"
-      backLabel="Back to all estimates"
-      eyebrow="Work / Estimate"
-      title={`${opportunity.number} · ${opportunity.title}`}
-      description={
+  /** Title block (no page header): shown at the top of the project sidebar. */
+  // Customer + address now render in the Customer tab (project-panels CustomerPanel).
+  /*
+  const identityMeta = (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500">
           <span className="font-medium text-slate-700">
             {customerNameFromOpportunity(opportunity)}
@@ -2087,8 +2129,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             View on map
           </button>
         </div>
-      }
-      badge={
+  );
+  */
+  const identityBadge = (
         <>
         {estimate?.status && estimate.status !== "converted_to_job" ? (
           <span
@@ -2111,46 +2154,149 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         ) : null}
         {isAiGenerated(opportunity.source) ? <AiGeneratedBadge className="text-[11px]" /> : null}
         </>
-      }
-      actions={
-        <>
-          {crewLocked ? null : (
-            <>
-              <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setCrewMode("contractor")}>
-                <Handshake className="size-3.5 text-primary" />
-                {contractorId ? "Change contractor" : "Assign contractor"}
-              </Button>
-              <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setCrewMode("technician")}>
-                <HardHat className="size-3.5 text-primary" />
-                {technicianId ? "Change technician" : "Assign technician"}
-              </Button>
-            </>
-          )}
-          {/* Prints the customer-facing document (same layout the customer signs), in place, at any status. */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5"
-            disabled={!opportunity || Boolean(printJob) || !taxRateReady}
-            title="Print or save as PDF"
-            onClick={printEstimate}
-          >
-            <Printer className="size-3.5 text-primary" />
-            Print / PDF
-          </Button>
-          {printJob ? (
-            <PrintPortal onDone={() => setPrintJob(null)}>
-              <EstimatePdfDocument snapshot={printJob.snapshot} approval={printJob.approval} />
-            </PrintPortal>
-          ) : null}
-        </>
-      }
+  );
+  const printButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-8 gap-1.5"
+      disabled={!opportunity || Boolean(printJob) || !taxRateReady}
+      title="Print or save as PDF"
+      onClick={printEstimate}
     >
-      <div className="grid gap-5 lg:grid-cols-[minmax(240px,0.58fr)_minmax(0,2.42fr)]">
-        {/* Left rail */}
-        <section className="space-y-3.5">
+      <Printer className="size-3.5 text-primary" />
+      Print / PDF
+    </Button>
+  );
+
+  const showFollowUp =
+    estimate?.status === "sent" ||
+    (opportunity.status === "estimate_sent" && estimate?.status !== "changes_requested");
+  const navGroups = projectNavGroups(
+    {
+      lines: filledLines.length,
+      optional: filledLines.filter((line) => line.optional).length,
+      hasJob: Boolean(estimate?.jobId),
+      changeOrders: projectData.job?.changeOrders?.length || 0,
+      schedule: projectData.schedule.length,
+      invoices: (linkedInvoice ? 1 : 0) + (projectData.job?.changeOrders || []).filter((order) => order.billingInvoiceId).length,
+      files: projectFiles({
+        customerPhotos: projectData.customerPhotos,
+        companyFiles: prepAttachments,
+        estimate,
+        opportunity,
+        job: projectData.job,
+      }).length,
+    },
+    accepted,
+  );
+  const detailTabs = [
+    { id: "customer", label: "Customer", icon: UserRound },
+    ...(opportunity.title || opportunity.description ? [{ id: "request", label: "Work request", icon: FileText }] : []),
+    { id: "prep", label: "Preparation", icon: Route, meta: opportunity.prepChoice ? undefined : "Choose" },
+    // Follow-up is a small form at the bottom of the sidebar (client: not a page of its own).
+    ...(activityTimeline.length ? [{ id: "activity", label: "Activity", icon: History, meta: String(activityTimeline.length) }] : []),
+  ];
+  const listedViews = new Set([...navGroups.flatMap((group) => group.items.map((item) => item.id)), ...detailTabs.map((tab) => tab.id)]);
+  const centreView =
+    view === "auto"
+      ? !opportunity.prepChoice && !estimate?.id
+        ? "prep"
+        : "estimate"
+      : listedViews.has(view)
+        ? view
+        : "estimate";
+
+  return (
+    <PortalPage
+      backHref="/pro/dashboard/new-estimate"
+      backLabel="Back to all estimates"
+      eyebrow="Work / Estimate"
+      title={`${opportunity.number} · ${opportunity.title}`}
+      headerless
+    >
+      <div className="grid gap-5 lg:grid-cols-[232px_minmax(0,1fr)]">
+        {/* Left rail: the project menu (Bolster-style). */}
+        <section className="min-w-0 space-y-3.5 lg:sticky lg:top-15 lg:self-start">
+          {/* The identity card (number, customer, address) moved: number + status head the menu,
+              customer and address are the Customer tab. */}
+          <ProjectLifecycleNav
+            header={
+              <div className="flex items-start gap-2">
+                <Link
+                  href="/pro/dashboard/new-estimate"
+                  aria-label="Back to all estimates"
+                  title="Back to all estimates"
+                  className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:border-border"
+                >
+                  <ArrowLeft className="size-3.5" />
+                </Link>
+                <div className="min-w-0">
+                  <p className="text-[14px] leading-snug font-semibold tracking-tight text-slate-900 dark:text-foreground">
+                    {opportunity.number} · {opportunity.title}
+                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">{identityBadge}</div>
+                </div>
+              </div>
+            }
+            groups={navGroups}
+            view={centreView}
+            onView={setView}
+            details={detailTabs}
+            footer={
+              showFollowUp ? (
+                <div>
+                  <p className="text-xs leading-snug text-slate-500">Not accepted yet. Set a reminder to follow up.</p>
+                  <div className="mt-2.5 grid gap-2">
+                    <Input
+                      type="date"
+                      aria-label="Follow-up date"
+                      className="h-8 text-xs"
+                      value={followUpAt}
+                      onChange={(e) => setFollowUpAt(e.target.value)}
+                    />
+                    <Textarea
+                      rows={2}
+                      aria-label="Follow-up notes"
+                      placeholder="Notes"
+                      className="min-h-0 text-xs"
+                      value={followUpNotes}
+                      onChange={(e) => setFollowUpNotes(e.target.value)}
+                    />
+                    <Button size="sm" variant="outline" className="h-8 text-xs" disabled={saving} onClick={() => void saveFollowUp()}>
+                      Save follow-up
+                    </Button>
+                  </div>
+                </div>
+              ) : null
+            }
+          />
+
+          {/* Customer, request, preparation, follow-up and activity open in the centre from here. */}
+        </section>
+
+        {/* Main column */}
+        <section className="min-w-0 space-y-4">
+          {/* Only on the Estimate tab (before the estimate card exists); other tabs carry their own actions. */}
+          {!showEstimateSection && centreView === "estimate" ? (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {crewLocked ? null : (
+                <>
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setCrewMode("contractor")}>
+                    <Handshake className="size-3.5 text-primary" />
+                    {contractorId ? "Change contractor" : "Assign contractor"}
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setCrewMode("technician")}>
+                    <HardHat className="size-3.5 text-primary" />
+                    {technicianId ? "Change technician" : "Assign technician"}
+                  </Button>
+                </>
+              )}
+              {printButton}
+            </div>
+          ) : null}
           {(estimate?.changeRequests?.length || estimate?.customerUpdates?.length) ? (
-            <div className="lg:sticky lg:top-4 lg:z-10">
+            <div>
               <ChangeRequestsRail
                 status={estimate?.status}
                 changeRequests={estimate?.changeRequests || []}
@@ -2158,50 +2304,94 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
               />
             </div>
           ) : null}
-
-          <div className={RAIL_CARD}>
-            <SectionLabel>Customer & property</SectionLabel>
-            <p className="mt-2.5 text-[15px] font-semibold tracking-tight text-slate-900">
-              {customerNameFromOpportunity(opportunity)}
-            </p>
-            <p className="mt-1 text-sm leading-relaxed text-slate-700">
-              <span>{propertyLine(opportunity)}</span>{" "}
-              <button
-                type="button"
-                onClick={() => setMapOpen(true)}
-                className="group inline-flex items-center gap-1 align-baseline text-xs font-bold text-primary underline underline-offset-2 hover:text-primary/80 cursor-pointer"
-                title="View route and distance on map"
-              >
-                <MapPin className="size-3.5 shrink-0 self-center group-hover:animate-pulse" />
-                View on map
-              </button>
-            </p>
-          </div>
-
-          <div className={RAIL_CARD}>
-            <SectionLabel>Work request</SectionLabel>
-            {opportunity.categoryName ? (
-              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                <p className="inline-flex rounded-md bg-primary/8 px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-primary uppercase">
-                  {opportunity.categoryName}
-                </p>
-                {opportunity.subcategoryName ? (
-                  <p className="inline-flex rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-slate-600 uppercase">
-                    {opportunity.subcategoryName}
-                  </p>
+          {centreView !== "estimate" ? (
+            <div className="space-y-3">
+              {centreView === "follow-up" && showFollowUp ? (
+              <>
+          {(estimate?.status === "sent" ||
+            (opportunity.status === "estimate_sent" &&
+              estimate?.status !== "changes_requested")) && (
+            <div className={RAIL_CARD}>
+              <SectionLabel>Follow-up</SectionLabel>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
+                Customer hasn&apos;t accepted yet — set a follow-up.
+              </p>
+              <div className="mt-3 grid gap-2">
+                <Input type="date" value={followUpAt} onChange={(e) => setFollowUpAt(e.target.value)} />
+                <Textarea
+                  rows={2}
+                  placeholder="Follow-up notes"
+                  value={followUpNotes}
+                  onChange={(e) => setFollowUpNotes(e.target.value)}
+                />
+                <Button size="sm" variant="outline" disabled={saving} onClick={() => void saveFollowUp()}>
+                  Save follow-up
+                </Button>
+              </div>
+            </div>
+          )}
+              </>
+              ) : centreView === "activity" ? (
+              <>
+          {activityTimeline.length ? (
+            <div className={RAIL_CARD}>
+              <div className="flex items-baseline justify-between gap-2">
+                <SectionLabel>Activity</SectionLabel>
+                {activityTimeline.length > ACTIVITY_PREVIEW_COUNT ? (
+                  <span className="text-[10px] font-medium tabular-nums text-slate-400">
+                    {activityTimeline.length}
+                  </span>
                 ) : null}
               </div>
-            ) : null}
-            <p className="mt-2 text-[15px] font-semibold tracking-tight text-slate-900">
-              {opportunity.title}
-            </p>
-            {opportunity.description ? (
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">
-                {opportunity.description}
-              </p>
-            ) : null}
-          </div>
-
+              <ol
+                className={
+                  // Full list on its own tab: no fixed-height inner scroll (client).
+                  "relative mt-3 ml-1 space-y-0 border-l border-slate-200 pl-4 dark:border-border-soft"
+                }
+              >
+                {activityTimeline.map((item) => (
+                  <li key={item.key} className="relative pb-4 last:pb-0">
+                    <span className="absolute -left-[1.3rem] top-1.5 size-2 rounded-full border-2 border-primary bg-white" />
+                    <p className="text-sm font-medium text-slate-900">{item.action}</p>
+                    {item.details ? (
+                      <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+                        {item.details}
+                      </p>
+                    ) : null}
+                    {item.at ? (
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {formatDate(item.at)}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
+              {/* Activity is its own tab now: the whole list shows, no Show more / less. */}
+              {false && activityTimeline.length > ACTIVITY_PREVIEW_COUNT ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="mt-1 h-7 w-full justify-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900"
+                  onClick={() => setActivityExpanded((open) => !open)}
+                >
+                  {activityExpanded ? (
+                    <>
+                      Show less
+                      <ChevronUp className="size-3" />
+                    </>
+                  ) : (
+                    <>
+                      Show {activityTimeline.length - ACTIVITY_PREVIEW_COUNT} more
+                      <ChevronDown className="size-3" />
+                    </>
+                  )}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+              </>
+              ) : centreView === "prep" ? (
           <div className={RAIL_CARD}>
             <SectionLabel>How will this estimate be prepared?</SectionLabel>
             <div className="mt-3 grid gap-2">
@@ -2212,7 +2402,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     key={option.id}
                     type="button"
                     disabled={saving}
-                    onClick={() => void setPrepChoice(option.id)}
+                    onClick={() => {
+                      void setPrepChoice(option.id);
+                      setView("estimate");
+                    }}
                     className={cn(
                       "flex w-full items-start gap-2.5 rounded-xl border px-3 py-3 text-left transition",
                       selected
@@ -2248,94 +2441,45 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
               })}
             </div>
           </div>
-
-          {(estimate?.status === "sent" ||
-            (opportunity.status === "estimate_sent" &&
-              estimate?.status !== "changes_requested")) && (
-            <div className={RAIL_CARD}>
-              <SectionLabel>Follow-up</SectionLabel>
-              <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
-                Customer hasn&apos;t accepted yet — set a follow-up.
-              </p>
-              <div className="mt-3 grid gap-2">
-                <Input type="date" value={followUpAt} onChange={(e) => setFollowUpAt(e.target.value)} />
-                <Textarea
-                  rows={2}
-                  placeholder="Follow-up notes"
-                  value={followUpNotes}
-                  onChange={(e) => setFollowUpNotes(e.target.value)}
+              ) : isProjectPanelView(centreView) ? (
+                <ProjectPanel
+                  view={centreView}
+                  estimate={estimate}
+                  opportunity={opportunity}
+                  lines={lines}
+                  onLinesChange={setLines}
+                  locked={estimateLocked}
+                  preview={centreView === "preview" ? buildPrintJob() : null}
+                  linkedInvoice={linkedInvoice}
+                  companyFiles={prepAttachments}
+                  data={projectData}
+                  onShowMap={() => setMapOpen(true)}
+                  printButton={printButton}
+                  mapProps={{
+                    provider,
+                    customerName: customerNameFromOpportunity(opportunity),
+                    customerAddress: propertyLine(opportunity),
+                    customerCoords:
+                      opportunity.propertyAddress?.lat && opportunity.propertyAddress?.lng
+                        ? { lat: opportunity.propertyAddress.lat, lng: opportunity.propertyAddress.lng }
+                        : null,
+                    serviceAddress: {
+                      street: opportunity.propertyAddress?.street || opportunity.propertyAddress?.address || "",
+                      city: opportunity.propertyAddress?.city || "",
+                      state: opportunity.propertyAddress?.state || "",
+                      zip: opportunity.propertyAddress?.zip || "",
+                    },
+                  }}
+                  onOpenEstimate={() => setView("estimate")}
+                  onSend={sendNow}
+                  canSend={!accepted && !estimateLocked}
                 />
-                <Button size="sm" variant="outline" disabled={saving} onClick={() => void saveFollowUp()}>
-                  Save follow-up
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {activityTimeline.length ? (
-            <div className={RAIL_CARD}>
-              <div className="flex items-baseline justify-between gap-2">
-                <SectionLabel>Activity</SectionLabel>
-                {activityTimeline.length > ACTIVITY_PREVIEW_COUNT ? (
-                  <span className="text-[10px] font-medium tabular-nums text-slate-400">
-                    {activityTimeline.length}
-                  </span>
-                ) : null}
-              </div>
-              <ol
-                className={
-                  activityExpanded && activityTimeline.length > ACTIVITY_PREVIEW_COUNT
-                    ? "relative mt-3 max-h-64 space-y-0 overflow-y-auto border-l border-slate-200 pl-4 pr-1 dark:border-border-soft"
-                    : "relative mt-3 space-y-0 border-l border-slate-200 pl-4 dark:border-border-soft"
-                }
-              >
-                {(activityExpanded
-                  ? activityTimeline
-                  : activityTimeline.slice(0, ACTIVITY_PREVIEW_COUNT)
-                ).map((item) => (
-                  <li key={item.key} className="relative pb-4 last:pb-0">
-                    <span className="absolute -left-[1.3rem] top-1.5 size-2 rounded-full border-2 border-primary bg-white" />
-                    <p className="text-sm font-medium text-slate-900">{item.action}</p>
-                    {item.details ? (
-                      <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-                        {item.details}
-                      </p>
-                    ) : null}
-                    {item.at ? (
-                      <p className="mt-1 text-[11px] text-slate-400">
-                        {formatDate(item.at)}
-                      </p>
-                    ) : null}
-                  </li>
-                ))}
-              </ol>
-              {activityTimeline.length > ACTIVITY_PREVIEW_COUNT ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  className="mt-1 h-7 w-full justify-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-900"
-                  onClick={() => setActivityExpanded((open) => !open)}
-                >
-                  {activityExpanded ? (
-                    <>
-                      Show less
-                      <ChevronUp className="size-3" />
-                    </>
-                  ) : (
-                    <>
-                      Show {activityTimeline.length - ACTIVITY_PREVIEW_COUNT} more
-                      <ChevronDown className="size-3" />
-                    </>
-                  )}
-                </Button>
               ) : null}
             </div>
           ) : null}
-        </section>
-
-        {/* Main column */}
-        <section className="min-w-0 space-y-4">
+          {/* The estimate sheet stays mounted while a details panel is open (drafts / auto-save keep running). */}
+          <div className={cn("space-y-4", centreView !== "estimate" && "hidden")}>
+            <ApprovalStatus estimate={estimate} />
           {/* Same cards as the job Summary tab; only once someone is assigned ("Assign …" is in the header). */}
           {technicianId ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/15 bg-gradient-to-r from-primary/[0.07] via-primary/[0.03] to-transparent px-4 py-3 shadow-xs">
@@ -2467,7 +2611,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           ) : null}
 
           {showPrepInfo ? (
-            <div ref={prepInfoRef}>
+            <div ref={prepInfoRef} id="project-files" className="scroll-mt-4">
               <ExistingInformationPanel
                 findings={prepFindings}
                 onFindingsChange={setPrepFindings}
@@ -2489,7 +2633,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
           {/* Estimate builder — hidden on visit path until Build estimate creates a draft */}
           {showEstimateSection ? (
-          <div ref={estimateSectionRef} className={MAIN_CARD}>
+          <div ref={estimateSectionRef} id="estimate-sheet" className={cn(MAIN_CARD, "scroll-mt-4")}>
             {canBuildEstimate ? (
               <>
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4 dark:border-border-soft">
@@ -2619,6 +2763,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                         </Button>
                       </>
                     )}
+                    {printButton}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button size="sm" variant="outline" className="gap-1.5" aria-label="More actions">
@@ -2626,7 +2771,25 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                           More
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuContent align="end" className="w-56">
+                        {crewLocked ? null : (
+                          <>
+                            <DropdownMenuItem onSelect={() => setCrewMode("contractor")}>
+                              <Handshake className="size-4 text-primary" />
+                              {contractorId ? "Change contractor" : "Assign contractor"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => setCrewMode("technician")}>
+                              <HardHat className="size-4 text-primary" />
+                              {technicianId ? "Change technician" : "Assign technician"}
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                        {!accepted && !estimateLocked ? (
+                          <DropdownMenuItem disabled={saving || !estimate?.id} onSelect={() => setPresentOpen(true)}>
+                            <Presentation className="size-4 text-primary" />
+                            In-person presentation
+                          </DropdownMenuItem>
+                        ) : null}
                         <DropdownMenuItem onSelect={() => setMapOpen(true)}>
                           <MapPin className="size-4 text-primary" />
                           View on map
@@ -2654,12 +2817,12 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     />
                   </div>
 
-                  <div>
+                  <div id="line-items" className="scroll-mt-4">
                     <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <Label>Line items</Label>
                         <p className="text-xs text-slate-500">
-                          Group by trade or stage (Plumbing, Electrical…) — qty × unit price
+                          Group by trade or stage (Plumbing, Electrical…). Cost + profit % set the price; optional items aren&apos;t in the total.
                         </p>
                         {templateMemory.applied ? (
                           <p className="mt-1 inline-flex items-center gap-1 text-xs text-primary">
@@ -2675,6 +2838,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       onChange={setLines}
                       locked={estimateLocked}
                       soft
+                      spreadsheet
                       sectionActions={(section) =>
                         estimate?.id ? (
                           <SectionStageButton
@@ -2690,97 +2854,6 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     />
                   </div>
 
-                  <div className="overflow-hidden rounded-xl border border-[#94a3b8] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-border dark:bg-card">
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-slate-200/80 bg-[#f7f8fa] px-4 py-3 dark:border-border-soft dark:bg-muted/40">
-                      <h3 className="text-xs font-semibold tracking-[0.08em] text-slate-700 uppercase dark:text-foreground">
-                        Estimate summary
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        {[
-                          estimate?.number,
-                          opportunity.categoryName,
-                          filledLines.length
-                            ? `${filledLines.length} line item${filledLines.length === 1 ? "" : "s"}`
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                    </div>
-                    {estimate?.stages?.length ? (
-                      <ProjectStagesSummary stages={estimate.stages} onSchedule={() => setStagesOpen(true)} />
-                    ) : null}
-
-                    <div className="grid gap-6 bg-white px-4 py-4 sm:grid-cols-2 dark:bg-card">
-                      <div className="space-y-3 text-sm">
-                        <p className="text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase">Cost breakdown</p>
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-slate-600 dark:text-muted-foreground">Labour</span>
-                          <span className="font-medium tabular-nums text-slate-900 dark:text-foreground">{formatMoney(mix.labor)}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-slate-600 dark:text-muted-foreground">Material</span>
-                          <span className="font-medium tabular-nums text-slate-900 dark:text-foreground">{formatMoney(mix.materials)}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-slate-600 dark:text-muted-foreground">Equipment</span>
-                          <span className="font-medium tabular-nums text-slate-900 dark:text-foreground">{formatMoney(mix.equipment)}</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3 text-sm sm:border-l sm:border-slate-200/80 sm:pl-6 dark:sm:border-border-soft">
-                        <p className="text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase">Totals</p>
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-slate-600 dark:text-muted-foreground">Subtotal</span>
-                          <span className="font-medium tabular-nums text-slate-900 dark:text-foreground">{formatMoney(subtotal)}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-4">
-                          <Label htmlFor="discount" className="font-normal text-slate-600 dark:text-muted-foreground">
-                            Discount
-                          </Label>
-                          <div className="relative w-28">
-                            <span
-                              aria-hidden="true"
-                              className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-xs text-slate-400"
-                            >
-                              $
-                            </span>
-                            <Input
-                              id="discount"
-                              className="h-8 border-[#b4becc] bg-[#fafbfc] pl-5 pr-2 text-right text-sm tabular-nums shadow-none"
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              value={discount}
-                              disabled={estimateLocked}
-                              onChange={(e) => setDiscount(Number(e.target.value) || 0)}
-                            />
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-slate-600 dark:text-muted-foreground">Tax ({taxRateReady ? taxRatePercent : "…"}%)</span>
-                          <span className="font-medium tabular-nums text-slate-900 dark:text-foreground">{taxRateReady ? formatMoney(taxAmount) : "…"}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-4 rounded-lg bg-primary/[0.07] px-3 py-2.5 text-base font-semibold text-slate-900 dark:bg-primary/15 dark:text-foreground">
-                          <span>Total</span>
-                          <span className="text-lg tabular-nums text-primary dark:text-foreground">{taxRateReady ? formatMoney(grandTotal) : "…"}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-slate-100 bg-white px-4 py-3 dark:border-border-soft dark:bg-card">
-                      <Label htmlFor="terms" className="text-[11px] text-slate-500">
-                        Terms
-                      </Label>
-                      <Input
-                        id="terms"
-                        className="mt-1 h-8 border-[#b4becc] bg-[#fafbfc] shadow-none"
-                        value={terms}
-                        disabled={estimateLocked}
-                        onChange={(e) => setTerms(e.target.value)}
-                      />
-                    </div>
-                  </div>
 
                   {visitSupportSummary &&
                   (visitSupportSummary.photoCount > 0 ||
@@ -2836,22 +2909,6 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     </div>
                   ) : null}
 
-                  {estimate?.id ? (
-                    <>
-                      <div className="rounded-xl border border-[#94a3b8] bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-border dark:bg-card">
-                        <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
-                          Notes &amp; updates
-                        </h3>
-                        <p className="mt-1 mb-2 text-xs text-slate-500">
-                          Office notes and updates from technicians / contractors on this estimate. Notes marked
-                          &quot;Shared with customer&quot; show on the customer&apos;s estimate page.
-                        </p>
-                        <RenderWhenVisible>
-                          <NotesPanel kind="estimate" id={estimate.id} empty="No notes on this estimate yet." />
-                        </RenderWhenVisible>
-                      </div>
-                    </>
-                  ) : null}
                 </div>
               </>
             ) : (
@@ -2885,9 +2942,192 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           ) : (
             <div ref={estimateSectionRef} className="h-0 overflow-hidden" aria-hidden />
           )}
+          {/* Client: the summary and the notes are their own cards below the line items, not inside the estimate card. */}
+          {showEstimateSection && canBuildEstimate ? (
+            <>
+          {(() => {
+            // Same numbers as before (mix, subtotal, discount, tax, total); a CRM-style layout.
+            const mixRows = [
+              { key: "labor", label: "Labour", value: mix.labor, bar: "bg-primary" },
+              { key: "materials", label: "Material", value: mix.materials, bar: "bg-primary/55" },
+              { key: "equipment", label: "Equipment", value: mix.equipment, bar: "bg-primary/25" },
+            ];
+            const mixTotal = mixRows.reduce((sum, row) => sum + (Number(row.value) || 0), 0);
+            const pct = (value: number) => (mixTotal > 0 ? Math.round(((Number(value) || 0) / mixTotal) * 100) : 0);
+            const optionalTotal = filledLines
+              .filter((line) => line.optional)
+              .reduce((sum, line) => sum + lineTotal(line), 0);
+            const label = "text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase";
+            return (
+              <div className="overflow-hidden rounded-2xl border border-[#94a3b8] bg-white dark:border-border dark:bg-card">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 pt-4 pb-3">
+                  <h3 className={label}>Estimate summary</h3>
+                  <p className="text-xs text-slate-500">
+                    {[
+                      estimate?.number,
+                      opportunity.categoryName,
+                      filledLines.length ? `${filledLines.length} line item${filledLines.length === 1 ? "" : "s"}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </div>
+                {estimate?.stages?.length ? (
+                  <ProjectStagesSummary stages={estimate.stages} onSchedule={() => setStagesOpen(true)} />
+                ) : null}
+
+                <div className="grid border-t border-slate-100 lg:grid-cols-[minmax(0,1fr)_360px] dark:border-border-soft">
+                  {/* Cost breakdown + terms */}
+                  <div className="px-5 py-4">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className={label}>Cost breakdown</p>
+                      <p className="text-xs text-slate-500 tabular-nums">{formatMoney(mixTotal)}</p>
+                    </div>
+                    <div
+                      className="mt-3 flex h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-muted"
+                      role="img"
+                      aria-label={mixRows.map((row) => `${row.label} ${pct(row.value)}%`).join(", ")}
+                    >
+                      {mixRows.map((row) =>
+                        pct(row.value) > 0 ? (
+                          <span key={row.key} className={cn("h-full", row.bar)} style={{ width: `${pct(row.value)}%` }} />
+                        ) : null,
+                      )}
+                    </div>
+                    <ul className="mt-4 grid gap-2.5 sm:grid-cols-3">
+                      {mixRows.map((row) => (
+                        <li key={row.key} className="rounded-xl border border-slate-200/80 px-3.5 py-3 dark:border-border">
+                          <p className="flex items-center gap-1.5 text-xs text-slate-500">
+                            <span className={cn("size-2 rounded-full", row.bar)} aria-hidden />
+                            {row.label}
+                          </p>
+                          <p className="mt-1.5 text-[15px] font-semibold tracking-tight text-slate-900 tabular-nums dark:text-foreground">
+                            {formatMoney(row.value)}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-slate-400 tabular-nums">{pct(row.value)}% of the work</p>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div className="mt-5">
+                      <Label htmlFor="terms" className={label}>
+                        Terms
+                      </Label>
+                      <Input
+                        id="terms"
+                        className="mt-2 h-9 border-[#b4becc] bg-[#fafbfc] shadow-none"
+                        value={terms}
+                        disabled={estimateLocked}
+                        onChange={(e) => setTerms(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Totals ledger */}
+                  <div className="border-t border-slate-100 bg-slate-50/70 px-5 py-4 lg:border-t-0 lg:border-l dark:border-border-soft dark:bg-muted/20">
+                    <p className={label}>Totals</p>
+                    <dl className="mt-3 space-y-3 text-sm">
+                      <div className="flex items-center justify-between gap-4">
+                        <dt className="text-slate-600 dark:text-muted-foreground">Subtotal</dt>
+                        <dd className="font-medium text-slate-900 tabular-nums dark:text-foreground">{formatMoney(subtotal)}</dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <dt>
+                          <Label htmlFor="discount" className="font-normal text-slate-600 dark:text-muted-foreground">
+                            Discount
+                          </Label>
+                        </dt>
+                        <dd className="relative w-28">
+                          <span
+                            aria-hidden="true"
+                            className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-xs text-slate-400"
+                          >
+                            − $
+                          </span>
+                          <Input
+                            id="discount"
+                            className="h-8 border-[#b4becc] bg-white pr-2 pl-7 text-right text-sm tabular-nums shadow-none"
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={discount}
+                            disabled={estimateLocked}
+                            onChange={(e) => setDiscount(Number(e.target.value) || 0)}
+                          />
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <dt className="text-slate-600 dark:text-muted-foreground">Tax ({taxRateReady ? taxRatePercent : "…"}%)</dt>
+                        <dd className="font-medium text-slate-900 tabular-nums dark:text-foreground">
+                          {taxRateReady ? formatMoney(taxAmount) : "…"}
+                        </dd>
+                      </div>
+                    </dl>
+                    {/* A total line, not a filled block (client: the block looked like a button). */}
+                    <div className="mt-4 flex items-baseline justify-between gap-4 border-t-2 border-slate-900/80 pt-3 dark:border-foreground/70">
+                      <span className="text-sm font-semibold text-slate-900 dark:text-foreground">Total</span>
+                      <span className="text-2xl font-semibold tracking-tight text-primary tabular-nums dark:text-foreground">
+                        {taxRateReady ? formatMoney(grandTotal) : "…"}
+                      </span>
+                    </div>
+                    {optionalTotal > 0 ? (
+                      <p className="mt-2.5 text-xs text-slate-500">
+                        + <span className="font-medium tabular-nums text-slate-700 dark:text-foreground">{formatMoney(optionalTotal)}</span> in optional
+                        add-ons, not included in the total.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          {estimate?.id ? (
+            <>
+              <div className={MAIN_CARD}>
+                <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
+                  Notes &amp; updates
+                </h3>
+                <p className="mt-1 mb-2 text-xs text-slate-500">
+                  Office notes and updates from technicians / contractors on this estimate. Notes marked
+                  &quot;Shared with customer&quot; show on the customer&apos;s estimate page.
+                </p>
+                <RenderWhenVisible>
+                  <NotesPanel kind="estimate" id={estimate.id} empty="No notes on this estimate yet." />
+                </RenderWhenVisible>
+              </div>
+            </>
+          ) : null}
+            </>
+          ) : null}
+          </div>
         </section>
       </div>
 
+      {printJob ? (
+        <PrintPortal onDone={() => setPrintJob(null)}>
+          <EstimatePdfDocument snapshot={printJob.snapshot} approval={printJob.approval} />
+        </PrintPortal>
+      ) : null}
+      <Dialog open={presentOpen} onOpenChange={setPresentOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Present in person</DialogTitle>
+            <DialogDescription>
+              Opens the customer&apos;s view of this estimate in a new tab on this device, so they can review, choose and sign
+              it with you. Like sending it, this marks the estimate as sent.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPresentOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={presentInPerson}>
+              <Presentation className="size-4" />
+              Open customer view
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {sendEstimate || estimate ? (
         <SendApprovalDialog
           open={sendOpen}

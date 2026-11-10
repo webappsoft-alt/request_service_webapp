@@ -1124,6 +1124,13 @@ function mapEstimateItems(estimateId: string, value: unknown): EstimateItem[] {
         total: numberValue(record.total),
         ...(type !== "labor" ? { images } : {}),
         ...(section ? { section } : {}),
+        ...(record.unitCost != null && Number.isFinite(Number(record.unitCost)) ? { unitCost: Number(record.unitCost) } : {}),
+        ...(record.profitPercent != null && Number.isFinite(Number(record.profitPercent))
+          ? { profitPercent: Number(record.profitPercent) }
+          : {}),
+        ...(record.optional === true
+          ? { optional: true as boolean, ...(trimmed(record.optionGroup) ? { optionGroup: trimmed(record.optionGroup) } : {}) }
+          : {}),
       } satisfies EstimateItem;
     })
     .filter((item): item is EstimateItem => Boolean(item));

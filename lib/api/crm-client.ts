@@ -10,6 +10,7 @@ import type {
   PortalVendor,
 } from "@/lib/data/crm-people";
 import { dedupeCalendarEvents, employeeName, isSyntheticCalendarId, taskCalendarSlot, type PortalCalendarEvent, type PortalEmployee, type PortalEmployeeDetail, type PortalEventKind, type PortalRequest, type PortalTimeWindow, type PortalEmployeeWorkingHours } from "@/lib/data/portal";
+import { lineExtras } from "@/lib/estimate-line-extras";
 import type { Estimate, EstimateActivity, EstimateSiteVisitRecord, EstimateStatus, Invoice, Job, Payment, ServiceAddress } from "@/lib/types";
 import {
   crmIdOf,
@@ -278,6 +279,9 @@ function estimateItemsToApi(items: Estimate["items"], minQuantity = 0.01) {
         ...(String(item.section || "").trim()
           ? { section: String(item.section).trim() }
           : {}),
+        // Spreadsheet + option fields (the server keeps only those set).
+        ...(String(item.unit || "").trim() ? { unit: String(item.unit).trim().slice(0, 20) } : {}),
+        ...lineExtras(item),
       };
     });
 }
@@ -3349,6 +3353,19 @@ export async function assignSchedule(schedule: CrmScheduleAssignment) {
     { silent: true },
   );
   return mapCrmEntity(response, mapScheduleEvent);
+}
+
+/**
+ * The calendar rows saved for one record (a job, estimate or lead) — the API's own rows only,
+ * without the company-wide invoice / payment / estimate cards `querySchedule` merges in.
+ */
+export async function listRecordSchedule(recordId: string) {
+  const id = recordId.trim();
+  if (!id) return [];
+  const response = await getData(providerCrmApi.schedule, { recordId: id }, { silent: true, force: true });
+  return mapCrmList(response, mapScheduleEvent)
+    .items.filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .filter((item) => item.recordId === id);
 }
 
 export async function updateSchedule(id: string, schedule: Partial<CrmScheduleAssignment>) {

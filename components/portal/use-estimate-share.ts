@@ -4,6 +4,7 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { readCostLines } from "@/components/portal/use-job-costing";
 import { estimateAsJob, moneyFromLines } from "@/components/portal/work-builders";
 import { stripChangeRequestLinesFromNotes } from "@/lib/data/estimate-change-requests";
+import { lineExtras, optionExtras } from "@/lib/estimate-line-extras";
 import type { Estimate } from "@/lib/types";
 
 const EVENT = "rs-estimate-share";
@@ -21,6 +22,10 @@ export type EstimateShareLine = {
   images?: string[];
   /** Named work section (e.g. Plumbing). */
   section?: string;
+  /** Optional add-on / alternative: listed apart, not in the total. */
+  optional?: boolean;
+  /** What the option is for ("Countertop upgrade"). */
+  optionGroup?: string;
 };
 
 export type EstimateSiteVisitPhoto = {
@@ -198,6 +203,8 @@ export function buildEstimateSnapshot(
     ...(String(item.section || "").trim()
       ? { section: String(item.section).trim() }
       : {}),
+    // Cost / profit and optional add-ons (optional lines stay out of the totals).
+    ...lineExtras(item),
   }));
   const stored = readCostLines(extras.email, estimateAsJob(estimate));
   const lines = fromEstimate.length
@@ -281,6 +288,8 @@ export function buildEstimateSnapshot(
         ? { images: line.images }
         : {}),
       ...(line.section ? { section: line.section } : {}),
+      // Customer copy: optional flag only (cost / profit stay internal).
+      ...optionExtras(line),
     })),
     subtotal: estimate.subtotal ?? money.subtotal,
     discount: Math.max(0, Number(estimate.discount) || 0) || undefined,

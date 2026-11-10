@@ -15,6 +15,7 @@ import {
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,7 @@ import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { getAuthToken } from "@/components/api/apiFuntions";
 import { finalizeEstimate, shareEstimate, type ShareEstimateInput } from "@/lib/api/crm-client";
 import { estimateCanShare } from "@/lib/data/portal";
+import { formatMoney } from "@/lib/format";
 import type { PortalCustomerCrm } from "@/lib/data/crm-people";
 import type { Estimate } from "@/lib/types";
 import { useAppSelector } from "@/store/hooks";
@@ -296,6 +298,8 @@ function ApprovalPreview({
     snapshot.companySignatureDataUrl || "",
   );
   const [busy, setBusy] = useState(false);
+  /** The company confirms the estimate before it goes out (the customer ticks their own box when signing). */
+  const [confirmed, setConfirmed] = useState(false);
   const [signatureHighlight, setSignatureHighlight] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const signatureRef = useRef<HTMLDivElement>(null);
@@ -318,6 +322,12 @@ function ApprovalPreview({
     toast.error("Sign for the company on page 2 before sending.");
   }
 
+  function focusConfirmation() {
+    focusCompanySignature();
+    toast.dismiss();
+    toast.error("Tick the company confirmation on page 2 before sending.");
+  }
+
   return (
     <>
       <div
@@ -326,6 +336,7 @@ function ApprovalPreview({
       >
         <EstimatePdfDocument
           snapshot={snapshot}
+          customerBoxNote="The customer ticks this box when they sign."
           companySlot={
             <div
               ref={signatureRef}
@@ -347,6 +358,22 @@ function ApprovalPreview({
                   snapshot.companySignedAt || new Date().toISOString()
                 }
               />
+              <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] leading-4 text-foreground">
+                <Checkbox
+                  checked={confirmed}
+                  onCheckedChange={(value) => setConfirmed(value === true)}
+                  className="mt-0.5 size-3.5"
+                  aria-label="Company confirmation"
+                />
+                <span>
+                  I confirm this estimate is accurate and authorize sending it to{" "}
+                  <strong>{snapshot.customerName || "the customer"}</strong> for{" "}
+                  <strong>
+                    {formatMoney(Number(snapshot.total) || 0)}
+                  </strong>
+                  .
+                </span>
+              </label>
             </div>
           }
         />
@@ -373,6 +400,10 @@ function ApprovalPreview({
               : keptImage;
             if (!signer.trim() || !image) {
               focusCompanySignature();
+              return;
+            }
+            if (!confirmed) {
+              focusConfirmation();
               return;
             }
             setBusy(true);

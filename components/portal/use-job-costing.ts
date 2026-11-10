@@ -2,6 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
+import type { LineExtras } from "@/lib/estimate-line-extras";
 import type { Job, JobItem } from "@/lib/types";
 
 const EVENT = "rs-job-costing";
@@ -19,7 +20,7 @@ export type JobCostLine = {
   images?: string[];
   /** Named work section (e.g. Plumbing). Empty = General / unsectioned. */
   section?: string;
-};
+} & LineExtras;
 
 type CostingStore = Record<string, JobCostLine[]>;
 
@@ -126,6 +127,8 @@ export function lineTotal(line: JobCostLine) {
 export function jobCostMix(lines: JobCostLine[]) {
   return lines.reduce(
     (acc, line) => {
+      // Optional add-ons / alternatives are priced but not in the total.
+      if (line.optional) return acc;
       const total = lineTotal(line);
       acc.total += total;
       if (line.kind === "labor") acc.labor += total;

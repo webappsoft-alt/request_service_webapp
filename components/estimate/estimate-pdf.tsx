@@ -33,6 +33,37 @@ function groupShareLinesBySection(items: EstimateShareLine[]) {
   });
 }
 
+/** Optional add-ons / alternatives the pro offered: priced, but not part of the total. */
+function OptionalAddOns({ items }: { items: EstimateShareLine[] }) {
+  if (!items.length) return null;
+  return (
+    <div className="mt-4 overflow-hidden rounded-[4px] border border-dashed border-[#94a3b8] text-[12px] break-inside-avoid">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 bg-[#f8fafc] px-2 py-2">
+        <p className="text-[11px] font-semibold tracking-[0.1em] text-slate-700 uppercase">Optional add-ons</p>
+        <p className="text-[11px] text-muted-foreground">Not included in the total · ask your contractor to add any of these</p>
+      </div>
+      <table className="w-full table-fixed border-collapse">
+        <tbody>
+          {items.map((row, index) => (
+            <tr key={`optional-${row.description}-${index}`} className="border-t border-input">
+              <td className="px-2 py-2 font-medium break-words">
+                {row.description || "Option"}
+                {row.optionGroup ? (
+                  <span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">Option for: {row.optionGroup}</span>
+                ) : null}
+              </td>
+              <td className="w-24 px-1.5 py-2 text-center whitespace-nowrap text-muted-foreground tabular-nums">
+                {row.quantity} {row.unit}
+              </td>
+              <td className="w-24 px-2 py-2 text-center font-medium whitespace-nowrap tabular-nums">{formatMoney(row.total)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export const DEFAULT_ESTIMATE_TERMS = [
   {
     title: "Acceptance",
@@ -65,11 +96,14 @@ export function EstimatePdfDocument({
   approval,
   companySlot,
   customerSlot,
+  customerBoxNote,
 }: {
   snapshot: EstimateShareSnapshot;
   approval?: EstimateApproval;
   companySlot?: ReactNode;
   customerSlot?: ReactNode;
+  /** Pro-side preview: say the unsigned customer checkbox is ticked by the customer when they sign. */
+  customerBoxNote?: string;
 }) {
   return (
     <div className="space-y-6 print:space-y-0 print:p-0">
@@ -118,7 +152,8 @@ export function EstimatePdfDocument({
               </tr>
             </thead>
             <tbody>
-              {groupShareLinesBySection(snapshot.items).flatMap((group) => {
+              {/* Optional add-ons are listed apart below (they aren't in the total). */}
+              {groupShareLinesBySection(snapshot.items.filter((item) => !item.optional)).flatMap((group) => {
                 const rows = [];
                 if (group.label) {
                   rows.push(
@@ -200,6 +235,7 @@ export function EstimatePdfDocument({
             </tbody>
           </table>
         </div>
+        <OptionalAddOns items={snapshot.items.filter((item) => item.optional)} />
         <div className="mt-4 ml-auto w-56 text-[12px]">
           <Row label="Subtotal" value={formatMoney(snapshot.subtotal)} />
           {Number(snapshot.discount) > 0 ? (
@@ -256,6 +292,7 @@ export function EstimatePdfDocument({
             empty="Customer signs to approve this estimate"
             snapshot={snapshot}
             isCustomer
+            boxNote={customerBoxNote}
           />
         </div>
       </PdfPage>
@@ -399,6 +436,7 @@ function SignatureBlock({
   empty,
   snapshot,
   isCustomer = false,
+  boxNote,
 }: {
   title: string;
   name?: string;
@@ -408,6 +446,7 @@ function SignatureBlock({
   empty: string;
   snapshot?: EstimateShareSnapshot;
   isCustomer?: boolean;
+  boxNote?: string;
 }) {
   return (
     <div className="flex flex-col">
@@ -447,6 +486,9 @@ function SignatureBlock({
                 <strong>{formatMoney(snapshot.total)}</strong>.
               </span>
             </div>
+          ) : null}
+          {isCustomer && boxNote ? (
+            <p className="mt-1.5 pl-5.5 text-[10.5px] text-muted-foreground italic print:hidden">{boxNote}</p>
           ) : null}
         </div>
       )}

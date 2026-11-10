@@ -212,6 +212,10 @@ function mapPublicEstimateToSnapshot(
         total: numberValue(item.total, Math.round(quantity * unitPrice * 100) / 100),
         ...(isMaterial && images.length ? { images } : {}),
         ...(section ? { section } : {}),
+        // Optional add-ons are listed apart and aren't in the total.
+        ...(item.optional === true
+          ? { optional: true, ...(stringValue(item.optionGroup).trim() ? { optionGroup: stringValue(item.optionGroup).trim() } : {}) }
+          : {}),
       };
     },
   );

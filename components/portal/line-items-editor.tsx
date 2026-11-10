@@ -15,6 +15,7 @@ import {
   type JobCostKind,
   type JobCostLine,
 } from "@/components/portal/use-job-costing";
+import { priceFromCost, profitFromPrice } from "@/lib/estimate-line-extras";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -81,6 +82,11 @@ export type LineItemsEditorProps = {
   wideDescription?: boolean;
   /** Price and Total columns (default true). Off for viewers who must not see customer pricing. */
   showPricing?: boolean;
+  /**
+   * Estimate spreadsheet (opt-in): Cost and Profit % columns that set the price, and an Optional
+   * toggle (optional add-ons / alternatives stay out of the total). Jobs and invoices leave it off.
+   */
+  spreadsheet?: boolean;
   className?: string;
 };
 
@@ -115,8 +121,10 @@ export function LineItemsEditor({
   minLines = 0,
   wideDescription = true,
   showPricing = true,
+  spreadsheet = false,
   className,
 }: LineItemsEditorProps) {
+  const sheet = spreadsheet && showPricing;
   function patch(id: string, next: Partial<JobCostLine>) {
     if (locked) return;
     onChange(
@@ -138,7 +146,7 @@ export function LineItemsEditor({
     onChange(lines.filter((line) => line.id !== id));
   }
 
-  const colSpan = (showUnit ? 7 : 6) - (showPricing ? 0 : 2);
+  const colSpan = (showUnit ? 7 : 6) - (showPricing ? 0 : 2) + (sheet ? 3 : 0);
   const cols = colWidths(wideDescription);
 
   return (
@@ -148,7 +156,9 @@ export function LineItemsEditor({
       <Table
         className={cn(
           "w-full table-fixed",
-          wideDescription
+          sheet
+            ? "min-w-208"
+            : wideDescription
             ? showPricing
               ? "min-w-[36rem]"
               : "min-w-[27rem]"
@@ -190,6 +200,22 @@ export function LineItemsEditor({
             ) : null}
             {showPricing ? (
               <>
+                {sheet ? (
+                  <>
+                    <TableHead
+                      className="h-8 w-21 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
+                      title="What one unit costs you (not shown to the customer)"
+                    >
+                      Cost
+                    </TableHead>
+                    <TableHead
+                      className="h-8 w-16 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
+                      title="Profit on top of cost (not shown to the customer)"
+                    >
+                      Profit %
+                    </TableHead>
+                  </>
+                ) : null}
                 <TableHead
                   className={cn(
                     "h-8 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase",
@@ -208,6 +234,14 @@ export function LineItemsEditor({
                 </TableHead>
               </>
             ) : null}
+            {sheet ? (
+              <TableHead
+                className="h-8 w-17 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
+                title="Optional add-on or alternative: shown to the customer, not in the total"
+              >
+                Optional
+              </TableHead>
+            ) : null}
             <TableHead className={cn("h-8 bg-[#f7f8fa]", cols.remove)}>
               <span className="sr-only">Remove</span>
             </TableHead>
@@ -224,6 +258,7 @@ export function LineItemsEditor({
                 allowMaterialImages={allowMaterialImages}
                 wideDescription={wideDescription}
                 showPricing={showPricing}
+                spreadsheet={sheet}
                 canRemove={!locked && lines.length > minLines}
                 onChange={patch}
                 onRemove={() => remove(line.id)}
@@ -249,6 +284,7 @@ function LineItemRow({
   allowMaterialImages,
   wideDescription,
   showPricing,
+  spreadsheet,
   canRemove,
   onChange,
   onRemove,
@@ -259,6 +295,7 @@ function LineItemRow({
   allowMaterialImages: boolean;
   wideDescription: boolean;
   showPricing: boolean;
+  spreadsheet: boolean;
   canRemove: boolean;
   onChange: (id: string, patch: Partial<JobCostLine>) => void;
   onRemove: () => void;
@@ -305,9 +342,40 @@ function LineItemRow({
   const numberField =
     "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
   const compact = wideDescription;
+  const hasCost = line.unitCost != null && Number.isFinite(Number(line.unitCost));
+
+  /**
+   * Cost changed: the price the customer sees stays put and the profit % follows (safe while
+   * typing digit by digit). With no price yet, the price starts at cost (0% profit).
+   */
+  function setCost(raw: string) {
+    if (raw === "") {
+      onChange(line.id, { unitCost: null, profitPercent: null });
+      return;
+    }
+    const cost = Math.max(0, Number(raw) || 0);
+    if (line.unitPrice > 0) {
+      onChange(line.id, { unitCost: cost, profitPercent: profitFromPrice(cost, line.unitPrice) });
+    } else {
+      onChange(line.id, { unitCost: cost, profitPercent: 0, unitPrice: cost });
+    }
+  }
+
+  /** Profit % changed (needs a cost): the price follows. */
+  function setProfit(raw: string) {
+    if (!hasCost) return;
+    const pct = raw === "" ? 0 : Number(raw);
+    const profitPercent = Number.isFinite(pct) ? pct : 0;
+    onChange(line.id, { profitPercent, unitPrice: priceFromCost(line.unitCost, profitPercent) ?? line.unitPrice });
+  }
+
+  /** Price typed directly: with a cost, the profit % follows. */
+  function setPrice(unitPrice: number) {
+    onChange(line.id, hasCost ? { unitPrice, profitPercent: profitFromPrice(line.unitCost, unitPrice) } : { unitPrice });
+  }
 
   return (
-    <TableRow className="hover:bg-transparent">
+    <TableRow className={cn("hover:bg-transparent", spreadsheet && line.optional && "bg-amber-50/60 dark:bg-amber-500/5")}>
       <TableCell className="min-w-0 whitespace-normal align-top py-2">
         <div className="flex w-full min-w-0 flex-col gap-1">
           <div className="relative w-full min-w-0">
@@ -357,6 +425,17 @@ function LineItemRow({
               </div>
             ) : null}
           </div>
+          {spreadsheet && line.optional ? (
+            <Input
+              aria-label="Option for"
+              disabled={locked}
+              placeholder="Option for… (e.g. Countertop upgrade)"
+              value={line.optionGroup ?? ""}
+              maxLength={120}
+              onChange={(event) => onChange(line.id, { optionGroup: event.target.value })}
+              className={cn(softField, "h-7 w-full min-w-0 text-xs")}
+            />
+          ) : null}
           {showImages ? (
             <>
               <div className="flex flex-wrap items-center gap-1">
@@ -503,6 +582,54 @@ function LineItemRow({
       ) : null}
       {showPricing ? (
       <>
+      {spreadsheet ? (
+        <>
+          <TableCell className="w-21 align-top px-0.5 py-2">
+            <div className="relative mx-auto w-full">
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 left-1 -translate-y-1/2 text-xs text-muted-foreground"
+              >
+                $
+              </span>
+              <Input
+                aria-label="Unit cost"
+                className={cn(softField, numberField, "w-full pl-4 pr-0.5 text-center tabular-nums", compact && "text-xs")}
+                disabled={locked}
+                inputMode="decimal"
+                min={0}
+                placeholder="—"
+                step="0.01"
+                type="number"
+                value={hasCost ? Number(line.unitCost) : ""}
+                onChange={(event) => setCost(event.target.value)}
+              />
+            </div>
+          </TableCell>
+          <TableCell className="w-16 align-top px-0.5 py-2">
+            <div className="relative mx-auto w-full">
+              <Input
+                aria-label="Profit percent"
+                title={hasCost ? undefined : "Enter a cost first"}
+                className={cn(softField, numberField, "w-full pr-4 pl-0.5 text-center tabular-nums", compact && "text-xs")}
+                disabled={locked || !hasCost}
+                inputMode="decimal"
+                placeholder="—"
+                step="0.1"
+                type="number"
+                value={hasCost && line.profitPercent != null ? Number(line.profitPercent) : ""}
+                onChange={(event) => setProfit(event.target.value)}
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 text-xs text-muted-foreground"
+              >
+                %
+              </span>
+            </div>
+          </TableCell>
+        </>
+      ) : null}
       <TableCell className={cn(cols.price, "align-top px-0.5 py-2")}>
         <div className="relative mx-auto w-full">
           <span
@@ -529,13 +656,11 @@ function LineItemRow({
             onChange={(event) => {
               const raw = event.target.value;
               if (raw === "") {
-                onChange(line.id, { unitPrice: 0 });
+                setPrice(0);
                 return;
               }
               const next = Number(raw);
-              onChange(line.id, {
-                unitPrice: Number.isFinite(next) ? next : 0,
-              });
+              setPrice(Number.isFinite(next) ? next : 0);
             }}
           />
         </div>
@@ -549,10 +674,38 @@ function LineItemRow({
             compact ? "text-xs" : "text-sm",
           )}
         >
-          {formatMoney(lineTotal(line))}
+          <span className={cn(spreadsheet && line.optional && "text-muted-foreground italic")}>
+            {formatMoney(lineTotal(line))}
+          </span>
         </div>
       </TableCell>
       </>
+      ) : null}
+      {spreadsheet ? (
+        <TableCell className="w-17 align-top px-0.5 py-2 text-center">
+          <div className="flex h-8 items-center justify-center">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={Boolean(line.optional)}
+              aria-label={line.optional ? "Optional (not in total) — click to include" : "Included — click to make optional"}
+              title={line.optional ? "Optional: shown to the customer, not in the total" : "Included in the total"}
+              disabled={locked}
+              onClick={() => onChange(line.id, line.optional ? { optional: false, optionGroup: "" } : { optional: true })}
+              className={cn(
+                "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50",
+                line.optional ? "bg-amber-500" : "bg-slate-300 dark:bg-slate-600",
+              )}
+            >
+              <span
+                className={cn(
+                  "inline-block size-4 rounded-full bg-white shadow transition-transform",
+                  line.optional ? "translate-x-4.5" : "translate-x-0.5",
+                )}
+              />
+            </button>
+          </div>
+        </TableCell>
       ) : null}
       <TableCell className={cn(cols.remove, "align-top px-0 py-2 text-center")}>
         {canRemove ? (

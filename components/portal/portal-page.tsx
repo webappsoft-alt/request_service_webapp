@@ -12,6 +12,7 @@ export function PortalPage({
   badge,
   backHref,
   backLabel = "Back",
+  headerless = false,
 }: {
   /** Shows a back arrow to the left of the title that links here. */
   backHref?: string;
@@ -22,7 +23,17 @@ export function PortalPage({
   actions?: ReactNode;
   children: ReactNode;
   badge?: ReactNode;
+  /** No header card: the page shows its title and actions itself (the title stays for screen readers). */
+  headerless?: boolean;
 }) {
+  if (headerless) {
+    return (
+      <div className="flex flex-col gap-5">
+        <h1 className="sr-only">{title}</h1>
+        {children}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-3 rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:justify-between">

@@ -57,6 +57,9 @@ import {
 } from "@/lib/api/notifications-client";
 import type { AuthUser } from "@/store/authSlice";
 
+/** The recently-opened records tab bar in the header (Dashboard · REQ-… · JOB-…); off at the client's request. */
+const SHOW_RECORD_TABS = false;
+
 function NavLinks({
   collapsed = false,
   closeOnNavigate = false,
@@ -499,6 +502,8 @@ export function PortalShell({ children }: { children: ReactNode }) {
               </SheetContent>
             </Sheet>
 
+            {/* Client: the recently-opened records tab bar is removed (set SHOW_RECORD_TABS to bring it back). */}
+            {SHOW_RECORD_TABS ? (
             <div className="hidden min-w-0 flex-1 items-center gap-1.5 overflow-x-auto md:flex">
               <RecordTab
                 href="/pro/dashboard"
@@ -522,6 +527,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
                 />
               ))}
             </div>
+            ) : null}
 
             <GlobalSearch className="ml-auto hidden w-[22rem] lg:block xl:w-[26rem]" />
             <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
@@ -534,7 +540,12 @@ export function PortalShell({ children }: { children: ReactNode }) {
             </div>
           </div>
           {showPeople ? <PeopleSubnav /> : null}
-          {showWork ? <WorkSubnav /> : null}
+          {showWork ? (
+            // Desktop has these links in the sidebar: the Work tabs bar is for phones / tablets only.
+            <div className="lg:hidden">
+              <WorkSubnav />
+            </div>
+          ) : null}
         </header>
         <main
           key={pathname}

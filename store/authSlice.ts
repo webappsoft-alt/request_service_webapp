@@ -211,6 +211,11 @@ export type AuthState = {
   loading: boolean;
   error: string | null;
   hydrated: boolean;
+  /**
+   * Portal ("provider" | "technician" | "contractor" | "customer" | "public") whose saved session this tab
+   * last loaded (per-role sessions, lib/session-scope.ts). In memory only — not persisted.
+   */
+  sessionScope?: string | null;
 };
 
 const initialState: AuthState = {
@@ -419,6 +424,23 @@ const authSlice = createSlice({
       state.error = null;
     },
 
+    /**
+     * Use another saved session in this tab (per-role slots, see lib/session-scope.ts): the tab moved to a
+     * portal of another role. `null` = no session for that portal (its gate shows that portal's login).
+     */
+    loadSession(state, action: PayloadAction<string | null>) {
+      state.userData = action.payload;
+      applyDecryptedPayload(state, action.payload ? decryptData<AuthPayload>(action.payload) : null);
+      state.hydrated = true;
+      state.loading = false;
+      state.error = null;
+    },
+
+    /** The per-role session for this portal is in place (see SessionScopeSync). */
+    markSessionScope(state, action: PayloadAction<string>) {
+      state.sessionScope = action.payload;
+    },
+
     clearAuth(state) {
       state.userData = null;
       applyDecryptedPayload(state, null);
@@ -436,6 +458,8 @@ export const {
   setAuthLoading,
   setAuthError,
   clearAuthError,
+  loadSession,
+  markSessionScope,
   clearAuth,
 } = authSlice.actions;
 

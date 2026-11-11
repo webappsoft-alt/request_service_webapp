@@ -7,6 +7,7 @@ import { selectAuth, selectAuthUser, selectIsAuthenticated } from "@/store/authS
 import { proPaths } from "@/lib/pro-paths";
 import { isTechnicianRole, technicianPaths } from "@/lib/technician-paths";
 import { contractorPaths, isContractorRole } from "@/lib/contractor-paths";
+import { useSessionSwitchPending } from "@/components/auth/use-session-switch-pending";
 
 /**
  * Client guard for /technical/*. The API independently rejects non-technician
@@ -19,9 +20,11 @@ export function TechnicianGate({ children }: { children: ReactNode }) {
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const role = user?.role || auth.role;
   const isTechnician = isAuthenticated && Boolean(auth.token) && isTechnicianRole(role);
+  // Per-role sessions: another role's session is being swapped for the technician one — wait.
+  const switching = useSessionSwitchPending();
 
   useEffect(() => {
-    if (!auth.hydrated || isTechnician) return;
+    if (!auth.hydrated || switching || isTechnician) return;
     if (!isAuthenticated) {
       router.replace(technicianPaths.login);
     } else if (role === "provider") {
@@ -31,9 +34,9 @@ export function TechnicianGate({ children }: { children: ReactNode }) {
     } else {
       router.replace("/");
     }
-  }, [auth.hydrated, isAuthenticated, isTechnician, role, router]);
+  }, [auth.hydrated, switching, isAuthenticated, isTechnician, role, router]);
 
-  if (!auth.hydrated || !isTechnician) {
+  if (!auth.hydrated || switching || !isTechnician) {
     return (
       <div className="technician-theme flex min-h-svh items-center justify-center bg-[var(--tech-bg)] text-sm text-muted-foreground">
         Opening your technician portal…

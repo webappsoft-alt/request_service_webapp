@@ -23,9 +23,12 @@ export function usePortalSettings() {
     [authProvider],
   );
 
-  const sourceHours = fromAuth.length
-    ? fromAuth
-    : cloneWorkingHours(provider.workingHours);
+  // Memoized: a new array on every render re-ran the effect below forever ("Maximum update depth
+  // exceeded") when the business has no office hours in the session.
+  const sourceHours = useMemo(
+    () => (fromAuth.length ? fromAuth : cloneWorkingHours(provider.workingHours)),
+    [fromAuth, provider.workingHours],
+  );
 
   const [officeHours, setOfficeHours] = useState(() =>
     cloneWorkingHours(sourceHours),

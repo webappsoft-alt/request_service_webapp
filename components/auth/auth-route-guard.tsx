@@ -7,6 +7,7 @@ import { selectAuth } from "@/store/authSlice";
 import { isProMarketingPath, proPaths } from "@/lib/pro-paths";
 import { customerPaths } from "@/lib/customer-paths";
 import { readPendingFixedOrder } from "@/lib/booking/pending-fixed-order";
+import { useSessionSwitchPending } from "@/components/auth/use-session-switch-pending";
 import { isTechnicianLoginPath, isTechnicianPath, technicianPaths } from "@/lib/technician-paths";
 import {
   contractorPaths,
@@ -118,6 +119,7 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const auth = useAppSelector(selectAuth);
+  const switching = useSessionSwitchPending();
 
   const role = auth.hydrated
     ? normalizeRole(auth.role || auth.user?.role)
@@ -157,7 +159,8 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
     (loggedIn || !isContractorLoginPath(pathname));
 
   useEffect(() => {
-    if (!auth.hydrated) return;
+    // Per-role sessions: a portal URL whose own session is still being swapped in — no redirect yet.
+    if (!auth.hydrated || switching) return;
 
     const nextRole = normalizeRole(auth.role || auth.user?.role);
     const nextLoggedIn = Boolean(auth.token && auth.isAuthenticated);
@@ -237,6 +240,7 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
     }
   }, [
     auth.hydrated,
+    switching,
     auth.isAuthenticated,
     auth.role,
     auth.token,
@@ -246,6 +250,7 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
   ]);
 
   if (
+    switching ||
     providerOffPortal ||
     customerOnPro ||
     technicianOffPortal ||

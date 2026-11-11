@@ -12,6 +12,7 @@ import { proPaths } from "@/lib/pro-paths";
 import { isTechnicianRole, technicianPaths } from "@/lib/technician-paths";
 import { contractorPaths, isContractorRole } from "@/lib/contractor-paths";
 import { PhoneVerificationGate } from "@/components/portal/phone-verification-gate";
+import { useSessionSwitchPending } from "@/components/auth/use-session-switch-pending";
 
 export function PortalGate({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -25,9 +26,11 @@ export function PortalGate({ children }: { children: ReactNode }) {
 
   const isTechnician = isTechnicianRole(user?.role || auth.role);
   const isContractor = isContractorRole(user?.role || auth.role);
+  // Per-role sessions: another role's session is being swapped for the Pro one — wait, don't redirect.
+  const switching = useSessionSwitchPending();
 
   useEffect(() => {
-    if (!auth.hydrated) return;
+    if (!auth.hydrated || switching) return;
     if (isTechnician) {
       // Technicians have their own portal; provider pages are never rendered for them.
       router.replace(technicianPaths.dashboard);
@@ -41,9 +44,9 @@ export function PortalGate({ children }: { children: ReactNode }) {
     if (!isProvider) {
       router.replace(proPaths.login);
     }
-  }, [auth.hydrated, isProvider, isTechnician, isContractor, router]);
+  }, [auth.hydrated, switching, isProvider, isTechnician, isContractor, router]);
 
-  if (!auth.hydrated || !isProvider) {
+  if (!auth.hydrated || switching || !isProvider) {
     return (
       <div className="flex min-h-svh items-center justify-center bg-[#f5f5f5] dark:bg-slate-900 text-sm text-muted-foreground dark:text-slate-400">
         Opening your business portal…

@@ -85,6 +85,13 @@ function clearRequestCaches(): void {
   getRecentSuccess.clear();
 }
 
+/** The tab switched to another signed-in user (per-role sessions): forget the previous user's cached answers. */
+export function clearSessionCaches(): void {
+  clearAuthMeCache();
+  clearRequestCaches();
+  refreshInFlight = null;
+}
+
 /** Drop all short-lived GET results (or those matching an endpoint root). */
 export function invalidateGetCache(endpointOrRoot?: string): void {
   if (!endpointOrRoot) {

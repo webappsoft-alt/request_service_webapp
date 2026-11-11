@@ -67,6 +67,55 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-11
 
+- **Per-role sessions: "/" and all public pages are the customer site** — client: opening `localhost:3000` in
+  a new tab went to `/contractor/dashboard`, because public pages used the last-used session (a contractor
+  signed in elsewhere) and the route guard then sent that contractor to their portal. Now the URL alone
+  decides: `/technical/*` technician, `/contractor/*` contractor, `/pro/*` + Pro marketing / sign-up
+  (`/for-pros*`, `/for-providers`) provider, estimate share links (`/e/…`, `/<uuid>`) keep the tab's own
+  session, and everything else (`/`, `/account`, `/login`, `/register`, services, profiles, blog, quote…)
+  uses the **customer** session only. A Pro / Technician / Contractor in another tab never takes over the
+  customer site. Verified: page sweep with a Pro + Technician signed in (16 pages, all correct: e.g. `/`,
+  `/services`, `/login` stay put, `/account/dashboard` → `/login`, `/technical/jobs` stays, `/contractor/jobs`
+  → contractor login); multi-tab test 17/17; unit test all pass. · `lib/session-scope.ts`
+
+- **Fix: Pro portal render loop ("Maximum update depth exceeded") when the business has no office hours** —
+  client saw a blank "Rendering…" Pro dashboard in a new tab. `usePortalSettings` built a new
+  `sourceHours` array on every render when the session had no working hours, and its effect copied it into
+  state each time → endless re-render. `sourceHours` is now memoized. (Opening `/` while signed in as a Pro
+  still goes to `/pro/dashboard` — the existing route-guard rule, unchanged.)
+  · `components/portal/use-portal-settings.ts`
+
+- **Per-role sessions: a Technician / Contractor / Customer / Pro in one tab no longer replaces another tab's
+  session** — client: multi-role session isolation on the live site, additive and production-safe.
+  - Cause: all portals shared one localStorage key (`persist:userData`). Signing in as another role in any
+    tab overwrote every tab's session on its next reload / token refresh; signing out anywhere signed every
+    tab out.
+  - Now one saved session per role: `persist:userData:provider | :technician | :contractor | :customer`,
+    chosen by URL — `/pro/*` Pro, `/technical/*` Technician, `/contractor/*` Contractor, `/account/*` +
+    `/login`, `/register`, `/verify-otp`, forgot / reset → Customer. Public pages use the role this tab
+    already uses (sessionStorage holds only the role name), else the last used session.
+  - Writes go to the slot of the role inside the session (login, token refresh, profile update). Sign-out
+    clears only that role's slot. Unknown roles (e.g. admin) use the shared key exactly as before.
+  - Zero regression: `persist:userData` is still written ("last used") and read as a fallback; a session
+    saved before this change is copied into its slot on first use, so live users are not signed out.
+  - Security unchanged: slots hold the same AES-encrypted redux-persist value (`encryptData`,
+    `NEXT_PUBLIC_ENCRYPTION_KEY`); auth state is still the encrypted Redux + redux-persist store; no token
+    in sessionStorage; no API / backend change.
+  - Cross-role URLs: a portal whose own session is missing shows its own login (e.g. a Technician URL in a
+    tab where only a Pro is signed in → technician login, not the Pro dashboard). Gates and the route guard
+    wait while a tab's session is being swapped (`useSessionSwitchPending`) instead of redirecting with the
+    old one; `switchSession` swaps auth in one step and drops the previous user's cached lists / GETs.
+  - Kill switch: build with `NEXT_PUBLIC_SCOPED_SESSIONS=off` → the single shared key, as before.
+  - Verified: Chrome multi-tab test (same browser storage, mocked API, fake encrypted sessions) — 14 checks
+    pass (legacy Pro session still works, technician login in tab B keeps Pro in tab A after reload, customer
+    URL asks for customer login, new tabs open the right portal without re-login, technician sign-out keeps
+    the Pro signed in); unit test of the storage adapter — 26 checks pass; estimate page regression run clean.
+  - Files: `lib/session-scope.ts` (new), `components/auth/use-session-switch-pending.ts` (new),
+    `store/index.ts`, `store/authSlice.ts`, `store/redux-provider.tsx`, `components/api/apiFuntions.ts`,
+    `components/portal/portal-gate.tsx`, `components/technician/technician-gate.tsx`,
+    `components/contractor/contractor-gate.tsx`, `components/account/customer-gate.tsx`,
+    `components/auth/auth-route-guard.tsx`
+
 - **Wrong-portal login: clear message + button to the right sign-in page** — client: a technician on the
   contractor login got a vague error. The API now says which account type it is and where to sign in (see the
   backend log); new `showLoginErrorToast` (`lib/login-portal-hint.ts`) shows that message for 10 s with a

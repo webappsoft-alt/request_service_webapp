@@ -7,6 +7,7 @@ import { selectAuth, selectAuthUser, selectIsAuthenticated } from "@/store/authS
 import { contractorPaths, isContractorRole } from "@/lib/contractor-paths";
 import { proPaths } from "@/lib/pro-paths";
 import { isTechnicianRole, technicianPaths } from "@/lib/technician-paths";
+import { useSessionSwitchPending } from "@/components/auth/use-session-switch-pending";
 
 /**
  * Client guard for the contractor portal. The API independently rejects
@@ -19,9 +20,11 @@ export function ContractorGate({ children }: { children: ReactNode }) {
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const role = user?.role || auth.role;
   const isContractor = isAuthenticated && Boolean(auth.token) && isContractorRole(role);
+  // Per-role sessions: another role's session is being swapped for the contractor one — wait.
+  const switching = useSessionSwitchPending();
 
   useEffect(() => {
-    if (!auth.hydrated || isContractor) return;
+    if (!auth.hydrated || switching || isContractor) return;
     if (!isAuthenticated) {
       router.replace(contractorPaths.login);
     } else if (role === "provider") {
@@ -31,9 +34,9 @@ export function ContractorGate({ children }: { children: ReactNode }) {
     } else {
       router.replace("/");
     }
-  }, [auth.hydrated, isAuthenticated, isContractor, role, router]);
+  }, [auth.hydrated, switching, isAuthenticated, isContractor, role, router]);
 
-  if (!auth.hydrated || !isContractor) {
+  if (!auth.hydrated || switching || !isContractor) {
     return (
       <div className="contractor-theme flex min-h-svh items-center justify-center bg-[var(--ct-bg)] text-sm text-muted-foreground">
         Opening your contractor portal…

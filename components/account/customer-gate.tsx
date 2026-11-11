@@ -9,6 +9,7 @@ import {
   selectIsAuthenticated,
 } from "@/store/authSlice";
 import { customerPaths } from "@/lib/customer-paths";
+import { useSessionSwitchPending } from "@/components/auth/use-session-switch-pending";
 
 export function CustomerGate({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -21,16 +22,19 @@ export function CustomerGate({ children }: { children: ReactNode }) {
     Boolean(auth.token) &&
     (role === "customer" || role === "consumer" || role === "user");
 
+  // Per-role sessions: another role's session is being swapped for the customer one — wait.
+  const switching = useSessionSwitchPending();
+
   useEffect(() => {
-    if (!auth.hydrated) return;
+    if (!auth.hydrated || switching) return;
     if (!isCustomer) {
       router.replace(
         `/login?next=${encodeURIComponent(customerPaths.dashboard)}`,
       );
     }
-  }, [auth.hydrated, isCustomer, router]);
+  }, [auth.hydrated, switching, isCustomer, router]);
 
-  if (!auth.hydrated || !isCustomer) {
+  if (!auth.hydrated || switching || !isCustomer) {
     return (
       <div className="flex min-h-svh items-center justify-center bg-[#f5f5f5] text-sm text-muted-foreground">
         Opening your customer dashboard…

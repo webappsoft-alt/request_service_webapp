@@ -16,7 +16,8 @@ import {
   REGISTER,
 } from "redux-persist";
 import storage from "redux-persist/lib/storage";
-import authReducer from "./authSlice";
+import authReducer, { loadSession } from "./authSlice";
+import { createScopedSessionStorage } from "@/lib/session-scope";
 import serviceAreasReducer from "./serviceAreasSlice";
 import categoriesReducer from "./categoriesSlice";
 import fixedServicesReducer from "./fixedServicesSlice";
@@ -74,7 +75,9 @@ import {
  */
 const authPersistConfig = {
   key: "userData",
-  storage,
+  // Same key as before; the adapter keeps one saved session per role (lib/session-scope.ts) so tabs of
+  // different roles don't overwrite each other. NEXT_PUBLIC_SCOPED_SESSIONS=off = plain localStorage.
+  storage: createScopedSessionStorage(storage),
   whitelist: ["userData"],
 };
 
@@ -134,12 +137,24 @@ export type RootState = ReturnType<typeof rootReducer>;
 /** Clears the entire Redux tree (auth, location, categories, etc.) in one action. */
 export const resetStore = createAction("app/reset");
 
+/** Use another role's saved session in this tab (see lib/session-scope.ts). Payload: encrypted userData. */
+export const switchSession = createAction<string | null>("app/switch-session");
+
 const appReducer: Reducer<RootState> = (
   state: RootState | undefined,
   action: Action,
 ) => {
   if (resetStore.match(action)) {
     return rootReducer(undefined, action);
+  }
+  if (switchSession.match(action)) {
+    // Another role's session in this tab: drop the previous user's cached lists, swap the auth
+    // session in one step (keeps redux-persist's bookkeeping, so no "signed out" write in between).
+    const fresh = rootReducer(undefined, { type: "app/switch-session/init" });
+    return {
+      ...fresh,
+      auth: rootReducer(state, loadSession(action.payload)).auth,
+    };
   }
   return rootReducer(state, action);
 };

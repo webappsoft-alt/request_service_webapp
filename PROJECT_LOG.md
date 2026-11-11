@@ -67,6 +67,99 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-11
 
+- **Estimate page Change orders tab = the job's full Change Orders tab** — client.
+  - Was a short list (number, title, status, amount). Now renders the job page's `JobChangeOrdersPanel`
+    inside the page card: Original / Approved / Pending / Rejected tiles, each change order card with its
+    type (customer change order / internal scope update), status, who requested it, its lines, amount and
+    "Not billed" / Create invoice, plus "Create change order". Same props and lock rule as the job page
+    (no new change orders once the job is completed or invoiced).
+  - New `replaceJob` on `useProjectData` so a created / approved change order shows at once (no reload).
+    The old `ChangeOrdersPanel` list is kept, unused.
+  - Checked in Chrome with mocks. Files: `components/portal/estimate-v2/project-panels.tsx`.
+
+- **Site visit: black bold section titles, Reschedule hint on the Date / time label row** — client.
+  - Photos, Measurements, Work items and Visit schedule history titles: `text-xs font-bold text-slate-900`
+    uppercase (were 11px `slate-500` semibold). Work items title is in the shared `WorkItemsEditor`, so the
+    Existing information panel matches.
+  - "Use Reschedule to change time…" moved from under the date / time fields to the right of the
+    "Date / time" label (wraps under it on narrow screens), removing the extra row.
+  - Measurement field labels (What are you measuring? / Value / Unit) `slate-700` instead of grey; the other
+    field labels already use the standard dark text.
+  - Files: `components/portal/estimate-v2/site-visits-panel.tsx`, `components/portal/estimate-v2/work-items-editor.tsx`.
+
+- **Dropdowns no longer open when their label is clicked (app-wide) + softer grey hints on site visits** — client.
+  - Clicking a `<label>` makes the browser send a click to its field. Radix Select treats that click as
+    a touch tap and opened; `PaginatedEntitySelect` opened on any click. Both now open only on a press
+    on the field itself (pointer, touch or Enter / Space); a label click just focuses the field.
+    `SelectTrigger` does this with a `pressedRef` + `preventDefault` (skips Radix's click handler), so
+    every Select in the app gets it. Chrome check: label click → closed and focused; mouse click,
+    Enter and touch tap → open.
+  - Site visit: the Work items hint, Measurements hint, "Save or complete the visit…" note and the
+    Visit schedule history lines use the muted `slate-400` (same as the "Use Reschedule…" note);
+    history action words `slate-600` instead of near-black. Section titles were already one style
+    (11px uppercase `slate-500` semibold), unchanged.
+  - Files: `components/ui/select.tsx`, `components/portal/paginated-entity-select.tsx`,
+    `components/portal/estimate-v2/work-items-editor.tsx`, `components/portal/estimate-v2/site-visits-panel.tsx`.
+
+- **Searchable pickers (technician / contractor): menu now lines up with the field, like Select** — client.
+  - `PaginatedEntitySelect` put the caller's `className` (border, padding, background) on its outer
+    wrapper, not the field. That drew a second box around the field, and the menu, sized from the
+    wrapper, came out ~16px wider on each side (seen in the site-visit dialogs).
+  - `className` now goes on the field (button / search input), as `SelectTrigger` does; the wrapper is
+    plain `relative w-full`. Applies everywhere the picker is used.
+  - Files: `components/portal/paginated-entity-select.tsx`.
+
+- **Change requests table: no reload / spinner when the request dialog is closed** — client.
+  - Closing the review dialog always bumped a local `reload` counter, so the table refetched and
+    showed its loading overlay even when nothing was decided.
+  - The table now reads its rows from the existing `contractorReviews` slice (`fetchContractorReviews`,
+    same `provider/contractor-requests` API). Approve / reject already replace the row there, so close
+    makes no API call. Refetches still happen on open, filter / page change and socket updates
+    (`version`), and keep the current rows on screen instead of the spinner.
+  - The pending-count call now runs only where a badge uses it (`onCountsChange`) and after a decision.
+    New `onDecided` callback on `ContractorReviewDialog` / `JobRequestsTab`; the estimate page uses it to
+    refresh its "N new" count after a reject or a completion approval. `listKey` exported from the slice.
+  - Checked in Chrome with mocks: 3 open/close rounds, 0 extra list calls.
+  - Files: `components/portal/job-requests-tab.tsx`, `components/portal/contractor-review-dialog.tsx`,
+    `store/contractorReviewsSlice.ts`, `components/portal/estimate-v2/project-panels.tsx`.
+
+- **Site visits: "Schedule follow-up visit" blocked while a visit is still open** — client bug report.
+  - The button is disabled while any visit is scheduled / rescheduled / in progress, with an amber note
+    ("Visit #2 is still scheduled. Complete, cancel or reschedule it…") and an "Open Visit #N" link.
+    Same rule is enforced by the API (409), see backend log.
+  - Files: `components/portal/estimate-v2/site-visits-panel.tsx`.
+
+- **Estimate page Job tab: Crew showed "Nobody assigned" though a technician was assigned** — client.
+  - Crew names only came from the team list (`usePortalCrew().employeeLabel`), which returns "" when the
+    person isn't in it / it hasn't loaded, and a job made without a copied technician had no crew at all.
+  - Now falls back to the name saved on the job (`job.assignedTo`), then to the technician assigned on
+    the estimate (passed in as `estimateTechnician` from the workspace's `technicianLabel`).
+  - Files: `components/portal/estimate-v2/project-panels.tsx`, `components/portal/estimate-v2/new-estimate-workspace-view.tsx`.
+
+- **Estimate page: status banner on every tab, no duplicate badge, richer Job tab** — client.
+  - The accepted / converted banner now heads every tab (was Summary + Preview only) and reads
+    "Converted to job JOB-… · accepted by <customer> · <date>" (the separate "Customer:" line is folded in;
+    Company line kept). The sidebar status badge is hidden once accepted / converted (the banner shows it).
+  - Job tab redesigned: header (job number, status, title, **Open job**), 5-step tracker (Booked → Scheduled
+    → In progress → Completed → Invoiced; "cancelled" note), facts grid (Scheduled, Due, Crew technicians +
+    contractors, Job value incl. approved change orders, Invoice link, Job site), an amber "N change requests
+    waiting for your review" bar with **Review** (opens Change requests), then Stages and Latest activity.
+  - Files: `components/portal/estimate-v2/project-panels.tsx`, `new-estimate-workspace-view.tsx`
+
+- **Estimate page: estimate number, latest status, Job + Change requests sections** — client: the page showed
+  the work-request number (Est-1677) while the list shows EST-248, still said "Accepted" after it became a job,
+  and the technician's change-order request wasn't visible from the estimate.
+  - Menu header shows the estimate's number (same as All estimates), the work-request number only when
+    there's no estimate yet.
+  - Status badge and card subtitle show the latest status incl. **Converted to job · JOB-…** (was hidden);
+    the approval banner reads "Converted to job JOB-… · accepted by the customer".
+  - Production: **Job** (was "Progress", meta = job number) with job status, progress, stages, latest
+    activity and **Open job**; **Change requests** (when the job has any, meta "N new" while pending) with the
+    same table as the job's Requests tab (approve / reject / create the change order; live via the socket);
+    Change orders stays as before. New `jobRequests` + `reloadJob` in `useProjectData`.
+  - Files: `components/portal/estimate-v2/project-panels.tsx`, `project-lifecycle-nav.tsx`,
+    `new-estimate-workspace-view.tsx`
+
 - **Per-role sessions: "/" and all public pages are the customer site** — client: opening `localhost:3000` in
   a new tab went to `/contractor/dashboard`, because public pages used the last-used session (a contractor
   signed in elsewhere) and the route guard then sent that contractor to their portal. Now the URL alone

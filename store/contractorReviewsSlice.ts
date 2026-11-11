@@ -33,7 +33,8 @@ const initialState: ContractorReviewsState = {
 
 type RootLike = { contractorReviews: ContractorReviewsState };
 
-function listKey(query: PendingReviewQuery) {
+/** Cache key of a list query (a screen checks it before showing `list.data`). */
+export function listKey(query: PendingReviewQuery) {
   return [query.page || 1, query.limit || 20, query.status || "pending_pro_approval", query.type || "", query.jobId || ""].join("|");
 }
 

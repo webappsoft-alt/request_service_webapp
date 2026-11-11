@@ -2150,7 +2150,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   */
   const identityBadge = (
         <>
-        {estimate?.status && estimate.status !== "converted_to_job" ? (
+        {/* Status badge; once accepted / converted the banner at the top shows it instead (client). */}
+        {estimate?.status === "accepted" || estimate?.status === "converted_to_job" ? null : estimate?.status ? (
           <span
             className={cn(
               "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
@@ -2195,6 +2196,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       optional: filledLines.filter((line) => line.optional).length,
       hasJob: Boolean(estimate?.jobId),
       changeOrders: projectData.job?.changeOrders?.length || 0,
+      jobNumber: projectData.job?.number,
+      requests: projectData.jobRequests,
       schedule: projectData.schedule.length,
       invoices: (linkedInvoice ? 1 : 0) + (projectData.job?.changeOrders || []).filter((order) => order.billingInvoiceId).length,
       files: projectFiles({
@@ -2252,7 +2255,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                 </Link>
                 <div className="min-w-0">
                   <p className="text-[14px] leading-snug font-semibold tracking-tight text-slate-900 dark:text-foreground">
-                    {opportunity.number} · {opportunity.title}
+                    {estimate?.number || opportunity.number} · {opportunity.title}
                   </p>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">{identityBadge}</div>
                 </div>
@@ -2296,6 +2299,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
         {/* Main column */}
         <section className="min-w-0 space-y-4">
+          {/* Client: the accepted / converted banner heads every tab. */}
+          <ApprovalStatus estimate={estimate} jobNumber={projectData.job?.number} />
           {/* Only on the Estimate tab (before the estimate card exists); other tabs carry their own actions. */}
           {!showEstimateSection && centreView === "estimate" ? (
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -2490,6 +2495,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     },
                   }}
                   onOpenEstimate={() => setView("estimate")}
+                  onView={setView}
+                  estimateTechnician={technicianLabel}
                   onSend={sendNow}
                   canSend={!accepted && !estimateLocked}
                 />
@@ -2498,7 +2505,6 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           ) : null}
           {/* The estimate sheet stays mounted while a details panel is open (drafts / auto-save keep running). */}
           <div className={cn("space-y-4", centreView !== "estimate" && !partsView && "hidden")}>
-            {partsView ? null : <ApprovalStatus estimate={estimate} />}
           {/* Same cards as the job Summary tab; only once someone is assigned ("Assign …" is in the header). */}
           {technicianId && !partsView ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/15 bg-gradient-to-r from-primary/[0.07] via-primary/[0.03] to-transparent px-4 py-3 shadow-xs">
@@ -2662,9 +2668,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     <h2 className="text-lg font-semibold tracking-tight text-slate-900">
                       Estimate{estimate?.number ? ` · ${estimate.number}` : ""}
                     </h2>
-                    {estimate?.status && estimate.status !== "converted_to_job" ? (
+                    {estimate?.status ? (
                       <p className="mt-0.5 text-sm text-slate-500">
                         {estimateStatusLabel(estimate.status)}
+                        {estimate.status === "converted_to_job" && projectData.job?.number ? ` · ${projectData.job.number}` : ""}
                       </p>
                     ) : !estimate?.status ? (
                       <p className="mt-0.5 text-sm text-slate-500">Ready to build</p>

@@ -110,10 +110,10 @@ export function WorkItemsEditor({
     <div className={cn("space-y-3", className)}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
+          <h3 className="text-xs font-bold tracking-[0.08em] text-slate-900 uppercase dark:text-foreground">
             {title}
           </h3>
-          <p className="mt-1 text-xs leading-relaxed text-slate-500">{hint}</p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-400">{hint}</p>
         </div>
         {!disabled ? (
           <div className="flex flex-wrap gap-1.5">

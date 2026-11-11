@@ -221,6 +221,12 @@ export function SiteVisitsPanel({
   const [photoDragOver, setPhotoDragOver] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
+  // One open visit at a time (same rule as the API): a new visit only once the current one is
+  // completed, cancelled or a no-show. Moving the open visit is a Reschedule, not a new visit.
+  const openVisit = sortedVisits.find((item) => !["completed", "cancelled", "no_show"].includes(item.status));
+  const openVisitMessage = openVisit
+    ? `Visit #${openVisit.sequenceNumber || ""} is still ${String(openVisit.status || "scheduled").replace(/_/g, " ")}. Complete, cancel or reschedule it before scheduling another visit.`
+    : "";
   const [followUpOpen, setFollowUpOpen] = useState(false);
   const [followUpType, setFollowUpType] = useState<VisitType>("follow_up_assessment");
   const [followUpAt, setFollowUpAt] = useState("");
@@ -520,6 +526,10 @@ export function SiteVisitsPanel({
   }
 
   async function scheduleFollowUp() {
+    if (openVisit) {
+      toast.error(openVisitMessage);
+      return;
+    }
     if (!followUpAt) {
       toast.error("Pick a date and time for the follow-up visit.");
       return;
@@ -675,7 +685,8 @@ export function SiteVisitsPanel({
             </Button>
             <Button
               size="sm"
-              disabled={saving}
+              disabled={saving || Boolean(openVisit)}
+              title={openVisitMessage || undefined}
               onClick={() => {
                 setFollowUpType(sortedVisits.length ? "follow_up_assessment" : "initial_assessment");
                 setFollowUpOpen(true);
@@ -686,6 +697,21 @@ export function SiteVisitsPanel({
             </Button>
           </div>
         </div>
+
+        {openVisit ? (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+            <span>{openVisitMessage}</span>
+            {openVisit.id !== selected?.id ? (
+              <button
+                type="button"
+                className="font-semibold underline-offset-2 hover:underline"
+                onClick={() => setSelectedId(openVisit.id)}
+              >
+                Open Visit #{openVisit.sequenceNumber}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         {sortedVisits.length ? (
           <div className="mt-4 grid gap-2">
@@ -899,7 +925,13 @@ export function SiteVisitsPanel({
               )}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="visit-when">Date / time</Label>
+              {/* Client: the hint sits on the label row (right), not under the fields. */}
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                <Label htmlFor="visit-when">Date / time</Label>
+                <p className="text-[11px] leading-snug text-slate-400">
+                  Use Reschedule to change time with a reason and keep history on this visit.
+                </p>
+              </div>
               <DateTimeField
                 id="visit-when"
                 value={scheduledAt}
@@ -907,9 +939,6 @@ export function SiteVisitsPanel({
                 onChange={setScheduledAt}
                 fieldClassName={cn(DIALOG_FIELD, "bg-[#fafbfc]")}
               />
-              <p className="text-[11px] leading-relaxed text-slate-400">
-                Use Reschedule to change time with a reason and keep history on this visit.
-              </p>
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="visit-findings">Findings</Label>
@@ -938,7 +967,7 @@ export function SiteVisitsPanel({
           </div>
 
           <div className="mt-6 border-t border-[#d8dee8] pt-5">
-            <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
+            <h3 className="text-xs font-bold tracking-[0.08em] text-slate-900 uppercase dark:text-foreground">
               Photos
             </h3>
             <div
@@ -1028,10 +1057,10 @@ export function SiteVisitsPanel({
           </div>
 
           <div className="mt-6 border-t border-[#d8dee8] pt-5">
-            <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
+            <h3 className="text-xs font-bold tracking-[0.08em] text-slate-900 uppercase dark:text-foreground">
               Measurements
             </h3>
-            <p className="mt-1 text-xs leading-relaxed text-slate-500">
+            <p className="mt-1 text-xs leading-relaxed text-slate-400">
               What = the thing measured · Value = the number · Unit = how it is measured
             </p>
             {(measurements.length || 0) > 0 ? (
@@ -1066,7 +1095,7 @@ export function SiteVisitsPanel({
             {canEditCapture ? (
               <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_5.5rem_8.5rem_auto] sm:items-center">
                 <div className="min-w-0 space-y-1">
-                  <Label className="text-[11px] text-slate-500">What are you measuring?</Label>
+                  <Label className="text-xs text-slate-700 dark:text-foreground">What are you measuring?</Label>
                   <Input
                     placeholder="e.g. Square footage, Pipe length, System tonnage"
                     value={measurementLabel}
@@ -1081,7 +1110,7 @@ export function SiteVisitsPanel({
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-slate-500">Value</Label>
+                  <Label className="text-xs text-slate-700 dark:text-foreground">Value</Label>
                   <Input
                     placeholder="1800"
                     value={measurementValue}
@@ -1096,7 +1125,7 @@ export function SiteVisitsPanel({
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-slate-500">Unit</Label>
+                  <Label className="text-xs text-slate-700 dark:text-foreground">Unit</Label>
                   <Select value={measurementUnit} onValueChange={setMeasurementUnit}>
                     <SelectTrigger className="h-9 bg-[#fafbfc]">
                       <SelectValue placeholder="Unit" />
@@ -1130,7 +1159,7 @@ export function SiteVisitsPanel({
               disabled={!canEditCapture || saving}
             />
             {canEditCapture ? (
-              <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+              <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
                 Save or complete the visit to persist work items. They seed the estimate automatically.
               </p>
             ) : null}
@@ -1138,7 +1167,7 @@ export function SiteVisitsPanel({
 
           {(selected.scheduleHistory?.length || 0) > 0 ? (
             <div className="mt-6 rounded-xl border border-[#b4becc] bg-[#f8fafc] px-4 py-3.5">
-              <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
+              <h3 className="text-xs font-bold tracking-[0.08em] text-slate-900 uppercase dark:text-foreground">
                 Visit schedule history
               </h3>
               <ol className="mt-2.5 space-y-2">
@@ -1147,8 +1176,8 @@ export function SiteVisitsPanel({
                   .reverse()
                   .slice(0, 6)
                   .map((item, index) => (
-                    <li key={`${item.at}-${index}`} className="text-xs leading-relaxed text-slate-500">
-                      <span className="font-medium capitalize text-slate-800">
+                    <li key={`${item.at}-${index}`} className="text-xs leading-relaxed text-slate-400">
+                      <span className="font-medium capitalize text-slate-600">
                         {(item.action || "update").replace(/_/g, " ")}
                       </span>
                       {item.fromScheduledAt || item.toScheduledAt

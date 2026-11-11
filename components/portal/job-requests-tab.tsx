@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Eye, XCircle } from "lucide-react";
 import { RequestStatusPill } from "@/components/contractor/contractor-ui";
 import { ContractorReviewDialog } from "@/components/portal/contractor-review-dialog";
@@ -11,12 +11,11 @@ import {
   type ContractorRequest,
   type ContractorRequestStatus,
   type ContractorRequestType,
-  type Paginated,
 } from "@/lib/api/contractor-portal-client";
-import { extractErrorMessage } from "@/components/api/extractErrorMessage";
+import { fetchContractorReviews, listKey } from "@/store/contractorReviewsSlice";
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import type { ChangeOrder } from "@/lib/types";
 
 const PAGE_SIZE = 10;
@@ -74,6 +73,7 @@ export function JobRequestsTab({
   initialRequestId,
   onChangeOrderCreated,
   onCountsChange,
+  onDecided,
 }: {
   jobId: string;
   /** The job's change orders — extras created from these requests are shown inline. */
@@ -82,46 +82,55 @@ export function JobRequestsTab({
   initialRequestId?: string | null;
   onChangeOrderCreated: (request: ContractorRequest) => void;
   onCountsChange?: (pending: number) => void;
+  /** After an approve / reject (e.g. refresh the page's request counts). */
+  onDecided?: (request: ContractorRequest) => void;
 }) {
   // Socket `contractor:requests` bumps this so the list stays live.
   const version = useAppSelector((state) => state.contractorReviews.version);
-  const [data, setData] = useState<Paginated<ContractorRequest> | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const dispatch = useAppDispatch();
   const [status, setStatus] = useState<ContractorRequestStatus | "">("");
   const [type, setType] = useState<ContractorRequestType | "">("");
   const [page, setPage] = useState(1);
-  const [reload, setReload] = useState(0);
+  /** Bumped after an approve / reject so the pending badge is recounted (the row itself is updated in the slice). */
+  const [decided, setDecided] = useState(0);
+
+  // The list lives in the contractorReviews slice (same thunk as Pending reviews). Approve / reject
+  // replace the row there, so closing the dialog needs no refetch and shows no spinner.
+  const key = listKey({ jobId, status: status || "all", type: type || undefined, page, limit: PAGE_SIZE });
+  const list = useAppSelector((state) => state.contractorReviews.list);
+  const data = list.key === key ? list.data : null;
+  const loading = !data && (list.loading || list.key !== key);
+  const error = list.key === key ? list.error || "" : "";
   /** Row being reviewed, and whether the dialog opens on Approve or the Reject reason form. */
   const [picked, setPicked] = useState<{ request: ContractorRequest; mode: "review" | "reject" } | null>(null);
   const [deepLinkId, setDeepLinkId] = useState<string | null>(initialRequestId || null);
 
+  // Fetch on open, filter / page change and socket updates (version). Rows already on screen stay
+  // visible while it refreshes; the spinner only shows when there is nothing to show yet.
   useEffect(() => {
+    void dispatch(
+      fetchContractorReviews({ jobId, status: status || "all", type: type || undefined, page, limit: PAGE_SIZE, force: true }),
+    );
+  }, [dispatch, jobId, status, type, page, version]);
+
+  // Pending total for the tab badge (independent of the page / filters shown), only when a badge is shown.
+  const countsRef = useRef(onCountsChange);
+  useEffect(() => {
+    countsRef.current = onCountsChange;
+  });
+  const wantsCounts = Boolean(onCountsChange);
+  useEffect(() => {
+    if (!wantsCounts) return;
     let cancelled = false;
-    setLoading(true);
-    listContractorReviewRequests({ jobId, status: status || "all", type: type || undefined, page, limit: PAGE_SIZE })
-      .then((result) => {
-        if (cancelled) return;
-        setData(result);
-        setError("");
-      })
-      .catch((err) => {
-        if (!cancelled) setError(extractErrorMessage(err) || "Could not load requests.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    // Pending total for the tab badge (independent of the page / filters shown).
     listContractorReviewRequests({ jobId, status: "pending_pro_approval", page: 1, limit: 1 })
       .then((result) => {
-        if (!cancelled) onCountsChange?.(result.total);
+        if (!cancelled) countsRef.current?.(result.total);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onCountsChange is a display callback
-  }, [jobId, status, type, page, version, reload]);
+  }, [wantsCounts, jobId, version, decided]);
 
   // Deep link from a notification: open that request once it is on the page.
   const deepLinked = deepLinkId ? data?.items.find((row) => row.id === deepLinkId) : null;
@@ -130,7 +139,8 @@ export function JobRequestsTab({
   function closeDialog() {
     setPicked(null);
     setDeepLinkId(null);
-    setReload((v) => v + 1);
+    // Client: no reload on close. A decision already updated the row in the slice.
+    // setReload((v) => v + 1);
   }
 
   return (
@@ -290,6 +300,10 @@ export function JobRequestsTab({
         }}
         onApproved={(request) => {
           if (request.type === "change_order") onChangeOrderCreated(request);
+        }}
+        onDecided={(request) => {
+          setDecided((v) => v + 1);
+          onDecided?.(request);
         }}
       />
     </div>

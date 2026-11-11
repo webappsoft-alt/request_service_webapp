@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
 import {
+  Briefcase,
   CalendarClock,
   CalendarDays,
   ChevronDown,
-  ClipboardList,
   Eye,
   FolderOpen,
   GitPullRequestArrow,
+  Inbox,
   ListChecks,
   Receipt,
   Table2,
@@ -41,6 +42,10 @@ export type ProjectNavCounts = {
   optional: number;
   hasJob: boolean;
   changeOrders: number;
+  /** The job's number once the estimate became a job. */
+  jobNumber?: string;
+  /** Requests from the job's crew: all, and waiting for review. */
+  requests?: { total: number; pending: number };
   schedule: number;
   invoices: number;
   files: number;
@@ -66,8 +71,19 @@ export function projectNavGroups(counts: ProjectNavCounts, accepted: boolean): N
       id: "production",
       title: "Production",
       items: [
-        ...(counts.hasJob ? [{ id: "progress", label: "Progress", icon: ClipboardList }] : []),
+        // Client: once converted, the job has its own section (status, progress, Open job).
+        ...(counts.hasJob ? [{ id: "progress", label: "Job", icon: Briefcase, meta: counts.jobNumber }] : []),
         ...(counts.changeOrders ? [{ id: "change-orders", label: "Change orders", icon: GitPullRequestArrow, meta: count(counts.changeOrders) }] : []),
+        ...(counts.hasJob && counts.requests?.total
+          ? [
+              {
+                id: "requests",
+                label: "Change requests",
+                icon: Inbox,
+                meta: counts.requests.pending ? `${counts.requests.pending} new` : count(counts.requests.total),
+              },
+            ]
+          : []),
         ...(counts.schedule ? [{ id: "schedule", label: "Schedule", icon: CalendarDays, meta: count(counts.schedule) }] : []),
         ...(counts.invoices ? [{ id: "invoices", label: "Invoices", icon: Receipt, meta: count(counts.invoices) }] : []),
         // Budget stays, moved to the end of Production (client).

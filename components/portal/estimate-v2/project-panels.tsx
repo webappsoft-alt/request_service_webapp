@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { BadgeCheck, CalendarDays, ExternalLink, FileText, Hash, ImageIcon, Inbox, Loader2, Mail, MapPin, PenLine, Phone, UserRound } from "lucide-react";
+import { AlertCircle, BadgeCheck, CalendarClock, CalendarDays, Check, HardHat, Receipt, Wallet, ExternalLink, FileText, Hash, ImageIcon, Inbox, Loader2, Mail, MapPin, PenLine, Phone, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { EstimatePdfDocument } from "@/components/estimate/estimate-pdf";
@@ -15,6 +15,10 @@ import { lineTotal, type JobCostLine } from "@/components/portal/use-job-costing
 import type { EstimateApproval, EstimateShareSnapshot } from "@/components/portal/use-estimate-share";
 import type { RouteLocationMapInnerProps } from "@/components/portal/route-location-map-inner";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
+import { JobRequestsTab } from "@/components/portal/job-requests-tab";
+import { JobChangeOrdersPanel } from "@/components/portal/job-change-orders-panel";
+import { listContractorReviewRequests } from "@/lib/api/contractor-portal-client";
+import { useAppSelector } from "@/store/hooks";
 import { Button } from "@/components/ui/button";
 import { getInvoice, getJob, getRequest, listRecordSchedule, updateSchedule } from "@/lib/api/crm-client";
 import type { EstimateV2Opportunity, OpportunityAttachment } from "@/lib/api/estimate-v2-client";
@@ -47,6 +51,7 @@ export const PROJECT_PANEL_VIEWS = [
   "budget",
   "progress",
   "change-orders",
+  "requests",
   "schedule",
   "invoices",
   "files",
@@ -105,7 +110,7 @@ function Muted({ children }: { children: ReactNode }) {
 }
 
 /** Who signed, and when — the approval status of an estimate. */
-export function ApprovalStatus({ estimate }: { estimate: Estimate | null }) {
+export function ApprovalStatus({ estimate, jobNumber }: { estimate: Estimate | null; jobNumber?: string }) {
   const customer = estimate?.signature;
   const company = estimate?.companySignature;
   const accepted = estimate?.status === "accepted" || estimate?.status === "converted_to_job";
@@ -121,9 +126,19 @@ export function ApprovalStatus({ estimate }: { estimate: Estimate | null }) {
     >
       <p className="flex items-center gap-1.5 font-semibold">
         <BadgeCheck className={cn("size-4", accepted ? "text-emerald-600" : "text-muted-foreground")} />
-        {accepted ? "Accepted by the customer" : "Awaiting the customer's signature"}
+        {estimate?.status === "converted_to_job"
+          ? `Converted to job${jobNumber ? ` ${jobNumber}` : ""}`
+          : accepted
+            ? "Accepted"
+            : "Awaiting the customer's signature"}
+        {accepted ? (
+          <span className="font-normal">
+            · accepted by {customer?.signedBy ? <span className="font-semibold">{customer.signedBy}</span> : "the customer"}
+            {customer?.signedAt ? <span className="opacity-70"> · {formatDate(customer.signedAt)}</span> : null}
+          </span>
+        ) : null}
       </p>
-      {customer?.signedBy ? (
+      {customer?.signedBy && !accepted ? (
         <p className="flex items-center gap-1.5">
           <PenLine className="size-3.5 opacity-70" />
           Customer: <span className="font-medium">{customer.signedBy}</span>
@@ -157,6 +172,12 @@ export type ProjectData = {
   scheduleLoading: boolean;
   setSchedule: Dispatch<SetStateAction<PortalCalendarEvent[]>>;
   reloadSchedule: () => void;
+  /** Change order / completion requests from the job's technicians and contractors. */
+  jobRequests: { total: number; pending: number };
+  /** Load the job again (after a request becomes a change order). */
+  reloadJob: () => void;
+  /** Show a job the API just returned (e.g. after a change order is created or approved). */
+  replaceJob: (job: Job) => void;
 };
 
 type Keyed<T> = { key: string; value: T };
@@ -172,17 +193,38 @@ export function useProjectData({
   requestId?: string | null;
 }): ProjectData {
   const [job, setJob] = useState<Keyed<Job | null> | null>(null);
+  const [jobNonce, setJobNonce] = useState(0);
+  const jobKey = jobId ? `${jobId}#${jobNonce}` : "";
   useEffect(() => {
-    if (!jobId || job?.key === jobId) return;
+    if (!jobId || job?.key === jobKey) return;
     let cancelled = false;
     void getJob(jobId).then(
-      (value) => !cancelled && setJob({ key: jobId, value }),
-      () => !cancelled && setJob({ key: jobId, value: null }),
+      (value) => !cancelled && setJob({ key: jobKey, value }),
+      () => !cancelled && setJob((current) => ({ key: jobKey, value: current?.value ?? null })),
     );
     return () => {
       cancelled = true;
     };
-  }, [jobId, job?.key]);
+  }, [jobId, jobKey, job?.key]);
+
+  // Requests from the job's crew (all + waiting for review). The socket bumps `version` so it stays live.
+  const requestsVersion = useAppSelector((state) => state.contractorReviews.version);
+  const [requests, setRequests] = useState<Keyed<{ total: number; pending: number }> | null>(null);
+  const requestsKey = jobId ? `${jobId}#${requestsVersion}#${jobNonce}` : "";
+  useEffect(() => {
+    if (!jobId || requests?.key === requestsKey) return;
+    let cancelled = false;
+    void Promise.all([
+      listContractorReviewRequests({ jobId, status: "all", page: 1, limit: 1 }),
+      listContractorReviewRequests({ jobId, status: "pending_pro_approval", page: 1, limit: 1 }),
+    ]).then(
+      ([all, pending]) => !cancelled && setRequests({ key: requestsKey, value: { total: all.total, pending: pending.total } }),
+      () => !cancelled && setRequests({ key: requestsKey, value: { total: 0, pending: 0 } }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId, requestsKey, requests?.key]);
 
   const [photos, setPhotos] = useState<Keyed<string[]> | null>(null);
   useEffect(() => {
@@ -227,14 +269,18 @@ export function useProjectData({
   );
 
   return {
-    job: jobId && job?.key === jobId ? job.value : null,
-    jobLoading: Boolean(jobId && job?.key !== jobId),
+    // Keep showing the loaded job while it reloads (reloadJob).
+    job: jobId && job?.key.startsWith(`${jobId}#`) ? job.value : null,
+    jobLoading: Boolean(jobId && !job?.key.startsWith(`${jobId}#`)),
     customerPhotos: requestId && photos?.key === requestId ? photos.value : [],
     customerPhotosLoading: Boolean(requestId && photos?.key !== requestId),
     schedule: rows?.value || [],
     scheduleLoading: Boolean(recordIds.length && !rows),
     setSchedule,
     reloadSchedule: () => setNonce((n) => n + 1),
+    jobRequests: requests?.value || { total: 0, pending: 0 },
+    reloadJob: () => setJobNonce((n) => n + 1),
+    replaceJob: (next: Job) => setJob({ key: jobKey, value: next }),
   };
 }
 
@@ -317,6 +363,8 @@ export function ProjectPanel({
   linkedInvoice,
   companyFiles,
   onOpenEstimate,
+  onView,
+  estimateTechnician,
   onShowMap,
   mapProps,
   printButton,
@@ -336,6 +384,10 @@ export function ProjectPanel({
   /** Files the company added under Existing information. */
   companyFiles: OpportunityAttachment[];
   onOpenEstimate: () => void;
+  /** Open another section of this page (e.g. Change requests from the Job tab). */
+  onView?: (view: string) => void;
+  /** Technician assigned on this estimate (shown on the Job tab when the job has no crew of its own). */
+  estimateTechnician?: string;
   onShowMap: () => void;
   /** Business and job-site details for the Customer tab map. */
   mapProps: RouteLocationMapInnerProps;
@@ -345,7 +397,7 @@ export function ProjectPanel({
   canSend: boolean;
 }) {
   const { job } = data;
-  const needsJob = view === "progress" || view === "change-orders";
+  const needsJob = view === "progress" || view === "change-orders" || view === "requests";
   if (needsJob && data.jobLoading) {
     return (
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -365,9 +417,38 @@ export function ProjectPanel({
     case "budget":
       return <BudgetPanel lines={lines} job={job} />;
     case "progress":
-      return <ProgressPanel job={job} estimate={estimate} />;
+      return <ProgressPanel job={job} estimate={estimate} pendingRequests={data.jobRequests.pending} onView={onView} estimateTechnician={estimateTechnician} />;
+    case "requests":
+      return job ? (
+        <section className={PANEL_CARD}>
+          {/* Same table as the job's Requests tab (approve / reject, create the change order). */}
+          <JobRequestsTab
+            jobId={job.id}
+            changeOrders={job.changeOrders || []}
+            onChangeOrderCreated={() => data.reloadJob()}
+            // Any decision changes the sidebar's "N new" count. An approved change order already
+            // reloads through onChangeOrderCreated, so only the other decisions reload here.
+            onDecided={(request) => {
+              if (!(request.type === "change_order" && request.status !== "rejected")) data.reloadJob();
+            }}
+          />
+        </section>
+      ) : null;
     case "change-orders":
-      return <ChangeOrdersPanel job={job} />;
+      // Client: the full Change Orders tab of the job page (summary tiles, cards with lines, create /
+      // approve), not a short list. Same props and lock rule as the job page.
+      // return <ChangeOrdersPanel job={job} />;
+      return job ? (
+        <section className={PANEL_CARD}>
+          <JobChangeOrdersPanel
+            job={job}
+            originalAmount={(job.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0)}
+            invoiceId={linkedInvoice?.id || job.invoiceId}
+            locked={Boolean(linkedInvoice || job.invoiceId) || ["completed", "invoiced", "paid"].includes(job.status)}
+            onJobUpdated={(next) => data.replaceJob(next)}
+          />
+        </section>
+      ) : null;
     case "schedule":
       return <SchedulePanel data={data} />;
     case "invoices":
@@ -648,7 +729,6 @@ function RequestPanel({
 }
 
 function PreviewPanel({
-  estimate,
   preview,
   onSend,
   canSend,
@@ -676,7 +756,6 @@ function PreviewPanel({
   }
   return (
     <div className="space-y-3">
-      <ApprovalStatus estimate={estimate} />
       <Panel
         label="Preview · as the customer sees it"
         aside={
@@ -832,41 +911,179 @@ function BudgetPanel({ lines, job }: { lines: JobCostLine[]; job: Job | null }) 
 }
 
 const JOB_STEPS: { label: string; statuses: string[] }[] = [
-  { label: "Booked", statuses: ["unscheduled", "scheduled", "dispatched", "en_route", "on_site", "on_hold", "waiting_parts", "needs_return"] },
-  { label: "In progress", statuses: ["in_progress"] },
+  { label: "Booked", statuses: ["unscheduled"] },
+  { label: "Scheduled", statuses: ["scheduled", "dispatched", "en_route"] },
+  { label: "In progress", statuses: ["on_site", "in_progress", "on_hold", "waiting_parts", "needs_return"] },
   { label: "Completed", statuses: ["completed"] },
+  { label: "Invoiced", statuses: ["invoiced", "paid"] },
 ];
 
-function ProgressPanel({ job, estimate }: { job: Job | null; estimate: Estimate | null }) {
+/** The job made from this estimate: where it stands, when, who, how much — and a way into the job. */
+function ProgressPanel({
+  job,
+  estimate,
+  pendingRequests = 0,
+  onView,
+  estimateTechnician = "",
+}: {
+  job: Job | null;
+  estimate: Estimate | null;
+  pendingRequests?: number;
+  onView?: (view: string) => void;
+  estimateTechnician?: string;
+}) {
+  const { employeeLabel } = usePortalCrew();
   if (!job) {
     return (
-      <Panel label="Progress">
+      <Panel label="Job">
         <Muted>The job couldn&apos;t be loaded.</Muted>
       </Panel>
     );
   }
+  const cancelled = job.status === "cancelled";
   const stepIndex = Math.max(0, JOB_STEPS.findIndex((step) => step.statuses.includes(job.status)));
   const stages = estimate?.stages || [];
+  // Crew names: the team list first, then the name saved on the job (team list not loaded yet),
+  // then the technician assigned on this estimate (job made before a technician was copied over).
+  const technicianIds = [...new Set([...(job.assignedEmployeeIds || []), job.assignedEmployeeId].filter(Boolean) as string[])];
+  const crewNames = technicianIds.map((id) => employeeLabel(id)).filter(Boolean);
+  const technicians = crewNames.length
+    ? crewNames
+    : technicianIds.length && job.assignedTo
+      ? [job.assignedTo]
+      : estimateTechnician && estimateTechnician !== "Assigned technician"
+        ? [estimateTechnician]
+        : technicianIds.length
+          ? [job.assignedTo || "Assigned technician"]
+          : [];
+  const contractors = (job.crewContractors || []).map((row) => row.name).filter(Boolean);
+  const baseValue = (job.items || []).filter((item) => item.source !== "change_order").reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+  const approved = (job.changeOrders || []).filter((order) => order.status === "approved");
+  const extras = approved.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
+  const a = job.address;
+  const address = a ? [a.address || a.street, a.city, [a.state, a.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "";
+
   return (
     <div className="space-y-3">
-      <Panel
-        label="Progress"
-        aside={<span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", jobStatusTone(job.status))}>{jobStatusLabel(job.status)}</span>}
-      >
-        <p className="text-sm text-slate-700 dark:text-foreground">
-          <span className="font-semibold">{job.number}</span> {job.title ? `· ${job.title}` : ""}
-        </p>
-        <ol className="mt-3 grid grid-cols-3 gap-2">
-          {JOB_STEPS.map((step, index) => (
-            <li key={step.label}>
-              <div className={cn("h-1.5 rounded-full", index <= stepIndex ? "bg-primary" : "bg-slate-200 dark:bg-muted")} />
-              <p className={cn("mt-1.5 text-xs", index <= stepIndex ? "font-semibold text-slate-900 dark:text-foreground" : "text-slate-500")}>
-                {step.label}
-              </p>
-            </li>
-          ))}
-        </ol>
-      </Panel>
+      <section className={cn(PANEL_CARD, "overflow-hidden p-0")}>
+        {/* Header */}
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-border-soft">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase">Job</p>
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-lg font-semibold tracking-tight text-slate-900 dark:text-foreground">
+              {job.number}
+              <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", jobStatusTone(job.status))}>{jobStatusLabel(job.status)}</span>
+            </p>
+            {job.title ? <p className="mt-0.5 text-sm text-slate-600 dark:text-muted-foreground">{job.title}</p> : null}
+          </div>
+          <Button size="sm" className="h-9 gap-1.5" asChild>
+            <Link href={`/pro/dashboard/jobs/${job.id}`}>
+              <ExternalLink className="size-3.5" /> Open job
+            </Link>
+          </Button>
+        </div>
+
+        {/* Stepper */}
+        <div className="px-5 py-4">
+          {cancelled ? (
+            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
+              This job was cancelled.
+            </p>
+          ) : (
+            <ol className="flex items-start">
+              {JOB_STEPS.map((step, index) => {
+                const done = index < stepIndex;
+                const current = index === stepIndex;
+                return (
+                  <li key={step.label} className="relative flex flex-1 flex-col items-center text-center">
+                    {index > 0 ? (
+                      <span
+                        aria-hidden
+                        className={cn("absolute top-3.5 right-1/2 h-0.5 w-full", index <= stepIndex ? "bg-primary" : "bg-slate-200 dark:bg-muted")}
+                      />
+                    ) : null}
+                    <span
+                      className={cn(
+                        "relative z-[1] flex size-7 items-center justify-center rounded-full border-2 text-[11px] font-semibold",
+                        done && "border-primary bg-primary text-primary-foreground",
+                        current && "border-primary bg-white text-primary ring-4 ring-primary/15 dark:bg-card",
+                        !done && !current && "border-slate-300 bg-white text-slate-400 dark:border-border dark:bg-card",
+                      )}
+                    >
+                      {done ? <Check className="size-3.5" /> : index + 1}
+                    </span>
+                    <span
+                      className={cn(
+                        "mt-1.5 text-[11px] sm:text-xs",
+                        current ? "font-semibold text-slate-900 dark:text-foreground" : done ? "text-slate-700 dark:text-foreground" : "text-slate-400",
+                      )}
+                    >
+                      {step.label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </div>
+
+        {/* Facts */}
+        <dl className="grid gap-px border-t border-slate-200 bg-slate-200 sm:grid-cols-2 lg:grid-cols-3 dark:border-border-soft dark:bg-border-soft">
+          <Fact icon={CalendarClock} label="Scheduled">
+            {job.scheduledAt ? formatDateTime(job.scheduledAt) : "Not scheduled yet"}
+          </Fact>
+          <Fact icon={CalendarDays} label="Due">
+            {job.dueAt ? formatDate(job.dueAt) : "—"}
+          </Fact>
+          <Fact icon={HardHat} label="Crew">
+            {technicians.length || contractors.length ? (
+              <>
+                {technicians.join(", ")}
+                {contractors.length ? (
+                  <span className="block text-xs font-normal text-slate-500">Contractors: {contractors.join(", ")}</span>
+                ) : null}
+              </>
+            ) : (
+              "Nobody assigned"
+            )}
+          </Fact>
+          <Fact icon={Wallet} label="Job value">
+            {formatMoney(baseValue + extras)}
+            {approved.length ? (
+              <span className="block text-xs font-normal text-slate-500">
+                incl. {approved.length} approved change order{approved.length === 1 ? "" : "s"} ({formatMoney(extras)})
+              </span>
+            ) : null}
+          </Fact>
+          <Fact icon={Receipt} label="Invoice">
+            {job.invoiceId ? (
+              <Link href={`/pro/dashboard/invoices/${job.invoiceId}`} className="text-primary hover:underline">
+                Open invoice
+              </Link>
+            ) : (
+              "Created when the work is complete"
+            )}
+          </Fact>
+          <Fact icon={MapPin} label="Job site">
+            {address || "—"}
+          </Fact>
+        </dl>
+      </section>
+
+      {pendingRequests ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+          <p className="flex items-center gap-2 font-medium">
+            <AlertCircle className="size-4" />
+            {pendingRequests} change request{pendingRequests === 1 ? "" : "s"} from the crew waiting for your review
+          </p>
+          {onView ? (
+            <Button size="sm" variant="outline" className="h-8 border-amber-400 bg-white" onClick={() => onView("requests")}>
+              Review
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
       {stages.length ? (
         <Panel label="Stages" aside={`${stageProgress(stages)}% done`}>
           <ul className="divide-y divide-slate-200 dark:divide-border-soft">
@@ -902,6 +1119,8 @@ function ProgressPanel({ job, estimate }: { job: Job | null; estimate: Estimate 
   );
 }
 
+// Kept for reference: the old short list (replaced by JobChangeOrdersPanel, client).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function ChangeOrdersPanel({ job }: { job: Job | null }) {
   const orders = job?.changeOrders || [];
   return (

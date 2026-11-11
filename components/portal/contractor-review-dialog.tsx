@@ -47,6 +47,7 @@ export function ContractorReviewDialog({
   open,
   onOpenChange,
   onApproved,
+  onDecided,
   initialMode = "review",
 }: {
   request: ContractorRequest | null;
@@ -54,6 +55,8 @@ export function ContractorReviewDialog({
   onOpenChange: (open: boolean) => void;
   /** After a successful approval (e.g. open the job's Change Orders tab). */
   onApproved?: (request: ContractorRequest) => void;
+  /** After a successful approve or reject (the request is no longer pending). */
+  onDecided?: (request: ContractorRequest) => void;
   /** "reject" opens straight on the reason form (Reject action in a table row). */
   initialMode?: Mode;
 }) {
@@ -61,7 +64,7 @@ export function ContractorReviewDialog({
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
       {/* Keyed so the form starts fresh for every request (content unmounts while closed). */}
-      {request ? <ReviewContent key={`${request.id}:${initialMode}`} request={request} onOpenChange={onOpenChange} onApproved={onApproved} initialMode={initialMode} /> : null}
+      {request ? <ReviewContent key={`${request.id}:${initialMode}`} request={request} onOpenChange={onOpenChange} onApproved={onApproved} onDecided={onDecided} initialMode={initialMode} /> : null}
     </Dialog>
   );
 }
@@ -70,11 +73,13 @@ function ReviewContent({
   request,
   onOpenChange,
   onApproved,
+  onDecided,
   initialMode,
 }: {
   request: ContractorRequest;
   onOpenChange: (open: boolean) => void;
   onApproved?: (request: ContractorRequest) => void;
+  onDecided?: (request: ContractorRequest) => void;
   initialMode: Mode;
 }) {
   const dispatch = useAppDispatch();
@@ -138,6 +143,7 @@ function ReviewContent({
       );
       onOpenChange(false);
       onApproved?.(result.payload);
+      onDecided?.(result.payload);
     } else {
       toast.error(result.payload || "Could not approve this request.");
     }
@@ -150,6 +156,7 @@ function ReviewContent({
     if (rejectContractorReview.fulfilled.match(result)) {
       toast.success(isCompletion ? `Re-work requested from ${contractorName}.` : "Change order request declined.");
       onOpenChange(false);
+      onDecided?.(result.payload);
     } else {
       toast.error(result.payload || "Could not reject this request.");
     }

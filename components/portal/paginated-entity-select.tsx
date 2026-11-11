@@ -101,6 +101,8 @@ export function PaginatedEntitySelect({
   const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  /** Set by a real press on the field; a click forwarded from its <label> leaves it false. */
+  const pressedRef = useRef(false);
   const onChangeRef = useRef(onChange);
   const onLoadMoreRef = useRef(onLoadMore);
   const loadingMoreRef = useRef(Boolean(loadingMore));
@@ -373,7 +375,9 @@ export function PaginatedEntitySelect({
   ) : null;
 
   return (
-    <div ref={rootRef} className={cn("relative w-full", className)}>
+    // className styles the field itself, like SelectTrigger. On this wrapper it drew a second box
+    // around the field and made the menu (sized from the wrapper) wider than the field.
+    <div ref={rootRef} className="relative w-full">
       {showSearch ? (
         <div className="relative w-full">
           <input
@@ -391,6 +395,7 @@ export function PaginatedEntitySelect({
             aria-busy={busy || undefined}
             className={cn(
               triggerClassName,
+              className,
               "pr-9 select-text",
             )}
             onChange={(event) => onSearchChange?.(event.target.value)}
@@ -416,12 +421,27 @@ export function PaginatedEntitySelect({
           aria-controls={listId}
           aria-busy={busy || undefined}
           data-loading={busy ? "" : undefined}
-          onClick={() => {
+          // Opens only on a press on the field itself (pointer or Enter / Space). Clicking its <label>
+          // makes the browser send a click here too; that one just focuses the field (client).
+          onPointerDown={() => {
+            pressedRef.current = true;
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") pressedRef.current = true;
+          }}
+          onClick={(event) => {
+            const pressed = pressedRef.current;
+            pressedRef.current = false;
             if (disabled) return;
+            if (!pressed) {
+              event.currentTarget.focus();
+              return;
+            }
             setOpen((current) => !current);
           }}
           className={cn(
             triggerClassName,
+            className,
             !selected && !selectedLabel && "text-muted-foreground",
           )}
         >

@@ -65,6 +65,111 @@ Modules, layout, notification channels and API conventions: see
 
 Newest first. Format: **what** — why · files.
 
+### 2026-11-11
+
+- **Wrong-portal login: clear message + button to the right sign-in page** — client: a technician on the
+  contractor login got a vague error. The API now says which account type it is and where to sign in (see the
+  backend log); new `showLoginErrorToast` (`lib/login-portal-hint.ts`) shows that message for 10 s with a
+  "Go to technician / contractor / Pro / customer sign-in" button when it names a sign-in path. Used by the
+  contractor, technician and Pro / customer login forms. · `lib/login-portal-hint.ts`,
+  `components/contractor/views/contractor-login-view.tsx`, `components/technician/views/technician-login-view.tsx`,
+  `components/auth/auth-form.tsx`
+
+- **Activity shows the time, not only the date** — client: activity entries only had the date. New
+  `formatDateTime` in `lib/format.ts` ("November 11, 2026 · 10:42 AM"; a date-only value still shows just the
+  date). Used in: estimate Activity tab, customer updates in the change-requests rail, Progress → Latest
+  activity (job), customer detail History and Timeline, dashboard Recent activity. The job file activity feed
+  already showed the time. · `lib/format.ts`, `components/portal/estimate-v2/new-estimate-workspace-view.tsx`,
+  `project-panels.tsx`, `components/portal/views/customer-detail-view.tsx`, `dashboard-view.tsx`
+
+- **Estimate card header: Print in More, no New estimate button** — client: the extra buttons pushed the
+  actions under the title; New estimate belongs only in the app sidebar (Estimate → Create estimate). Print /
+  PDF is now the first item in the More menu (same disabled rules); the New estimate button and More item and
+  the top-bar New estimate button were removed. The actions sit on the right of the title again.
+  · `components/portal/estimate-v2/new-estimate-workspace-view.tsx`
+
+- **Searchable pickers look like the app Select (global)** — client: the technician / contractor / team
+  dropdowns looked different from Visit type. `PaginatedEntitySelect` menu now matches `SelectContent` /
+  `SelectItem`: 4px gap under the field (no longer glued to it), ring + shadow, padded list (`p-1`), rounded rows
+  (`py-1.5 pl-2 pr-8`), `bg-accent` hover / selected, check mark on the chosen option; the "+ Add…" row uses
+  the same row shape in primary text (no grey band). Behaviour, paging and search unchanged. Applies everywhere
+  the picker is used (estimate crew, site visits, jobs, schedule dialogs…).
+  · `components/portal/paginated-entity-select.tsx`
+
+- **Preview & send: "Not now" on the template prompt opens the send dialog with no API calls** — client: after
+  "Not now" the page created the estimate (POST `…/opportunities/:id/estimates`) and reloaded the opportunity
+  and schedule before the dialog opened, which was slow. "Not now" itself never called the API; the calls came
+  from `openSendDialog` creating the draft when the estimate didn't exist yet. Now the dialog opens immediately
+  with a preview built from the sheet ("Send estimate for approval"); the draft is created by `prepareForSend`
+  (no reload) only when **Send for approval** is clicked. Old code kept commented. Saving the template still
+  calls the template API as before. · `components/portal/estimate-v2/new-estimate-workspace-view.tsx`
+
+- **Site visits: time is typed in, not picked from a dropdown** — client: no 15-minute slot list. `DateTimeField`
+  now pairs the date input with a native time input (any minute; keeps a draft while a segment is half-typed).
+  Value is still the local `YYYY-MM-DDTHH:mm` string, sent as `scheduledAt` ISO as before, so no payload or
+  backend change (the API takes any time). Used by the visit card, Schedule follow-up visit and Reschedule.
+  · `components/ui/date-time-field.tsx`
+
+- **Estimate page: Invoices tab is a table like the Invoices page** — client: the invoice document view wasn't
+  wanted. The tab now shows Invoiced / Paid / Balance due tiles and the same `PortalDataTable` +
+  `invoiceBoardColumns` as `/pro/dashboard/invoices` (invoice no., job no., issued, status, due, days overdue,
+  customer, address, totals…, row opens the invoice; View / Record a payment / Open job). Rows: the estimate's
+  invoice plus the job's change-order invoices (fetched with `getInvoice`). The `InvoicePrintDocument` view and
+  the separate change-order table were removed. · `components/portal/estimate-v2/project-panels.tsx`
+
+- **All estimates: table inside a bordered card** — client: Estimate templates has its search + table inside a
+  bordered white card, All estimates didn't. Wrapped the estimates `PortalDataTable` in the same card
+  (`rounded-2xl border border-[#94a3b8] bg-white p-4`). · `components/portal/estimate-v2/new-estimate-list-view.tsx`
+
+- **Estimate page: Parts & Labour = real line items + summary; invoice document; detailed Work request;
+  Create estimate in the menu** — client: the new Parts & Labour table "changed everything", the invoice tab
+  wasn't good, Work request needed more detail, and there was no create option in the app menu. Front end only.
+  - **Parts & Labour** now shows the estimate's own **Line items** card (same `SectionedLineItemsEditor`) and
+    the **Estimate summary** card, nothing else (header, scope, approval, crew, visits, notes hidden). It is
+    the same mounted sheet as Summary, so edits and auto-save are shared. The custom read-only table
+    (`PartsLabourPanel`) and the `totals` prop were removed.
+  - **Invoices**: the stat row plus the real invoice document (`InvoicePrintDocument`, the invoice page's print
+    layout, shown on screen with `block`): letterhead, bill to, service address, items by section, totals,
+    balance due, payment history. "Open invoice" in the header. Change-order invoices table kept.
+  - **Work request**: status badge, title, "What the customer needs" box, a bordered facts grid (request no.,
+    received, customer + phone/email, source, service address + View on map), Open lead / Customer profile,
+    customer answers as a table, customer photos & files, internal notes (not shown to the customer).
+  - App sidebar: **Estimate → Create estimate** (`/pro/dashboard/new-estimate/new`). The shell now marks only
+    the most specific child active, so "All estimates" doesn't light up on that page.
+  - Files: `components/portal/estimate-v2/new-estimate-workspace-view.tsx`, `project-panels.tsx`,
+    `components/portal/portal-shell.tsx`, `lib/data/portal-nav.ts`.
+
+- **Estimate page: Summary back on top, totals under Parts & Labour, Summary-style card borders, visible New
+  estimate** — client correction of the pass below; front end only.
+  - Menu: **Summary** is the first item again, **Parts & Labour** right under it; Budget stays last in Production.
+  - Parts & Labour: under the line-items table, a **Summary** box (subtotal, discount, tax %, total) with the
+    live numbers from the Summary sheet (new optional `totals` prop on `ProjectPanel`).
+  - Borders: panel cards (Work request, Progress, Invoices…), side cards (Activity, Preparation) and the
+    approval banner use the Summary card's outline `#94a3b8` (was `slate-300`).
+  - **+ New estimate** is now a visible button in the estimate card header (next to Print / PDF), and still
+    in the More menu.
+  - Files: `components/portal/estimate-v2/project-lifecycle-nav.tsx`, `project-panels.tsx`,
+    `new-estimate-workspace-view.tsx`.
+
+- **Estimate page: menu reorder, Parts & Labour, invoice table, clearer borders, New estimate** — client
+  UI pass; front end only, no API, data or workflow changes (convert to job, invoicing, sending unchanged).
+  - Menu: new **Parts & Labour** item at the top (read-only table of the line items by section: type, qty,
+    unit, rate, amount, optional tag; Labour / Parts / Equipment / Optional totals; "Edit on Summary").
+    **Estimate** is renamed **Summary** (same page, untouched). **Budget** moved to the end of Production.
+  - **Invoices** tab: full invoice view — status, total / paid / balance / due, line-items table, totals
+    breakdown (subtotal, discount, tax, total, paid, balance due), payments table (loaded with
+    `getInvoiceWithPayments`), and change-order invoices as a table with Open links.
+  - Borders: panel cards, side cards (Activity, Preparation, Work request, Progress…), stat tiles, table
+    outlines / header rules / row dividers and the unselected Preparation choices now use `slate-300` /
+    `slate-200` instead of the washed-out `slate-200/60`. The Summary card (`MAIN_CARD`) is unchanged.
+  - Shared `PortalDataTable`: the search box and table outline use `border-slate-300` (was `border-soft`
+    `#e2e8f0`), so list tables (e.g. All estimates) have a visible grid. Dark mode unchanged.
+  - **New estimate**: in the estimate card's More menu, and as a header button before the estimate card
+    exists (site-visit stage); both go to `/pro/dashboard/new-estimate/new`, same as the list page.
+  - Panel header asides that are buttons keep their own colours (only text asides are muted).
+  - Files: `components/portal/estimate-v2/project-lifecycle-nav.tsx`, `project-panels.tsx`,
+    `new-estimate-workspace-view.tsx`, `components/portal/portal-data-table.tsx`.
+
 ### 2026-11-10
 
 - **Estimate page: project menu never scrolls inside** — client: on a smaller screen the menu had its own

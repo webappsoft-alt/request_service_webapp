@@ -54,7 +54,7 @@ import {
   type EstimateV2Opportunity,
 } from "@/lib/api/estimate-v2-client";
 import type { JobStatus, RequestStatus } from "@/lib/types";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDateTime, formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   ADMIN_DIRECT_THREAD_ID,
@@ -816,7 +816,7 @@ export function DashboardView() {
                   <p className="text-[13px] font-medium">{item.title}</p>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
                     {item.detail}
-                    <span className="text-muted-foreground/70"> · {formatDate(item.at)}</span>
+                    <span className="text-muted-foreground/70"> · {formatDateTime(item.at)}</span>
                   </p>
                 </div>
               </Link>

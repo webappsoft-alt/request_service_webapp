@@ -30,6 +30,7 @@ import {
   putData,
   showApiErrorToast,
 } from "@/components/api/apiFuntions";
+import { showLoginErrorToast } from "@/lib/login-portal-hint";
 import { authApi } from "@/components/api/ApiRoutesFile";
 
 type AuthMode = "login" | "forgot" | "reset";
@@ -172,7 +173,7 @@ function AuthFormInner({
               : safeRedirect || (isProvider ? proPaths.dashboard : "/"),
           );
         } catch (error) {
-          showApiErrorToast(error, "Invalid email or password.");
+          showLoginErrorToast(error, "Invalid email or password.", (href) => router.push(href));
         } finally {
           setSubmitting(false);
           dispatch(setAuthLoading(false));

@@ -79,6 +79,8 @@ export const portalNavGroups: PortalNavGroup[] = [
         icon: ClipboardList,
         children: [
           { href: "/pro/dashboard/new-estimate", label: "All estimates" },
+          // Client: a direct way to start an estimate from the menu.
+          { href: "/pro/dashboard/new-estimate/new", label: "Create estimate" },
           { href: "/pro/dashboard/templates", label: "Estimate templates" },
         ],
       },

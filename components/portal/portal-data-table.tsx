@@ -254,7 +254,7 @@ export function PortalDataTable<T>({
                 setPage(1);
               }}
               placeholder={searchPlaceholder}
-              className="h-8 border-border-soft bg-white pl-8 text-xs dark:bg-slate-800/80 dark:border-border dark:text-foreground"
+              className="h-8 border-slate-300 bg-white pl-8 text-xs dark:bg-slate-800/80 dark:border-border dark:text-foreground"
             />
           </div>
           <p className="text-xs text-muted-foreground">
@@ -315,7 +315,7 @@ export function PortalDataTable<T>({
         </div>
       ) : null}
 
-      <div className="relative overflow-x-auto rounded-lg border border-border-soft bg-card">
+      <div className="relative overflow-x-auto rounded-lg border border-slate-300 bg-card dark:border-border">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">

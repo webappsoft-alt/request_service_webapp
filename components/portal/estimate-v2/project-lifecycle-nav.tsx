@@ -13,6 +13,7 @@ import {
   Receipt,
   Table2,
   Wallet,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -54,7 +55,9 @@ export function projectNavGroups(counts: ProjectNavCounts, accepted: boolean): N
       id: "pre",
       title: "Pre-production",
       items: [
-        { id: "estimate", label: "Estimate", icon: Table2, meta: count(counts.lines) },
+        // Client: Summary (the estimate itself) first, Parts & Labour (read-only line items) under it.
+        { id: "estimate", label: "Summary", icon: Table2 },
+        ...(counts.lines ? [{ id: "parts", label: "Parts & Labour", icon: Wrench, meta: count(counts.lines) }] : []),
         ...(counts.lines ? [{ id: "preview", label: "Preview", icon: Eye, meta: accepted ? "Signed" : undefined }] : []),
         ...(counts.optional ? [{ id: "selections", label: "Selections", icon: ListChecks, meta: `${counts.optional} optional` }] : []),
       ],
@@ -63,11 +66,12 @@ export function projectNavGroups(counts: ProjectNavCounts, accepted: boolean): N
       id: "production",
       title: "Production",
       items: [
-        ...(counts.lines ? [{ id: "budget", label: "Budget", icon: Wallet }] : []),
         ...(counts.hasJob ? [{ id: "progress", label: "Progress", icon: ClipboardList }] : []),
         ...(counts.changeOrders ? [{ id: "change-orders", label: "Change orders", icon: GitPullRequestArrow, meta: count(counts.changeOrders) }] : []),
         ...(counts.schedule ? [{ id: "schedule", label: "Schedule", icon: CalendarDays, meta: count(counts.schedule) }] : []),
         ...(counts.invoices ? [{ id: "invoices", label: "Invoices", icon: Receipt, meta: count(counts.invoices) }] : []),
+        // Budget stays, moved to the end of Production (client).
+        ...(counts.lines ? [{ id: "budget", label: "Budget", icon: Wallet }] : []),
       ],
     },
     {

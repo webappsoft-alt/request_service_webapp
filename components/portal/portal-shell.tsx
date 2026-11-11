@@ -300,7 +300,12 @@ function NavLinks({
                     {open ? (
                       <div className="mt-0.5 mb-1 ml-[1.45rem] flex flex-col gap-0.5 border-l border-white/20 pl-2.5">
                         {item.children.map((child) => {
-                          const childActive = matches(child.href);
+                          // Most specific sibling wins (e.g. "Create estimate" /new-estimate/new over "All estimates").
+                          const childActive =
+                            matches(child.href) &&
+                            !item.children!.some(
+                              (other) => other.href.length > child.href.length && other.href.startsWith(child.href) && matches(other.href),
+                            );
                           const childLink = (
                             <Link
                               href={child.href}

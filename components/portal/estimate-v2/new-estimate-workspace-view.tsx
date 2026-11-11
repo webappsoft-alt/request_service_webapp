@@ -104,7 +104,7 @@ import {
   shareEstimate,
   updateEstimate,
 } from "@/lib/api/crm-client";
-import { formatDate, formatMoney, visitWallClock } from "@/lib/format";
+import { formatDateTime, formatDate, formatMoney, visitWallClock } from "@/lib/format";
 import { lineExtras, optionExtras } from "@/lib/estimate-line-extras";
 import type { Estimate, EstimateChangeRequest, EstimateCustomerUpdate, Invoice } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -148,7 +148,7 @@ const PREP_OPTIONS = [
 ] as const;
 
 const RAIL_CARD =
-  "rounded-2xl border border-slate-200/60 dark:border-border bg-white dark:bg-card p-4 shadow-[0_1px_3px_rgba(15,23,42,0.06),0_6px_16px_-8px_rgba(15,23,42,0.10)]";
+  "rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
 const ACTIVITY_PREVIEW_COUNT = 4;
 const MAIN_CARD =
   "rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
@@ -345,7 +345,7 @@ function ChangeRequestsRail({
                 <p className="line-clamp-2 text-xs leading-snug text-slate-700">
                   {row.reason}
                 </p>
-                <p className="mt-0.5 text-[10px] text-slate-400">{formatDate(row.at)}</p>
+                <p className="mt-0.5 text-[10px] text-slate-400">{formatDateTime(row.at)}</p>
               </div>
             </li>
           ))}
@@ -1709,12 +1709,29 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       setSendOpen(true);
       return;
     }
-    // No estimate yet: create the draft first (the page shows the loading overlay), then preview it.
-    void ensureEstimate().then((created) => {
-      if (!created?.id) return;
-      setSendEstimate(previewEstimateFromSheet(created));
-      setSendOpen(true);
-    });
+    // No estimate yet: preview straight from the sheet, no API call (client: "Not now" / Preview & send must
+    // just open the dialog). The draft is created by prepareForSend when "Send for approval" is clicked.
+    // void ensureEstimate().then((created) => {
+    //   if (!created?.id) return;
+    //   setSendEstimate(previewEstimateFromSheet(created));
+    //   setSendOpen(true);
+    // });
+    const customerRef = opportunity?.customerId;
+    const unsaved = {
+      id: "",
+      number: "estimate",
+      status: "draft",
+      providerId: provider?.id || "",
+      customerId: typeof customerRef === "string" ? customerRef : String(customerRef?.id || customerRef?._id || ""),
+      propertyAddress: opportunity?.propertyAddress,
+      items: [],
+      subtotal: 0,
+      discount: 0,
+      tax: 0,
+      total: 0,
+    } as unknown as Estimate;
+    setSendEstimate(previewEstimateFromSheet(unsaved));
+    setSendOpen(true);
   }
 
   /** Runs on "Send for approval": save the sheet, finalize a draft, and return what to share. */
@@ -2206,6 +2223,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       : listedViews.has(view)
         ? view
         : "estimate";
+  /** Parts & Labour: the estimate's own line items and summary cards (client: same UI as Summary, not a new table). */
+  const partsView = centreView === "parts";
 
   return (
     <PortalPage
@@ -2304,7 +2323,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
               />
             </div>
           ) : null}
-          {centreView !== "estimate" ? (
+          {centreView !== "estimate" && !partsView ? (
             <div className="space-y-3">
               {centreView === "follow-up" && showFollowUp ? (
               <>
@@ -2360,7 +2379,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     ) : null}
                     {item.at ? (
                       <p className="mt-1 text-[11px] text-slate-400">
-                        {formatDate(item.at)}
+                        {formatDateTime(item.at)}
                       </p>
                     ) : null}
                   </li>
@@ -2410,7 +2429,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       "flex w-full items-start gap-2.5 rounded-xl border px-3 py-3 text-left transition",
                       selected
                         ? "border-primary bg-primary/[0.06] ring-1 ring-primary/30"
-                        : "border-slate-200 bg-slate-50/60 hover:border-primary/40 hover:bg-white dark:border-border dark:bg-transparent",
+                        : "border-slate-300 bg-slate-50/60 hover:border-primary/40 hover:bg-white dark:border-border dark:bg-transparent",
                     )}
                   >
                     <span
@@ -2478,10 +2497,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             </div>
           ) : null}
           {/* The estimate sheet stays mounted while a details panel is open (drafts / auto-save keep running). */}
-          <div className={cn("space-y-4", centreView !== "estimate" && "hidden")}>
-            <ApprovalStatus estimate={estimate} />
+          <div className={cn("space-y-4", centreView !== "estimate" && !partsView && "hidden")}>
+            {partsView ? null : <ApprovalStatus estimate={estimate} />}
           {/* Same cards as the job Summary tab; only once someone is assigned ("Assign …" is in the header). */}
-          {technicianId ? (
+          {technicianId && !partsView ? (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/15 bg-gradient-to-r from-primary/[0.07] via-primary/[0.03] to-transparent px-4 py-3 shadow-xs">
               <div className="flex min-w-0 items-center gap-3">
                 <span
@@ -2542,7 +2561,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
               </div>
             </div>
           ) : null}
-          {contractorId ? (
+          {contractorId && !partsView ? (
             <div className="rounded-lg border border-input bg-background px-4 py-3">
               <div className="flex items-center gap-2">
                 <Handshake className="size-4 text-muted-foreground" aria-hidden />
@@ -2579,8 +2598,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
               </div>
             </div>
           ) : null}
-          <QuoteAnswersAccordion answers={opportunity.quoteAnswers} />
+          {partsView ? null : <QuoteAnswersAccordion answers={opportunity.quoteAnswers} />}
           {showVisits ? (
+            <div className={cn(partsView && "hidden")}>
             <SiteVisitsPanel
               opportunityId={opportunity.id}
               opportunityTitle={opportunity.title}
@@ -2608,10 +2628,11 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                 }, 180);
               }}
             />
+            </div>
           ) : null}
 
           {showPrepInfo ? (
-            <div ref={prepInfoRef} id="project-files" className="scroll-mt-4">
+            <div ref={prepInfoRef} id="project-files" className={cn("scroll-mt-4", partsView && "hidden")}>
               <ExistingInformationPanel
                 findings={prepFindings}
                 onFindingsChange={setPrepFindings}
@@ -2636,7 +2657,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           <div ref={estimateSectionRef} id="estimate-sheet" className={cn(MAIN_CARD, "scroll-mt-4")}>
             {canBuildEstimate ? (
               <>
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4 dark:border-border-soft">
+                <div className={cn("flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4 dark:border-border-soft", partsView && "hidden")}>
                   <div>
                     <h2 className="text-lg font-semibold tracking-tight text-slate-900">
                       Estimate{estimate?.number ? ` · ${estimate.number}` : ""}
@@ -2763,7 +2784,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                         </Button>
                       </>
                     )}
-                    {printButton}
+                    {/* Client: Print is in More; New estimate only in the app sidebar (Estimate → Create estimate). */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button size="sm" variant="outline" className="gap-1.5" aria-label="More actions">
@@ -2790,6 +2811,13 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                             In-person presentation
                           </DropdownMenuItem>
                         ) : null}
+                        <DropdownMenuItem
+                          disabled={!opportunity || Boolean(printJob) || !taxRateReady}
+                          onSelect={() => printEstimate()}
+                        >
+                          <Printer className="size-4 text-primary" />
+                          Print / PDF
+                        </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setMapOpen(true)}>
                           <MapPin className="size-4 text-primary" />
                           View on map
@@ -2803,8 +2831,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                   </div>
                 </div>
 
-                <div className="mt-5 space-y-5">
-                  <div className="space-y-1.5">
+                <div className={cn("space-y-5", !partsView && "mt-5")}>
+                  <div className={cn("space-y-1.5", partsView && "hidden")}>
                     <Label htmlFor="scope">Scope of work</Label>
                     <Textarea
                       id="scope"
@@ -2855,7 +2883,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                   </div>
 
 
-                  {visitSupportSummary &&
+                  {!partsView &&
+                  visitSupportSummary &&
                   (visitSupportSummary.photoCount > 0 ||
                     visitSupportSummary.noteCount > 0 ||
                     visitSupportSummary.measurementCount > 0 ||
@@ -3081,7 +3110,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
               </div>
             );
           })()}
-          {estimate?.id ? (
+          {estimate?.id && !partsView ? (
             <>
               <div className={MAIN_CARD}>
                 <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">

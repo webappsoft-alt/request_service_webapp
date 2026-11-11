@@ -200,6 +200,8 @@ export function NewEstimateListView() {
         </Button>
       }
     >
+      {/* Same bordered card around the search + table as Estimate templates (client). */}
+      <div className="rounded-2xl border border-[#94a3b8] bg-white p-4 dark:border-border dark:bg-card">
       <PortalDataTable
         filename="estimates"
         countLabel="Estimates"
@@ -443,6 +445,7 @@ export function NewEstimateListView() {
           },
         ]}
       />
+      </div>
 
       <Dialog
         open={Boolean(deleteTarget)}

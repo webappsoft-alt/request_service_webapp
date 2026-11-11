@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { postData, showApiErrorToast } from "@/components/api/apiFuntions";
+import { showLoginErrorToast } from "@/lib/login-portal-hint";
 import { authApi } from "@/components/api/ApiRoutesFile";
 import { PasswordInput } from "@/components/auth/password-input";
 import { Button } from "@/components/ui/button";
@@ -82,7 +83,7 @@ export function TechnicianLoginView() {
       toast.success("Signed in to your technician portal.");
       router.replace(technicianPaths.dashboard);
     } catch (error) {
-      showApiErrorToast(error, "Invalid email or password.");
+      showLoginErrorToast(error, "Invalid email or password.", (href) => router.push(href));
     } finally {
       setSubmitting(false);
       dispatch(setAuthLoading(false));

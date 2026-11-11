@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { BadgeCheck, ExternalLink, FileText, ImageIcon, Loader2, Mail, MapPin, PenLine, Phone } from "lucide-react";
+import { BadgeCheck, CalendarDays, ExternalLink, FileText, Hash, ImageIcon, Inbox, Loader2, Mail, MapPin, PenLine, Phone, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { EstimatePdfDocument } from "@/components/estimate/estimate-pdf";
+import { invoiceBoardColumns } from "@/components/portal/invoice-columns";
+import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
 import { EventCalendar, EventCalendarSkeleton, eventTimes, type CalendarMove } from "@/components/portal/event-calendar";
 import { lineTotal, type JobCostLine } from "@/components/portal/use-job-costing";
@@ -14,17 +16,16 @@ import type { EstimateApproval, EstimateShareSnapshot } from "@/components/porta
 import type { RouteLocationMapInnerProps } from "@/components/portal/route-location-map-inner";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { Button } from "@/components/ui/button";
-import { getJob, getRequest, listRecordSchedule, updateSchedule } from "@/lib/api/crm-client";
+import { getInvoice, getJob, getRequest, listRecordSchedule, updateSchedule } from "@/lib/api/crm-client";
 import type { EstimateV2Opportunity, OpportunityAttachment } from "@/lib/api/estimate-v2-client";
+import { opportunityStatusLabel, opportunityStatusTone } from "@/lib/data/estimate-v2-status";
 import {
-  invoiceStatusLabel,
-  invoiceStatusTone,
   jobStatusLabel,
   jobStatusTone,
   windowFromMinutes,
   type PortalCalendarEvent,
 } from "@/lib/data/portal";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDateTime, formatDate, formatMoney } from "@/lib/format";
 import { stageDateRange, stageDisplayStatus, stageProgress, stageStatusLabel, stageStatusTone } from "@/lib/project-stages";
 import type { Estimate, Invoice, Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -58,14 +59,17 @@ export function isProjectPanelView(view: string): view is ProjectPanelView {
 
 /** Same surface as the estimate page's own cards (RAIL_CARD). */
 const PANEL_CARD =
-  "rounded-2xl border border-slate-200/60 bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.06),0_6px_16px_-8px_rgba(15,23,42,0.10)] dark:border-border dark:bg-card";
+  "rounded-2xl border border-[#94a3b8] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-border dark:bg-card";
 
 /** Same eyebrow as the estimate page's SectionLabel. */
 function PanelLabel({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
   return (
     <div className="flex min-h-8 items-center justify-between gap-2">
       <h2 className="text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase">{children}</h2>
-      {aside ? <span className="text-[11px] font-medium text-slate-400 tabular-nums">{aside}</span> : null}
+      {/* Text asides are muted; buttons keep their own colours. */}
+      {aside ? (
+        typeof aside === "string" ? <span className="text-[11px] font-medium text-slate-400 tabular-nums">{aside}</span> : aside
+      ) : null}
     </div>
   );
 }
@@ -81,7 +85,7 @@ function Panel({ label, aside, children, className }: { label: ReactNode; aside?
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" }) {
   return (
-    <div className="rounded-xl bg-slate-50 px-3 py-2.5 dark:bg-muted/40">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-border dark:bg-muted/40">
       <p className="text-[10px] font-semibold tracking-[0.12em] text-slate-500 uppercase">{label}</p>
       <p
         className={cn(
@@ -112,7 +116,7 @@ export function ApprovalStatus({ estimate }: { estimate: Estimate | null }) {
         "flex flex-wrap items-start gap-x-6 gap-y-2 rounded-2xl border px-4 py-3 text-sm",
         accepted
           ? "border-emerald-200 bg-emerald-50/70 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100"
-          : "border-slate-200/60 bg-white dark:border-border dark:bg-card",
+          : "border-[#94a3b8] bg-white dark:border-border dark:bg-card",
       )}
     >
       <p className="flex items-center gap-1.5 font-semibold">
@@ -353,7 +357,7 @@ export function ProjectPanel({
     case "customer":
       return <CustomerPanel opportunity={opportunity} onShowMap={onShowMap} mapProps={mapProps} />;
     case "request":
-      return <RequestPanel opportunity={opportunity} />;
+      return <RequestPanel opportunity={opportunity} photos={data.customerPhotos} onShowMap={onShowMap} />;
     case "preview":
       return <PreviewPanel estimate={estimate} preview={preview} onSend={onSend} canSend={canSend} onOpenEstimate={onOpenEstimate} printButton={printButton} />;
     case "selections":
@@ -367,7 +371,7 @@ export function ProjectPanel({
     case "schedule":
       return <SchedulePanel data={data} />;
     case "invoices":
-      return <InvoicesPanel invoice={linkedInvoice} job={job} />;
+      return <InvoicesPanel invoice={linkedInvoice} job={job} estimate={estimate} opportunity={opportunity} />;
     case "files":
       return <FilesPanel data={data} opportunity={opportunity} estimate={estimate} companyFiles={companyFiles} />;
   }
@@ -458,37 +462,188 @@ function CustomerPanel({
   );
 }
 
-function RequestPanel({ opportunity }: { opportunity: EstimateV2Opportunity }) {
-  const answers = (opportunity.quoteAnswers || []).filter((answer) => answer.label && answer.value);
+const SOURCE_LABEL: Record<string, string> = {
+  manual: "Created directly",
+  request: "Customer request",
+  lead: "Customer request",
+  website: "Website",
+  marketplace: "Marketplace",
+  ai_receptionist: "AI receptionist",
+  phone: "Phone call",
+};
+
+function sourceLabel(source?: string) {
+  if (!source) return "";
+  return SOURCE_LABEL[source] || source.replace(/[_-]+/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
+/** One labelled fact in the request's detail grid. */
+function Fact({ icon: Icon, label, children }: { icon: typeof Hash; label: string; children: ReactNode }) {
   return (
-    <Panel label="Work request">
-      {opportunity.categoryName ? (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <p className="inline-flex rounded-md bg-primary/8 px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-primary uppercase">
-            {opportunity.categoryName}
-          </p>
-          {opportunity.subcategoryName ? (
-            <p className="inline-flex rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-slate-600 uppercase dark:bg-muted">
-              {opportunity.subcategoryName}
+    <div className="flex h-full min-w-0 gap-2.5 bg-white px-4 py-3 dark:bg-card">
+      <Icon className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
+      <div className="min-w-0">
+        <dt className="text-[10px] font-semibold tracking-[0.12em] text-slate-500 uppercase">{label}</dt>
+        <dd className="mt-0.5 text-sm font-medium break-words text-slate-900 dark:text-foreground">{children}</dd>
+      </div>
+    </div>
+  );
+}
+
+function RequestPanel({
+  opportunity,
+  photos,
+  onShowMap,
+}: {
+  opportunity: EstimateV2Opportunity;
+  photos: string[];
+  onShowMap: () => void;
+}) {
+  const answers = (opportunity.quoteAnswers || []).filter((answer) => answer.label && answer.value);
+  const customer = customerOf(opportunity);
+  const p = opportunity.propertyAddress || {};
+  const address = [p.address || p.street, p.city, p.state, p.zip].filter(Boolean).join(", ");
+  const attachments = [
+    ...photos.map((url) => ({ url, name: "" })),
+    ...(opportunity.customerAttachments || []).map((file) => ({ url: file.url, name: file.name || "" })),
+  ].filter((file, index, all) => file.url && all.findIndex((other) => other.url === file.url) === index);
+  const isImage = (url: string) => /\.(png|jpe?g|gif|webp|avif|heic)(\?|$)/i.test(url) || url.includes("/image");
+
+  return (
+    <div className="space-y-3">
+      <Panel
+        label={`Work request · ${opportunity.number}`}
+        aside={
+          <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", opportunityStatusTone(opportunity.status))}>
+            {opportunityStatusLabel(opportunity.status)}
+          </span>
+        }
+      >
+        {opportunity.categoryName ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="inline-flex rounded-md bg-primary/8 px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-primary uppercase">
+              {opportunity.categoryName}
             </p>
+            {opportunity.subcategoryName ? (
+              <p className="inline-flex rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-slate-600 uppercase dark:bg-muted">
+                {opportunity.subcategoryName}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        <p className="mt-2 text-lg font-semibold tracking-tight text-slate-900 dark:text-foreground">{opportunity.title}</p>
+
+        <div className="mt-3 rounded-xl border border-slate-300 bg-slate-50/60 px-4 py-3 dark:border-border dark:bg-muted/20">
+          <p className="text-[10px] font-semibold tracking-[0.12em] text-slate-500 uppercase">What the customer needs</p>
+          <p className="mt-1 text-sm leading-relaxed whitespace-pre-wrap text-slate-700 dark:text-foreground">
+            {opportunity.description?.trim() || "No description was given."}
+          </p>
+        </div>
+
+        <dl className="mt-3 grid gap-px overflow-hidden rounded-xl border border-slate-300 bg-slate-200 sm:grid-cols-2 dark:border-border dark:bg-border-soft">
+          <Fact icon={Hash} label="Request number">
+            {opportunity.number}
+          </Fact>
+          <Fact icon={CalendarDays} label="Received">
+            {opportunity.createdAt ? formatDate(opportunity.createdAt) : "—"}
+          </Fact>
+          <Fact icon={UserRound} label="Customer">
+            {customer.name}
+            {customer.phone || customer.email ? (
+              <span className="block text-xs font-normal text-slate-500">
+                {[customer.phone, customer.email].filter(Boolean).join(" · ")}
+              </span>
+            ) : null}
+          </Fact>
+          <Fact icon={Inbox} label="Source">
+            {sourceLabel(opportunity.source) || "—"}
+          </Fact>
+          <div className="sm:col-span-2">
+            <Fact icon={MapPin} label="Service address">
+              {address || "No address yet"}
+              {address ? (
+                <button
+                  type="button"
+                  onClick={onShowMap}
+                  className="ml-2 text-xs font-bold text-primary underline underline-offset-2 hover:text-primary/80"
+                >
+                  View on map
+                </button>
+              ) : null}
+            </Fact>
+          </div>
+        </dl>
+
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-3 dark:border-border-soft">
+          {opportunity.requestId ? (
+            <Button size="sm" variant="outline" className="h-8 gap-1.5" asChild>
+              <Link href={`/pro/dashboard/requests/${opportunity.requestId}`}>
+                <ExternalLink className="size-3.5 text-primary" /> Open lead
+              </Link>
+            </Button>
+          ) : null}
+          {customer.id ? (
+            <Button size="sm" variant="outline" className="h-8 gap-1.5" asChild>
+              <Link href={`/pro/dashboard/customers/${customer.id}`}>
+                <UserRound className="size-3.5 text-primary" /> Customer profile
+              </Link>
+            </Button>
           ) : null}
         </div>
-      ) : null}
-      <p className="mt-2 text-[15px] font-semibold tracking-tight text-slate-900 dark:text-foreground">{opportunity.title}</p>
-      {opportunity.description ? (
-        <p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap text-slate-600 dark:text-muted-foreground">{opportunity.description}</p>
-      ) : null}
+      </Panel>
+
       {answers.length ? (
-        <dl className="mt-4 grid gap-x-6 gap-y-2.5 border-t border-slate-100 pt-3 text-sm sm:grid-cols-2 dark:border-border-soft">
-          {answers.map((answer, i) => (
-            <div key={answer.id || i}>
-              <dt className="text-xs text-slate-500">{answer.label}</dt>
-              <dd className="font-medium text-slate-800 dark:text-foreground">{answer.value}</dd>
-            </div>
-          ))}
-        </dl>
+        <Panel label="Customer answers" aside={`${answers.length} question${answers.length === 1 ? "" : "s"}`}>
+          <div className="overflow-hidden rounded-xl border border-slate-300 dark:border-border">
+            <table className="w-full text-sm">
+              <tbody className="divide-y divide-slate-200 dark:divide-border-soft">
+                {answers.map((answer, i) => (
+                  <tr key={answer.id || i}>
+                    <th scope="row" className="w-1/2 bg-slate-50 px-3 py-2.5 text-left font-medium text-slate-600 dark:bg-muted/40 dark:text-muted-foreground">
+                      {answer.label}
+                    </th>
+                    <td className="px-3 py-2.5 font-medium text-slate-900 dark:text-foreground">{answer.value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
       ) : null}
-    </Panel>
+
+      {attachments.length ? (
+        <Panel label="Photos & files from the customer" aside={String(attachments.length)}>
+          <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            {attachments.map((file) => (
+              <li key={file.url}>
+                <a
+                  href={file.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group block overflow-hidden rounded-xl border border-slate-300 bg-white focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none dark:border-border dark:bg-card"
+                >
+                  {isImage(file.url) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={file.url} alt={file.name || "Customer photo"} className="aspect-[4/3] w-full object-cover" />
+                  ) : (
+                    <span className="flex aspect-[4/3] items-center justify-center bg-slate-50 dark:bg-muted/40">
+                      <FileText className="size-6 text-slate-400" />
+                    </span>
+                  )}
+                  {file.name ? <span className="block truncate px-2 py-1.5 text-xs text-slate-600 dark:text-muted-foreground">{file.name}</span> : null}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      ) : null}
+
+      {opportunity.internalNotes?.trim() ? (
+        <Panel label="Internal notes" aside="Not shown to the customer">
+          <p className="text-sm leading-relaxed whitespace-pre-wrap text-slate-700 dark:text-foreground">{opportunity.internalNotes}</p>
+        </Panel>
+      ) : null}
+    </div>
   );
 }
 
@@ -579,7 +734,7 @@ function SelectionsPanel({
         {[...byGroup.entries()].map(([group, rows]) => (
           <div key={group}>
             <p className="text-xs font-medium text-slate-500">Option for: {group}</p>
-            <ul className="mt-1.5 divide-y divide-slate-100 rounded-xl border border-slate-200/70 dark:divide-border-soft dark:border-border">
+            <ul className="mt-1.5 divide-y divide-slate-200 rounded-xl border border-slate-300 dark:divide-border-soft dark:border-border">
               {rows.map((line) => (
                 <li key={line.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
                   <div className="min-w-0">
@@ -644,9 +799,9 @@ function BudgetPanel({ lines, job }: { lines: JobCostLine[]; job: Job | null }) 
           {included.length - withCost.length} of {included.length} lines have no cost yet. Add a cost on the estimate to see their profit.
         </p>
       ) : null}
-      <div className="mt-4 overflow-hidden rounded-xl border border-slate-200/70 dark:border-border">
+      <div className="mt-4 overflow-hidden rounded-xl border border-slate-300 dark:border-border">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 dark:bg-muted/40">
+          <thead className="border-b border-slate-300 bg-slate-50 dark:border-border dark:bg-muted/40">
             <tr className="text-left text-[10px] tracking-[0.12em] text-slate-500 uppercase">
               <th className="px-3 py-2 font-semibold">Section</th>
               <th className="px-3 py-2 text-right font-semibold">Price</th>
@@ -654,7 +809,7 @@ function BudgetPanel({ lines, job }: { lines: JobCostLine[]; job: Job | null }) 
               <th className="px-3 py-2 text-right font-semibold">Profit</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-border-soft">
+          <tbody className="divide-y divide-slate-200 dark:divide-border-soft">
             {[...bySection.entries()].map(([section, row]) => (
               <tr key={section}>
                 <td className="px-3 py-2 font-medium text-slate-900 dark:text-foreground">{section}</td>
@@ -714,7 +869,7 @@ function ProgressPanel({ job, estimate }: { job: Job | null; estimate: Estimate 
       </Panel>
       {stages.length ? (
         <Panel label="Stages" aside={`${stageProgress(stages)}% done`}>
-          <ul className="divide-y divide-slate-100 dark:divide-border-soft">
+          <ul className="divide-y divide-slate-200 dark:divide-border-soft">
             {stages.map((stage) => {
               const status = stageDisplayStatus(stage);
               return (
@@ -737,7 +892,7 @@ function ProgressPanel({ job, estimate }: { job: Job | null; estimate: Estimate 
               <li key={item.id} className="relative pb-3 last:pb-0">
                 <span className="absolute top-1.5 -left-[1.3rem] size-2 rounded-full border-2 border-primary bg-white" />
                 <p className="text-sm font-medium text-slate-900 dark:text-foreground">{item.title}</p>
-                <p className="mt-0.5 text-[11px] text-slate-400">{formatDate(item.createdAt)}</p>
+                <p className="mt-0.5 text-[11px] text-slate-400">{formatDateTime(item.createdAt)}</p>
               </li>
             ))}
           </ol>
@@ -751,7 +906,7 @@ function ChangeOrdersPanel({ job }: { job: Job | null }) {
   const orders = job?.changeOrders || [];
   return (
     <Panel label="Change orders" aside={String(orders.length)}>
-      <ul className="divide-y divide-slate-100 dark:divide-border-soft">
+      <ul className="divide-y divide-slate-200 dark:divide-border-soft">
         {orders.map((order) => (
           <li key={order.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
             <div className="min-w-0">
@@ -842,49 +997,77 @@ function SchedulePanel({ data }: { data: ProjectData }) {
   );
 }
 
-function InvoicesPanel({ invoice, job }: { invoice: Invoice | null; job: Job | null }) {
-  const changeInvoices = (job?.changeOrders || []).filter((order) => order.billingInvoiceId);
+/**
+ * This project's invoices (the estimate's invoice + change-order invoices) in the same table as the
+ * Invoices page (client: a table, not the document).
+ */
+function InvoicesPanel({
+  invoice,
+  job,
+  estimate,
+  opportunity,
+}: {
+  invoice: Invoice | null;
+  job: Job | null;
+  estimate: Estimate | null;
+  opportunity: EstimateV2Opportunity;
+}) {
+  const changeIds = (job?.changeOrders || []).map((order) => order.billingInvoiceId).filter((id): id is string => Boolean(id));
+  const changeKey = changeIds.join(",");
+  const [changeInvoices, setChangeInvoices] = useState<{ key: string; rows: Invoice[] } | null>(null);
+  useEffect(() => {
+    if (!changeKey) return;
+    let cancelled = false;
+    void Promise.all(changeKey.split(",").map((id) => getInvoice(id).catch(() => null))).then((rows) => {
+      if (!cancelled) setChangeInvoices({ key: changeKey, rows: rows.filter((row): row is Invoice => Boolean(row)) });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [changeKey]);
+  const loadingChanges = Boolean(changeKey) && changeInvoices?.key !== changeKey;
+  const rows = [
+    ...(invoice ? [invoice] : []),
+    ...(changeKey && changeInvoices?.key === changeKey ? changeInvoices.rows : []),
+  ].filter((row, index, all) => all.findIndex((other) => other.id === row.id) === index);
+
+  const customer = customerOf(opportunity);
+  const total = rows.reduce((sum, row) => sum + (Number(row.total) || 0), 0);
+  const paid = rows.reduce((sum, row) => sum + (Number(row.amountPaid) || 0), 0);
+  const balance = rows.reduce((sum, row) => sum + (Number(row.balanceDue) || 0), 0);
+
   return (
-    <div className="space-y-3">
-      {invoice ? (
-        <Panel
-          label={`Invoice · ${invoice.number}`}
-          aside={
-            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", invoiceStatusTone(invoice.status))}>
-              {invoiceStatusLabel(invoice.status)}
-            </span>
-          }
-        >
-          <div className="grid gap-2 sm:grid-cols-4">
-            <Stat label="Total" value={formatMoney(invoice.total)} />
-            <Stat label="Paid" value={formatMoney(invoice.amountPaid || 0)} tone={invoice.amountPaid ? "good" : undefined} />
-            <Stat label="Balance" value={formatMoney(invoice.balanceDue || 0)} tone={invoice.balanceDue > 0 ? "bad" : undefined} />
-            <Stat label="Due" value={invoice.dueAt ? formatDate(invoice.dueAt) : "—"} />
-          </div>
-          <div className="mt-3 flex justify-end">
-            <Button size="sm" variant="outline" className="h-8 gap-1.5" asChild>
-              <Link href={`/pro/dashboard/invoices/${invoice.id}`}>
-                <ExternalLink className="size-3.5 text-primary" /> Record a payment or send
-              </Link>
-            </Button>
-          </div>
-        </Panel>
-      ) : null}
-      {changeInvoices.length ? (
-        <Panel label="Change order invoices" aside={String(changeInvoices.length)}>
-          <ul className="divide-y divide-slate-100 dark:divide-border-soft">
-            {changeInvoices.map((order) => (
-              <li key={order.id} className="flex items-center justify-between gap-3 py-2 text-sm first:pt-0 last:pb-0">
-                <span>
-                  {order.billingInvoiceNumber || "Invoice"} <span className="text-slate-500">· {order.number}</span>
-                </span>
-                <span className="font-semibold tabular-nums">{formatMoney(Number(order.total) || 0)}</span>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      ) : null}
-    </div>
+    <Panel label="Invoices" aside={`${rows.length} invoice${rows.length === 1 ? "" : "s"}`}>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Stat label="Invoiced" value={formatMoney(total)} />
+        <Stat label="Paid" value={formatMoney(paid)} tone={paid ? "good" : undefined} />
+        <Stat label="Balance due" value={formatMoney(balance)} tone={balance > 0 ? "bad" : undefined} />
+      </div>
+      <div className="mt-4">
+        <PortalDataTable
+          filename="project-invoices"
+          countLabel="Invoices"
+          searchPlaceholder="Search by invoice #"
+          loading={loadingChanges && !rows.length}
+          rows={rows}
+          rowKey={(row) => row.id}
+          rowHref={(row) => `/pro/dashboard/invoices/${row.id}`}
+          empty="No invoices yet."
+          columns={invoiceBoardColumns({
+            jobs: job ? [job] : [],
+            estimates: estimate ? [estimate] : [],
+            requests: [],
+            customerName: () => customer.name,
+            customerAddress: () => opportunity.propertyAddress,
+          })}
+          actions={(row) => [
+            { label: "View", href: `/pro/dashboard/invoices/${row.id}` },
+            ...(row.balanceDue > 0 ? [{ label: "Record a payment", href: `/pro/dashboard/invoices/${row.id}` }] : []),
+            ...(row.jobId ? [{ label: "Open job", href: `/pro/dashboard/jobs/${row.jobId}` }] : []),
+          ]}
+        />
+      </div>
+    </Panel>
   );
 }
 
@@ -924,7 +1107,7 @@ function FilesPanel({
               href={row.url}
               target="_blank"
               rel="noreferrer"
-              className="group block overflow-hidden rounded-xl border border-slate-200/70 bg-white transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none dark:border-border dark:bg-card"
+              className="group block overflow-hidden rounded-xl border border-slate-300 bg-white transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none dark:border-border dark:bg-card"
             >
               <div className="flex aspect-4/3 items-center justify-center bg-slate-100 dark:bg-muted">
                 {isImage(row.url) ? (

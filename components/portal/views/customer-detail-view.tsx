@@ -108,7 +108,7 @@ import {
   type PortalRequest,
 } from "@/lib/data/portal";
 import type { Estimate, Invoice, Job, JobStatus, Payment } from "@/lib/types";
-import { formatDate, formatDueAt, formatLocation, formatMoney } from "@/lib/format";
+import { formatDateTime, formatDate, formatDueAt, formatLocation, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -1978,7 +1978,7 @@ function CustomerHistoryPanel({
                         </Link>
                       ) : null}
                     </div>
-                    <p className="shrink-0 text-xs text-muted-foreground">{formatDate(item.at)}</p>
+                    <p className="shrink-0 text-xs text-muted-foreground">{formatDateTime(item.at)}</p>
                   </li>
                 );
               }
@@ -1996,7 +1996,7 @@ function CustomerHistoryPanel({
                       {event.status ? ` · ${event.status}` : ""}
                     </p>
                   </div>
-                  <p className="shrink-0 text-xs text-muted-foreground">{formatDate(event.timestamp)}</p>
+                  <p className="shrink-0 text-xs text-muted-foreground">{formatDateTime(event.timestamp)}</p>
                 </li>
               );
             })}

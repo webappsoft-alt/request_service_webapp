@@ -9,7 +9,7 @@ import {
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDownIcon, Plus } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, Plus } from "lucide-react";
 import { SelectLoadingDots } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
@@ -146,8 +146,8 @@ export function PaginatedEntitySelect({
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
     const maxH = 240;
-    // When search replaces the trigger, sit flush under it (no dual border gap).
-    const gap = searchable ? 0 : 4;
+    // Same look as the app Select menu (client): a small gap under the field, searchable or not.
+    const gap = 4;
     const spaceBelow = window.innerHeight - rect.bottom - gap - 8;
     const spaceAbove = rect.top - gap - 8;
     const openUp = spaceBelow < Math.min(maxH, 140) && spaceAbove > spaceBelow;
@@ -255,10 +255,10 @@ export function PaginatedEntitySelect({
 
   const addRow = (className?: string) =>
     onAdd ? (
-      <div className={cn("shrink-0 bg-muted/30 p-1.5", className)}>
+      <div className={cn("shrink-0 p-1", className)}>
         <button
           type="button"
-          className="flex w-full items-center gap-1.5 rounded-md px-2.5 py-2 text-left text-sm font-medium text-primary hover:bg-primary/5"
+          className="flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1.5 pr-8 pl-2 text-left text-sm font-medium text-primary hover:bg-accent"
           onMouseDown={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -281,8 +281,7 @@ export function PaginatedEntitySelect({
       data-paginated-entity-menu=""
       data-lenis-prevent=""
       className={cn(
-        "flex flex-col overflow-hidden rounded-lg border border-input bg-popover text-popover-foreground shadow-md",
-        searchable && "rounded-t-none border-t-0",
+        "flex flex-col overflow-hidden rounded-lg border border-input bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10",
       )}
       onWheel={(event) => {
         event.stopPropagation();
@@ -291,7 +290,7 @@ export function PaginatedEntitySelect({
       {addPlacement === "top" ? addRow("border-b border-border") : null}
       <div
         ref={listRef}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1"
       >
         {loading && options.length === 0 ? (
           <div className="flex min-h-40 flex-col items-center justify-center gap-2 px-4 py-6 text-center">
@@ -341,8 +340,9 @@ export function PaginatedEntitySelect({
               data-paginated-option=""
               aria-selected={active}
               className={cn(
-                "flex w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-muted/60",
-                active && "bg-muted font-medium",
+                // Same row as SelectItem: rounded, highlighted on hover, check on the chosen one.
+                "relative flex w-full cursor-pointer items-center rounded-md py-1.5 pr-8 pl-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                active && "bg-accent text-accent-foreground",
               )}
               onMouseDown={(event) => {
                 // mousedown (not click): Dialog may swallow click on portaled nodes.
@@ -352,6 +352,7 @@ export function PaginatedEntitySelect({
               }}
             >
               {option.label}
+              {active ? <CheckIcon className="pointer-events-none absolute right-2 size-4" aria-hidden /> : null}
             </div>
           );
         })}
@@ -391,7 +392,6 @@ export function PaginatedEntitySelect({
             className={cn(
               triggerClassName,
               "pr-9 select-text",
-              open && "rounded-b-none",
             )}
             onChange={(event) => onSearchChange?.(event.target.value)}
             onKeyDown={(event) => {

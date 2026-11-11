@@ -52,6 +52,21 @@ export function formatDate(value?: string | Date | null) {
   }
 }
 
+/**
+ * Date and time for activity / history entries: "November 11, 2026 · 10:42 AM".
+ * A date-only value ("2026-11-11") has no time, so it shows the date alone.
+ */
+export function formatDateTime(value?: string | Date | null) {
+  if (!value) return "—";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}(T00:00:00(\.000)?Z?)?$/.test(value.trim())) {
+    return formatDate(value);
+  }
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d.getTime())) return formatDate(value);
+  const time = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(d);
+  return `${formatDate(d)} · ${time}`;
+}
+
 export function formatShortDate(value?: string | Date | null) {
   if (!value) return "—";
   try {

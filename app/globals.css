@@ -2489,3 +2489,42 @@ body.rs-cal-dragging [data-cal-overlay] {
     animation: none;
   }
 }
+
+/* Status banner links (estimate page): the arrow keeps nudging up-right and a faint underline
+   breathes, so job / customer / company read as clickable (client). Opacity + a 2px nudge only. */
+@keyframes banner-link-nudge {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate(2px, -2px);
+    opacity: 1;
+  }
+}
+@keyframes banner-link-underline {
+  0%,
+  100% {
+    background-size: 35% 1px;
+  }
+  50% {
+    background-size: 100% 1px;
+  }
+}
+.rs-banner-link {
+  animation: banner-link-underline 2.4s ease-in-out infinite;
+}
+.rs-banner-link:hover,
+.rs-banner-link:focus-visible {
+  animation: none;
+  background-size: 100% 1px;
+}
+.rs-banner-link-arrow {
+  animation: banner-link-nudge 1.6s ease-in-out infinite;
+}
+.rs-banner-link:hover .rs-banner-link-arrow {
+  animation: none;
+  transform: translate(2px, -2px);
+  opacity: 1;
+}

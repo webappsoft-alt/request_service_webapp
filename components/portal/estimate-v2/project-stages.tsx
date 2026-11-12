@@ -325,6 +325,7 @@ export function SectionStageButton({
   stages,
   sections,
   onSaved,
+  attention = true,
 }: {
   estimateId: string;
   /** Section key ("" = General). */
@@ -334,8 +335,11 @@ export function SectionStageButton({
   /** All line sections in order, so the stages keep the same order. */
   sections: string[];
   onSaved: (stages: ProjectStage[]) => void;
+  /** Blink (blue) while this section has no schedule yet (default on; client wants it on every estimate). */
+  attention?: boolean;
 }) {
   const stage = stages.find((item) => item.section === section) || null;
+  const needsSchedule = !stage && attention;
   const [open, setOpen] = useState(false);
   const [days, setDays] = useState("");
   const [hours, setHours] = useState("");
@@ -385,12 +389,23 @@ export function SectionStageButton({
         type="button"
         size="sm"
         variant="outline"
-        className={cn("h-7 gap-1 text-xs", stage && "border-primary/40 text-primary")}
-        title={stage ? `${label}: ${stageStatusLabel(stageDisplayStatus(stage))}` : `Set the time for ${label}`}
+        className={cn(
+          "h-7 gap-1 text-xs",
+          stage && "border-primary/40 text-primary",
+          // Client: no schedule yet → blue outline + blue text; only the clock icon blinks.
+          needsSchedule && "border-primary text-primary hover:text-primary",
+        )}
+        title={
+          stage
+            ? `${label}: ${stageStatusLabel(stageDisplayStatus(stage))}`
+            : `Set the schedule for ${label} (needed before the estimate can be sent)`
+        }
         onClick={() => setOpen(true)}
       >
-        <Clock3 className="size-3" />
-        {stage ? formatStageDuration({ days: stage.durationDays, hours: stage.durationHours }) : "Set time"}
+        {/* animate-pulse is opacity only, so it still runs with Windows animation effects off. */}
+        <Clock3 className={cn("size-3", needsSchedule && "animate-pulse")} />
+        {/* {stage ? formatStageDuration({ days: stage.durationDays, hours: stage.durationHours }) : "Set time"} */}
+        {stage ? `Change schedule · ${formatStageDuration({ days: stage.durationDays, hours: stage.durationHours })}` : "Set schedule"}
         {stage ? (
           <span
             className={cn(

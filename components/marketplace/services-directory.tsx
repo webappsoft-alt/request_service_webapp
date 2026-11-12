@@ -1573,7 +1573,11 @@ export function ServicesDirectory({
                 <li>
                   <button
                     type="button"
-                    onClick={resetFilters}
+                    onClick={() => {
+                      // Client: "Clear all" removes every chip, the location too.
+                      resetFilters();
+                      dispatch(clearLocation());
+                    }}
                     className="px-2 text-sm font-medium text-brand hover:text-foreground"
                   >
                     Clear all

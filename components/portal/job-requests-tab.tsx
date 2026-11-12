@@ -74,6 +74,8 @@ export function JobRequestsTab({
   onChangeOrderCreated,
   onCountsChange,
   onDecided,
+  title = "Requests",
+  description = "Completion proof and material / change order requests from the technicians and contractors on this job.",
 }: {
   jobId: string;
   /** The job's change orders — extras created from these requests are shown inline. */
@@ -84,6 +86,9 @@ export function JobRequestsTab({
   onCountsChange?: (pending: number) => void;
   /** After an approve / reject (e.g. refresh the page's request counts). */
   onDecided?: (request: ContractorRequest) => void;
+  /** Heading and line under it (the estimate page says "Change requests"). */
+  title?: string;
+  description?: string;
 }) {
   // Socket `contractor:requests` bumps this so the list stays live.
   const version = useAppSelector((state) => state.contractorReviews.version);
@@ -146,10 +151,8 @@ export function JobRequestsTab({
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <p className="text-sm font-bold text-foreground">Requests</p>
-        <p className="text-xs text-muted-foreground">
-          Completion proof and material / change order requests from the technicians and contractors on this job.
-        </p>
+        <p className="text-sm font-bold text-foreground">{title}</p>
+        <p className="text-xs text-muted-foreground">{description}</p>
       </div>
       {error ? <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p> : null}
 

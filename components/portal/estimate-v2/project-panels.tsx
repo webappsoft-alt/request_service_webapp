@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { AlertCircle, BadgeCheck, CalendarClock, CalendarDays, Check, HardHat, Receipt, Wallet, ExternalLink, FileText, Hash, ImageIcon, Inbox, Loader2, Mail, MapPin, PenLine, Phone, UserRound } from "lucide-react";
+import { AlertCircle, ArrowUpRight, BadgeCheck, Check, Clock3, ExternalLink, FileText, FolderOpen, Hash, ImageIcon, Loader2, Mail, MapPin, PenLine, Phone, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { EstimatePdfDocument } from "@/components/estimate/estimate-pdf";
@@ -22,7 +22,7 @@ import { useAppSelector } from "@/store/hooks";
 import { Button } from "@/components/ui/button";
 import { getInvoice, getJob, getRequest, listRecordSchedule, updateSchedule } from "@/lib/api/crm-client";
 import type { EstimateV2Opportunity, OpportunityAttachment } from "@/lib/api/estimate-v2-client";
-import { opportunityStatusLabel, opportunityStatusTone } from "@/lib/data/estimate-v2-status";
+import { estimateStatusLabel, opportunityStatusLabel, opportunityStatusTone } from "@/lib/data/estimate-v2-status";
 import {
   jobStatusLabel,
   jobStatusTone,
@@ -109,31 +109,147 @@ function Muted({ children }: { children: ReactNode }) {
   return <p className="text-sm text-slate-500">{children}</p>;
 }
 
+/**
+ * A name in the status banner that opens its page (job, customer, company). Client: it should look
+ * clickable and keep moving: the arrow nudges up-right and a faint underline breathes on a loop; on
+ * hover the underline is full. Keyframes: `.rs-banner-link` / `.rs-banner-link-arrow` in globals.css.
+ */
+function BannerLink({ href, children, title }: { href: string; children: ReactNode; title?: string }) {
+  return (
+    <Link
+      href={href}
+      title={title}
+      className={cn(
+        "rs-banner-link inline-flex items-center gap-0.5 rounded-sm font-semibold text-primary dark:text-sky-300",
+        "bg-[linear-gradient(currentColor,currentColor)] bg-[length:35%_1px] bg-bottom-left bg-no-repeat",
+        "transition-colors hover:text-primary/90",
+        "focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+      )}
+    >
+      {children}
+      <ArrowUpRight aria-hidden className="rs-banner-link-arrow size-3.5" />
+    </Link>
+  );
+}
+
 /** Who signed, and when — the approval status of an estimate. */
-export function ApprovalStatus({ estimate, jobNumber }: { estimate: Estimate | null; jobNumber?: string }) {
+export function ApprovalStatus({
+  estimate,
+  jobNumber,
+  opportunity,
+  actions,
+}: {
+  estimate: Estimate | null;
+  jobNumber?: string;
+  /** Before an estimate exists, the lead's status is shown (client: the status always sits in this bar). */
+  opportunity?: EstimateV2Opportunity | null;
+  /** Buttons on the right of the bar (e.g. Assign technician, Print). */
+  actions?: ReactNode;
+}) {
   const customer = estimate?.signature;
   const company = estimate?.companySignature;
-  const accepted = estimate?.status === "accepted" || estimate?.status === "converted_to_job";
-  if (!accepted && !customer?.signedBy && !company?.signedBy) return null;
+  const status = estimate?.status || "";
+  const accepted = status === "accepted" || status === "converted_to_job";
+  // Client: always show the status here (never in the sidebar). Parts with no data are left out.
+  const statusText = estimate?.status
+    ? estimateStatusLabel(estimate.status)
+    : opportunity?.status
+      ? opportunityStatusLabel(opportunity.status)
+      : "";
+  if (!statusText && !accepted) return null;
+  // Client: every status gets a tinted bar like the green one; only the colour changes.
+  const leadStatus = estimate?.status ? "" : String(opportunity?.status || "");
+  const tone: "success" | "info" | "warning" | "danger" | "neutral" | "progress" = accepted || leadStatus === "won"
+    ? "success"
+    : status === "sent" || leadStatus === "estimate_sent"
+      ? "info"
+      : status === "changes_requested"
+        ? "warning"
+        : status === "rejected" || status === "expired" || leadStatus === "lost"
+          ? "danger"
+          : leadStatus === "assessment_scheduled" || leadStatus === "assessment_completed" || leadStatus === "new"
+            ? "progress"
+            : "neutral";
+  const note = accepted
+    ? "Signed estimates are locked: they can't be edited or sent again."
+    : status === "sent"
+      ? "Waiting for the customer to review and sign."
+      : status === "changes_requested"
+        ? "The customer asked for changes. Update the estimate and send it again."
+        : status === "rejected"
+          ? "The customer declined this estimate."
+          : status === "expired"
+            ? "This estimate expired before the customer signed it."
+            : estimate?.id
+              ? "Not sent to the customer yet."
+              : leadStatus === "assessment_scheduled"
+                ? "A site visit is booked. Complete it, then build the estimate."
+                : leadStatus === "assessment_completed"
+                  ? "The site visit is done. Build the estimate from what was found."
+                  : leadStatus === "new"
+                    ? "New lead. Choose how to prepare the estimate."
+                    : leadStatus === "lost"
+                      ? "This lead was marked as lost."
+                      : leadStatus === "won"
+                        ? "The customer accepted."
+                        : "No estimate yet.";
+  const StatusIcon = accepted ? BadgeCheck : tone === "warning" || tone === "danger" ? AlertCircle : Clock3;
+  // Client: job, customer and company names open their pages.
+  const customerHref = estimate?.customerId ? `/pro/dashboard/customers/${estimate.customerId}` : "";
+  const companyHref = "/pro/dashboard/settings";
+  const customerName = (name: string) =>
+    customerHref ? (
+      <BannerLink href={customerHref} title="Open the customer">
+        {name}
+      </BannerLink>
+    ) : (
+      <span className="font-semibold">{name}</span>
+    );
   return (
     <div
       className={cn(
         "flex flex-wrap items-start gap-x-6 gap-y-2 rounded-2xl border px-4 py-3 text-sm",
-        accepted
-          ? "border-emerald-200 bg-emerald-50/70 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100"
-          : "border-[#94a3b8] bg-white dark:border-border dark:bg-card",
+        tone === "success" &&
+          "border-emerald-200 bg-emerald-50/70 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100",
+        tone === "info" && "border-sky-200 bg-sky-50/70 text-sky-950 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100",
+        tone === "warning" && "border-amber-200 bg-amber-50/70 text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100",
+        tone === "danger" && "border-rose-200 bg-rose-50/70 text-rose-950 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-100",
+        tone === "progress" && "border-indigo-200 bg-indigo-50/70 text-indigo-950 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-100",
+        tone === "neutral" && "border-slate-300 bg-slate-100/70 text-slate-900 dark:border-border dark:bg-muted/40 dark:text-foreground",
       )}
     >
-      <p className="flex items-center gap-1.5 font-semibold">
-        <BadgeCheck className={cn("size-4", accepted ? "text-emerald-600" : "text-muted-foreground")} />
-        {estimate?.status === "converted_to_job"
-          ? `Converted to job${jobNumber ? ` ${jobNumber}` : ""}`
-          : accepted
-            ? "Accepted"
-            : "Awaiting the customer's signature"}
+      <p className="flex flex-wrap items-center gap-1.5 font-semibold">
+        <StatusIcon
+          className={cn(
+            "size-4",
+            tone === "success" && "text-emerald-600",
+            tone === "info" && "text-sky-600",
+            tone === "warning" && "text-amber-600",
+            tone === "danger" && "text-rose-600",
+            tone === "progress" && "text-indigo-600",
+            tone === "neutral" && "text-slate-500",
+          )}
+        />
+        {status === "converted_to_job" ? (
+          estimate?.jobId ? (
+            // Client: the job number opens the job.
+            <span className="inline-flex items-center gap-1">
+              Converted to job
+              <BannerLink href={`/pro/dashboard/jobs/${estimate.jobId}`} title="Open the job">
+                {jobNumber || "Open job"}
+              </BannerLink>
+            </span>
+          ) : (
+            `Converted to job${jobNumber ? ` ${jobNumber}` : ""}`
+          )
+        ) : accepted ? (
+          "Accepted"
+        ) : (
+          statusText
+        )}
         {accepted ? (
           <span className="font-normal">
-            · accepted by {customer?.signedBy ? <span className="font-semibold">{customer.signedBy}</span> : "the customer"}
+            · accepted by {customer?.signedBy ? customerName(customer.signedBy) : "the customer"}
             {customer?.signedAt ? <span className="opacity-70"> · {formatDate(customer.signedAt)}</span> : null}
           </span>
         ) : null}
@@ -141,18 +257,22 @@ export function ApprovalStatus({ estimate, jobNumber }: { estimate: Estimate | n
       {customer?.signedBy && !accepted ? (
         <p className="flex items-center gap-1.5">
           <PenLine className="size-3.5 opacity-70" />
-          Customer: <span className="font-medium">{customer.signedBy}</span>
+          Customer: {customerName(customer.signedBy)}
           {customer.signedAt ? <span className="opacity-70">· {formatDate(customer.signedAt)}</span> : null}
         </p>
       ) : null}
       {company?.signedBy ? (
         <p className="flex items-center gap-1.5">
           <PenLine className="size-3.5 opacity-70" />
-          Company: <span className="font-medium">{company.signedBy}</span>
+          Company:{" "}
+          <BannerLink href={companyHref} title="Open your business profile">
+            {company.signedBy}
+          </BannerLink>
           {company.signedAt ? <span className="opacity-70">· {formatDate(company.signedAt)}</span> : null}
         </p>
       ) : null}
-      {accepted ? <p className="w-full text-xs opacity-80">Signed estimates are locked: they can&apos;t be edited or sent again.</p> : null}
+      {actions ? <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {note ? <p className="w-full text-xs opacity-80">{note}</p> : null}
     </div>
   );
 }
@@ -174,6 +294,8 @@ export type ProjectData = {
   reloadSchedule: () => void;
   /** Change order / completion requests from the job's technicians and contractors. */
   jobRequests: { total: number; pending: number };
+  /** The request counts have loaded at least once (before that they read 0). */
+  jobRequestsLoaded: boolean;
   /** Load the job again (after a request becomes a change order). */
   reloadJob: () => void;
   /** Show a job the API just returned (e.g. after a change order is created or approved). */
@@ -279,6 +401,7 @@ export function useProjectData({
     setSchedule,
     reloadSchedule: () => setNonce((n) => n + 1),
     jobRequests: requests?.value || { total: 0, pending: 0 },
+    jobRequestsLoaded: Boolean(requests),
     reloadJob: () => setJobNonce((n) => n + 1),
     replaceJob: (next: Job) => setJob({ key: jobKey, value: next }),
   };
@@ -409,7 +532,14 @@ export function ProjectPanel({
     case "customer":
       return <CustomerPanel opportunity={opportunity} onShowMap={onShowMap} mapProps={mapProps} />;
     case "request":
-      return <RequestPanel opportunity={opportunity} photos={data.customerPhotos} onShowMap={onShowMap} />;
+      return (
+        <RequestPanel
+          opportunity={opportunity}
+          photos={data.customerPhotos}
+          onShowMap={onShowMap}
+          onOpenFiles={onView ? () => onView("files") : undefined}
+        />
+      );
     case "preview":
       return <PreviewPanel estimate={estimate} preview={preview} onSend={onSend} canSend={canSend} onOpenEstimate={onOpenEstimate} printButton={printButton} />;
     case "selections":
@@ -423,6 +553,9 @@ export function ProjectPanel({
         <section className={PANEL_CARD}>
           {/* Same table as the job's Requests tab (approve / reject, create the change order). */}
           <JobRequestsTab
+            // Client: clearly not the same as Change orders.
+            title="Change requests"
+            description="Requests from your technicians and contractors for extra work or materials. Approving one adds it to Scope changes; declining it closes the request."
             jobId={job.id}
             changeOrders={job.changeOrders || []}
             onChangeOrderCreated={() => data.reloadJob()}
@@ -440,6 +573,19 @@ export function ProjectPanel({
       // return <ChangeOrdersPanel job={job} />;
       return job ? (
         <section className={PANEL_CARD}>
+          {/* Client: keep Change orders and Change requests apart. */}
+          <p className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-border dark:bg-muted/40 dark:text-muted-foreground">
+            Scope changes are the extra work added to this job (change orders). Requests sent by your technicians and contractors are
+            under{" "}
+            {onView ? (
+              <button type="button" className="font-semibold text-primary hover:underline" onClick={() => onView("requests")}>
+                Change requests
+              </button>
+            ) : (
+              <span className="font-semibold">Change requests</span>
+            )}
+            ; approving one adds it here.
+          </p>
           <JobChangeOrdersPanel
             job={job}
             originalAmount={(job.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0)}
@@ -559,6 +705,8 @@ function sourceLabel(source?: string) {
 }
 
 /** One labelled fact in the request's detail grid. */
+// Kept for the commented-out grids (Job tab, old Work request). 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function Fact({ icon: Icon, label, children }: { icon: typeof Hash; label: string; children: ReactNode }) {
   return (
     <div className="flex h-full min-w-0 gap-2.5 bg-white px-4 py-3 dark:bg-card">
@@ -571,14 +719,38 @@ function Fact({ icon: Icon, label, children }: { icon: typeof Hash; label: strin
   );
 }
 
+/** One label / value line in the Work request side column. */
+function DetailRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-2 text-sm">
+      <dt className="shrink-0 text-slate-500 dark:text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 text-right font-medium break-words text-slate-900 dark:text-foreground">{children}</dd>
+    </div>
+  );
+}
+
+/** Small uppercase heading used inside the Work request card. */
+function RequestHeading({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
+  return (
+    <div className="mb-2 flex items-center justify-between gap-2">
+      <h3 className="text-xs font-bold tracking-[0.08em] text-slate-900 uppercase dark:text-foreground">{children}</h3>
+      {aside ? <span className="text-xs text-slate-500">{aside}</span> : null}
+    </div>
+  );
+}
+
+/** The customer's original request (client: one professional record card, not stacked boxes). */
 function RequestPanel({
   opportunity,
   photos,
   onShowMap,
+  onOpenFiles,
 }: {
   opportunity: EstimateV2Opportunity;
   photos: string[];
   onShowMap: () => void;
+  /** Open the Photos & files tab (every file on the project). */
+  onOpenFiles?: () => void;
 }) {
   const answers = (opportunity.quoteAnswers || []).filter((answer) => answer.label && answer.value);
   const customer = customerOf(opportunity);
@@ -589,141 +761,190 @@ function RequestPanel({
     ...(opportunity.customerAttachments || []).map((file) => ({ url: file.url, name: file.name || "" })),
   ].filter((file, index, all) => file.url && all.findIndex((other) => other.url === file.url) === index);
   const isImage = (url: string) => /\.(png|jpe?g|gif|webp|avif|heic)(\?|$)/i.test(url) || url.includes("/image");
+  const initials =
+    customer.name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "C";
 
   return (
     <div className="space-y-3">
-      <Panel
-        label={`Work request · ${opportunity.number}`}
-        aside={
-          <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", opportunityStatusTone(opportunity.status))}>
-            {opportunityStatusLabel(opportunity.status)}
-          </span>
-        }
-      >
-        {opportunity.categoryName ? (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <p className="inline-flex rounded-md bg-primary/8 px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-primary uppercase">
-              {opportunity.categoryName}
+      <section className={cn(PANEL_CARD, "overflow-hidden p-0")}>
+        {/* Header: what this is, its status, and the two ways out. */}
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-border-soft">
+          <div className="min-w-0">
+            <p className="flex flex-wrap items-center gap-2 text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase">
+              Work request
+              <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-normal normal-case", opportunityStatusTone(opportunity.status))}>
+                {opportunityStatusLabel(opportunity.status)}
+              </span>
             </p>
-            {opportunity.subcategoryName ? (
-              <p className="inline-flex rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-slate-600 uppercase dark:bg-muted">
-                {opportunity.subcategoryName}
+            <h2 className="mt-1 text-lg font-semibold tracking-tight text-slate-900 dark:text-foreground">{opportunity.title}</h2>
+            {opportunity.categoryName ? (
+              <p className="mt-0.5 text-sm text-slate-500 dark:text-muted-foreground">
+                {opportunity.categoryName}
+                {opportunity.subcategoryName ? ` › ${opportunity.subcategoryName}` : ""}
               </p>
             ) : null}
           </div>
-        ) : null}
-        <p className="mt-2 text-lg font-semibold tracking-tight text-slate-900 dark:text-foreground">{opportunity.title}</p>
-
-        <div className="mt-3 rounded-xl border border-slate-300 bg-slate-50/60 px-4 py-3 dark:border-border dark:bg-muted/20">
-          <p className="text-[10px] font-semibold tracking-[0.12em] text-slate-500 uppercase">What the customer needs</p>
-          <p className="mt-1 text-sm leading-relaxed whitespace-pre-wrap text-slate-700 dark:text-foreground">
-            {opportunity.description?.trim() || "No description was given."}
-          </p>
-        </div>
-
-        <dl className="mt-3 grid gap-px overflow-hidden rounded-xl border border-slate-300 bg-slate-200 sm:grid-cols-2 dark:border-border dark:bg-border-soft">
-          <Fact icon={Hash} label="Request number">
-            {opportunity.number}
-          </Fact>
-          <Fact icon={CalendarDays} label="Received">
-            {opportunity.createdAt ? formatDate(opportunity.createdAt) : "—"}
-          </Fact>
-          <Fact icon={UserRound} label="Customer">
-            {customer.name}
-            {customer.phone || customer.email ? (
-              <span className="block text-xs font-normal text-slate-500">
-                {[customer.phone, customer.email].filter(Boolean).join(" · ")}
-              </span>
+          <div className="flex flex-wrap gap-2">
+            {opportunity.requestId ? (
+              <Button size="sm" variant="outline" className="h-9 gap-1.5" asChild>
+                <Link href={`/pro/dashboard/requests/${opportunity.requestId}`}>
+                  <ExternalLink className="size-3.5" /> Open lead
+                </Link>
+              </Button>
             ) : null}
-          </Fact>
-          <Fact icon={Inbox} label="Source">
-            {sourceLabel(opportunity.source) || "—"}
-          </Fact>
-          <div className="sm:col-span-2">
-            <Fact icon={MapPin} label="Service address">
-              {address || "No address yet"}
-              {address ? (
-                <button
-                  type="button"
-                  onClick={onShowMap}
-                  className="ml-2 text-xs font-bold text-primary underline underline-offset-2 hover:text-primary/80"
-                >
-                  View on map
-                </button>
-              ) : null}
-            </Fact>
+            {customer.id ? (
+              <Button size="sm" className="h-9 gap-1.5" asChild>
+                <Link href={`/pro/dashboard/customers/${customer.id}`}>
+                  <UserRound className="size-3.5" /> Customer profile
+                </Link>
+              </Button>
+            ) : null}
           </div>
-        </dl>
-
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-3 dark:border-border-soft">
-          {opportunity.requestId ? (
-            <Button size="sm" variant="outline" className="h-8 gap-1.5" asChild>
-              <Link href={`/pro/dashboard/requests/${opportunity.requestId}`}>
-                <ExternalLink className="size-3.5 text-primary" /> Open lead
-              </Link>
-            </Button>
-          ) : null}
-          {customer.id ? (
-            <Button size="sm" variant="outline" className="h-8 gap-1.5" asChild>
-              <Link href={`/pro/dashboard/customers/${customer.id}`}>
-                <UserRound className="size-3.5 text-primary" /> Customer profile
-              </Link>
-            </Button>
-          ) : null}
         </div>
-      </Panel>
 
-      {answers.length ? (
-        <Panel label="Customer answers" aside={`${answers.length} question${answers.length === 1 ? "" : "s"}`}>
-          <div className="overflow-hidden rounded-xl border border-slate-300 dark:border-border">
-            <table className="w-full text-sm">
-              <tbody className="divide-y divide-slate-200 dark:divide-border-soft">
-                {answers.map((answer, i) => (
-                  <tr key={answer.id || i}>
-                    <th scope="row" className="w-1/2 bg-slate-50 px-3 py-2.5 text-left font-medium text-slate-600 dark:bg-muted/40 dark:text-muted-foreground">
-                      {answer.label}
-                    </th>
-                    <td className="px-3 py-2.5 font-medium text-slate-900 dark:text-foreground">{answer.value}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_20rem]">
+          {/* Left: the request in the customer's words, then their answers. */}
+          <div className="space-y-6 px-5 py-5">
+            <div>
+              <RequestHeading>Customer&apos;s request</RequestHeading>
+              <blockquote className="border-l-[3px] border-primary/60 bg-slate-50 py-3 pr-4 pl-4 text-sm leading-relaxed whitespace-pre-wrap text-slate-800 dark:bg-muted/30 dark:text-foreground">
+                {opportunity.description?.trim() || "No description was given."}
+              </blockquote>
+            </div>
+
+            {answers.length ? (
+              <div>
+                <RequestHeading aside={`${answers.length} question${answers.length === 1 ? "" : "s"}`}>Quote questions</RequestHeading>
+                <dl className="divide-y divide-slate-200 rounded-xl border border-slate-300 dark:divide-border-soft dark:border-border">
+                  {answers.map((answer, i) => (
+                    <div key={answer.id || i} className="grid gap-1 px-4 py-2.5 text-sm sm:grid-cols-2 sm:gap-4">
+                      <dt className="text-slate-500 dark:text-muted-foreground">{answer.label}</dt>
+                      <dd className="font-medium text-slate-900 dark:text-foreground">{answer.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ) : null}
+
+            <div>
+              <RequestHeading
+                aside={
+                  onOpenFiles ? (
+                    <button type="button" className="font-semibold text-primary hover:underline" onClick={onOpenFiles}>
+                      All project photos &amp; files →
+                    </button>
+                  ) : attachments.length ? (
+                    String(attachments.length)
+                  ) : undefined
+                }
+              >
+                Photos &amp; files from the customer
+              </RequestHeading>
+              {attachments.length ? (
+                <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                  {attachments.map((file) => (
+                    <li key={file.url}>
+                      <a
+                        href={file.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="group block overflow-hidden rounded-xl border border-slate-300 bg-white focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none dark:border-border dark:bg-card"
+                      >
+                        {isImage(file.url) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={file.url} alt={file.name || "Customer photo"} className="aspect-[4/3] w-full object-cover" />
+                        ) : (
+                          <span className="flex aspect-[4/3] items-center justify-center bg-slate-50 dark:bg-muted/40">
+                            <FileText className="size-6 text-slate-400" />
+                          </span>
+                        )}
+                        {file.name ? <span className="block truncate px-2 py-1.5 text-xs text-slate-600 dark:text-muted-foreground">{file.name}</span> : null}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-500 dark:border-border">
+                  The customer didn&apos;t send any photos or files with this request.
+                </p>
+              )}
+            </div>
+
+            <div>
+              <RequestHeading aside="Not shown to the customer">Internal notes</RequestHeading>
+              {opportunity.internalNotes?.trim() ? (
+                <p className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-slate-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-foreground">
+                  {opportunity.internalNotes}
+                </p>
+              ) : (
+                <p className="rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-500 dark:border-border">No internal notes.</p>
+              )}
+            </div>
           </div>
-        </Panel>
-      ) : null}
 
-      {attachments.length ? (
-        <Panel label="Photos & files from the customer" aside={String(attachments.length)}>
-          <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            {attachments.map((file) => (
-              <li key={file.url}>
-                <a
-                  href={file.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="group block overflow-hidden rounded-xl border border-slate-300 bg-white focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none dark:border-border dark:bg-card"
-                >
-                  {isImage(file.url) ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={file.url} alt={file.name || "Customer photo"} className="aspect-[4/3] w-full object-cover" />
-                  ) : (
-                    <span className="flex aspect-[4/3] items-center justify-center bg-slate-50 dark:bg-muted/40">
-                      <FileText className="size-6 text-slate-400" />
-                    </span>
-                  )}
-                  {file.name ? <span className="block truncate px-2 py-1.5 text-xs text-slate-600 dark:text-muted-foreground">{file.name}</span> : null}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      ) : null}
+          {/* Right: reference details, who it's for, and where. */}
+          <aside className="space-y-6 border-t border-slate-200 bg-slate-50/60 px-5 py-5 lg:border-t-0 lg:border-l dark:border-border-soft dark:bg-muted/20">
+            <div>
+              <RequestHeading>Details</RequestHeading>
+              <dl className="divide-y divide-slate-200 dark:divide-border-soft">
+                <DetailRow label="Reference">{opportunity.number}</DetailRow>
+                <DetailRow label="Received">{opportunity.createdAt ? formatDate(opportunity.createdAt) : "—"}</DetailRow>
+                <DetailRow label="Source">{sourceLabel(opportunity.source) || "—"}</DetailRow>
+                {opportunity.subcategoryName || opportunity.categoryName ? (
+                  <DetailRow label="Service">{opportunity.subcategoryName || opportunity.categoryName}</DetailRow>
+                ) : null}
+              </dl>
+            </div>
 
-      {opportunity.internalNotes?.trim() ? (
-        <Panel label="Internal notes" aside="Not shown to the customer">
-          <p className="text-sm leading-relaxed whitespace-pre-wrap text-slate-700 dark:text-foreground">{opportunity.internalNotes}</p>
-        </Panel>
-      ) : null}
+            <div>
+              <RequestHeading>Customer</RequestHeading>
+              <div className="flex items-center gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                  {initials}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-foreground">{customer.name}</p>
+                  {customer.phone ? (
+                    <a href={`tel:${customer.phone}`} className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-primary dark:text-muted-foreground">
+                      <Phone className="size-3" aria-hidden /> {customer.phone}
+                    </a>
+                  ) : null}
+                  {customer.email ? (
+                    <a href={`mailto:${customer.email}`} className="flex items-center gap-1.5 truncate text-xs text-slate-600 hover:text-primary dark:text-muted-foreground">
+                      <Mail className="size-3" aria-hidden /> {customer.email}
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <RequestHeading>Service address</RequestHeading>
+              <p className="flex gap-2 text-sm text-slate-800 dark:text-foreground">
+                <MapPin className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
+                {address || "No address yet"}
+              </p>
+              {address ? (
+                <Button type="button" size="sm" variant="outline" className="mt-2 h-8 w-full gap-1.5" onClick={onShowMap}>
+                  <MapPin className="size-3.5" /> View on map
+                </Button>
+              ) : null}
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      {/* Customer answers now sit inside the card above (client: one record, not stacked boxes).
+      {answers.length ? (
+        <Panel label="Customer answers" ...>…</Panel>
+      ) : null} */}
+
+      {/* Photos & files and Internal notes moved inside the card above (client). */}
     </div>
   );
 }
@@ -1027,7 +1248,81 @@ function ProgressPanel({
           )}
         </div>
 
-        {/* Facts */}
+        {/* Facts in the project's own table (PortalDataTable, same as Invoices / Change requests). */}
+        <div className="border-t border-slate-200 px-5 py-4 dark:border-border-soft">
+          <PortalDataTable
+            filename={`job-${job.number || job.id}`}
+            countLabel="Job"
+            hideSearch
+            rows={[job]}
+            rowKey={(row) => row.id}
+            columns={[
+              {
+                id: "scheduled",
+                header: "Start date",
+                exportValue: (row) => (row.scheduledAt ? formatDateTime(row.scheduledAt) : "Not scheduled yet"),
+                cell: (row) => (row.scheduledAt ? formatDateTime(row.scheduledAt) : "Not scheduled yet"),
+              },
+              {
+                id: "due",
+                header: "Due date",
+                exportValue: (row) => (row.dueAt ? formatDate(row.dueAt) : ""),
+                cell: (row) => (row.dueAt ? formatDate(row.dueAt) : "—"),
+              },
+              {
+                id: "crew",
+                header: "Assigned crew",
+                exportValue: () => [...technicians, ...contractors].join(", "),
+                cell: () =>
+                  technicians.length || contractors.length ? (
+                    <>
+                      {technicians.join(", ")}
+                      {contractors.length ? (
+                        <span className="block text-xs text-slate-500">Contractors: {contractors.join(", ")}</span>
+                      ) : null}
+                    </>
+                  ) : (
+                    "Nobody assigned"
+                  ),
+              },
+              {
+                id: "value",
+                header: "Job total",
+                exportValue: () => formatMoney(baseValue + extras),
+                cell: () => (
+                  <span className="tabular-nums">
+                    {formatMoney(baseValue + extras)}
+                    {approved.length ? (
+                      <span className="block text-xs text-slate-500">
+                        incl. {approved.length} approved change order{approved.length === 1 ? "" : "s"} ({formatMoney(extras)})
+                      </span>
+                    ) : null}
+                  </span>
+                ),
+              },
+              {
+                id: "invoice",
+                header: "Invoice status",
+                exportValue: (row) => (row.invoiceId ? "Invoiced" : "Created when the work is complete"),
+                cell: (row) =>
+                  row.invoiceId ? (
+                    <Link href={`/pro/dashboard/invoices/${row.invoiceId}`} className="font-medium text-primary hover:underline">
+                      Open invoice
+                    </Link>
+                  ) : (
+                    "Created when the work is complete"
+                  ),
+              },
+              {
+                id: "site",
+                header: "Job address",
+                exportValue: () => address,
+                cell: () => address || "—",
+              },
+            ]}
+          />
+        </div>
+        {/* Was a grid of boxes (client asked for a table):
         <dl className="grid gap-px border-t border-slate-200 bg-slate-200 sm:grid-cols-2 lg:grid-cols-3 dark:border-border-soft dark:bg-border-soft">
           <Fact icon={CalendarClock} label="Scheduled">
             {job.scheduledAt ? formatDateTime(job.scheduledAt) : "Not scheduled yet"}
@@ -1067,7 +1362,7 @@ function ProgressPanel({
           <Fact icon={MapPin} label="Job site">
             {address || "—"}
           </Fact>
-        </dl>
+        </dl> */}
       </section>
 
       {pendingRequests ? (
@@ -1306,7 +1601,7 @@ function FilesPanel({
   const present = (Object.keys(BY_LABEL) as FileRow["by"][]).filter((by) => counts[by]);
 
   return (
-    <Panel label="Project files" aside={String(rows.length)}>
+    <Panel label="Photos & files" aside={rows.length ? String(rows.length) : undefined}>
       <div className="flex flex-wrap items-center gap-2 text-xs">
         {present.map((by) => (
           <span key={by} className={cn("rounded-full px-2 py-0.5 font-semibold ring-1 ring-inset", BY_TONE[by])}>
@@ -1319,6 +1614,16 @@ function FilesPanel({
           </span>
         ) : null}
       </div>
+      {!rows.length && !data.customerPhotosLoading ? (
+        <div className="mt-1 rounded-xl border border-dashed border-slate-300 px-5 py-8 text-center dark:border-border">
+          <FolderOpen className="mx-auto size-8 text-slate-300" aria-hidden />
+          <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-foreground">No photos or files yet</p>
+          <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-slate-500">
+            Everything on this project shows here: photos the customer sent with the request, files you add under
+            Existing information, site-visit photos and job photos.
+          </p>
+        </div>
+      ) : null}
       <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
         {rows.map((row) => (
           <li key={row.key}>

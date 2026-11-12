@@ -65,7 +65,186 @@ Modules, layout, notification channels and API conventions: see
 
 Newest first. Format: **what** — why · files.
 
+### 2026-11-12
+
+- **Services directory: "Clear all" also removes the location chip** — client.
+  - Clear all now runs `resetFilters()` and `dispatch(clearLocation())`. The sidebar Reset and the empty
+    state's "Reset filters" are unchanged (location kept). Pre-existing lint errors at lines 795 / 798
+    (refs during render) left as they were.
+  - Files: `components/marketplace/services-directory.tsx`.
+
+- **Status bar tinted for every status, buttons moved into it; Site visits closed by default with a View visits toggle** — client.
+  - `ApprovalStatus`: every status now gets the tinted style of the green bar (was a plain white box for
+    drafts / leads). Green accepted / converted / won, blue sent, amber changes requested, red declined /
+    expired / lost, indigo lead stages (new, assessment scheduled / completed), grey draft. Always a second
+    line saying what's next (e.g. "A site visit is booked. Complete it, then build the estimate.").
+    New `actions` slot on the right.
+  - Assign contractor / Assign technician / Print / PDF moved from a loose row into that slot (old row
+    commented out). Shown on Summary whenever the estimate card has no header of its own.
+  - Site visits / Existing information start closed every time the page loads (was open when a prep path was
+    chosen and there was no estimate; choosing a path still opens it).
+  - Site visits header matches "Customer quote answers": icon, "Site visits · N visits", a one-line summary of
+    the latest / open visit, and **View visits ⌄** on the right (**Hide visits ⌃** when open; the Collapse
+    button and the left arrow are gone). View / Build estimate stays next to it when closed.
+  - Chrome check with mocks: lead with a scheduled visit → indigo bar with the 3 buttons, Site visits closed,
+    opens with the toggle; converted / sent / draft bars as expected.
+  - Files: `components/portal/estimate-v2/project-panels.tsx`, `components/portal/estimate-v2/new-estimate-workspace-view.tsx`,
+    `components/portal/estimate-v2/site-visits-panel.tsx`.
+
+- **Estimate status always in the top banner, never in the sidebar header** — client.
+  - `ApprovalStatus` now always renders (was only for accepted / signed estimates). Title = the estimate's
+    status ("Sent to customer", "Draft", …), or the lead's status before there is an estimate ("Assessment
+    scheduled", …). Tone by status: green accepted / converted, blue sent, amber changes requested, red
+    declined / expired, neutral otherwise. One-line note on what's next; signatures, job / customer /
+    company links only when that data exists. New optional `opportunity` prop.
+  - Sidebar header: status pill removed (`SHOW_SIDEBAR_STATUS = false`, code kept); only the AI tag can show.
+  - Chrome check with mocks: converted → green banner as before; draft → "Draft · Not sent to the customer
+    yet."; sent → blue "Sent to customer · Waiting for the customer to review and sign."; sidebar header =
+    number + title only.
+  - Files: `components/portal/estimate-v2/project-panels.tsx`, `components/portal/estimate-v2/new-estimate-workspace-view.tsx`.
+
+- **Photos & files tab always listed; Request progress removed from Work request; Budget tab hidden** — client.
+  - Sidebar "Project files" → **Photos & files**, always shown (was only when files existed). The panel has
+    the same name and an empty state explaining where files come from (customer request, Existing
+    information, site visits, job). No count badge.
+  - Work request: "Request progress" timeline removed (it repeated the status banner and Job tab); the
+    photos block is titled "Photos & files from the customer" with an "All project photos & files →" link to
+    the tab. `estimate` / `job` props on `RequestPanel` removed again; `onOpenFiles` added.
+  - Budget sidebar item commented out (not deleted) so it can come back; `BudgetPanel` unchanged; the
+    unused Wallet icon import removed (noted in the comment).
+  - Chrome check with mocks. Files: `components/portal/estimate-v2/project-lifecycle-nav.tsx`,
+    `components/portal/estimate-v2/project-panels.tsx`.
+
+- **Work request card: no empty left column** — client.
+  - Under Customer's request (and Quote questions when there are any) the card now shows **Request progress**
+    (Request received → Estimate created → Sent to the customer → Accepted / Declined → Converted to job, each
+    with its date / number, ticked when done), then **Photos & files** and **Internal notes** (moved inside the
+    card from the separate cards below; each has a short note when empty).
+  - `RequestPanel` now also gets `estimate` and `job`. Chrome check with mocks, desktop + phone width.
+  - Files: `components/portal/estimate-v2/project-panels.tsx`.
+
+- **Work request tab redesigned as one record card** — client ("not good, make it professional").
+  - Header: "Work request" + status pill, title, "Category › Service", and Open lead / Customer profile on
+    the right. Body in two columns: left = the customer's request (quoted) and the quote questions they
+    answered (moved in from a separate card); right = Details (Reference, Received, Source, Service),
+    Customer (initials avatar, tap-to-call phone, mailto email) and Service address with a View on map button.
+    Photos & files and Internal notes stay as cards below. Stacks on phones (no sideways scroll).
+  - "Request number" relabelled "Reference": it shows the estimate's own number (Est-…), not a lead number.
+  - New small helpers `DetailRow` / `RequestHeading`; `Fact` kept for the commented-out grids. Unused icon
+    imports removed.
+  - Chrome check with mocks, desktop + 390px. Files: `components/portal/estimate-v2/project-panels.tsx`.
+
+- **Sidebar group "Changes" renamed "Change management"** — client (wanted a professional CRM label).
+  - Same items (Change requests, Scope changes). Chrome check: menu shows CHANGE MANAGEMENT.
+  - Files: `components/portal/estimate-v2/project-lifecycle-nav.tsx`.
+
+- **Estimate sidebar: own "Changes" group; "Change orders" renamed "Scope changes"** — client.
+  - Change requests and Scope changes moved out of Production into a new "Changes" group (after Production,
+    before Project). "Change orders" label → "Scope changes" (client's pick); section id unchanged.
+  - Estimate-page wording updated to match (Change requests description, note on the Scope changes section).
+    The shared job-page panel heading ("Change orders & scope changes") is unchanged.
+  - Chrome check with mocks: menu shows PRODUCTION (Job, Schedule, Invoices, Budget) then CHANGES
+    (Change requests 1, Scope changes).
+  - Files: `components/portal/estimate-v2/project-lifecycle-nav.tsx`, `components/portal/estimate-v2/project-panels.tsx`.
+
+- **Estimate sidebar: live blinking Change requests badge, actionable-only badges, Change requests vs Change orders labels** — client.
+  - Change requests badge = requests still waiting for review only (was "N new" or the total), blue. It
+    blinks while some arrived after the section was last opened; opening Change requests stops the blink,
+    approve / decline lowers the count (it goes when none are left). Live from the existing socket chain
+    (`contractor:requests` → `CONTRACTOR_REQUESTS_CHANGED` → `contractorReviews.version` → recount).
+    "Seen" is kept per job in this browser (`rs-seen-requests:<jobId>`, try/catch) and only updated once the
+    counts have loaded (new `jobRequestsLoaded` on `useProjectData`).
+  - Badges only for actionable items: Change orders "N pending" (draft / waiting for customer), Invoices
+    "1 due" (estimate invoice with a balance), Change requests count. Removed static counts on Parts &
+    Labour, Selections, Schedule, Project files, Activity and the "Signed" tag on Preview (now a tooltip).
+    Job keeps its job number.
+  - Change requests listed above Change orders with tooltips; the requests table on the estimate page is
+    titled "Change requests" with a line saying approving creates a change order (new optional `title` /
+    `description` on `JobRequestsTab`; job page unchanged). The Change orders section has a note linking
+    to Change requests.
+  - Chrome check with mocks: load → "1" blue blinking; open → not blinking; reload → still not blinking;
+    simulated socket push with 2 pending → "2" blinking; other badges gone.
+  - Files: `components/portal/estimate-v2/project-lifecycle-nav.tsx`, `components/portal/estimate-v2/new-estimate-workspace-view.tsx`,
+    `components/portal/estimate-v2/project-panels.tsx`, `components/portal/job-requests-tab.tsx`.
+
+- **Job tab table: back to columns, clearer column labels** — client (wanted only the labels changed, not the table).
+  - Reverted the one-row-per-detail version below (file restored to the side-by-side `PortalDataTable`).
+  - Column labels: Start date, Due date, Assigned crew, Job total, Invoice status, Job address
+    (were Scheduled, Due, Crew, Job value, Invoice, Job site). Values unchanged.
+  - Chrome check with mocks. Files: `components/portal/estimate-v2/project-panels.tsx`.
+
+- **(Reverted) Job tab details: one row per detail (label left, value right)** — client ("different label, easy to confirm").
+  - Six columns side by side didn't fit and the table scrolled sideways (Job site cut off). Same
+    `PortalDataTable`, now "Detail | Value" with a row each for Scheduled, Due, Crew, Job value, Invoice and
+    Job site (icon + label on the left). Export gives the same label / value pairs. Count reads "6 Job details".
+  - Chrome check with mocks, no sideways scroll. Files: `components/portal/estimate-v2/project-panels.tsx`.
+
+- **Job tab facts use the project's table (`PortalDataTable`)** — client ("table that we have in our project").
+  - Scheduled / Due / Crew / Job value / Invoice / Job site are columns of `PortalDataTable` (same component
+    as Invoices and Change requests), one row for the job: count + Export on top, the usual footer below.
+    Replaces the hand-made table from 2026-11-11. Unused icon imports removed.
+  - Chrome check with mocks. Files: `components/portal/estimate-v2/project-panels.tsx`.
+
 ### 2026-11-11
+
+- **Job tab: Scheduled / Due / Crew / Job value / Invoice / Job site as a table** — client.
+  - The grid of boxes under the step tracker is now a bordered table: one grey header row (icon + label,
+    same style as the app's tables) and one row of values. Scrolls sideways on narrow screens. Header,
+    tracker, Review bar and Latest activity unchanged. Old grid kept commented out.
+  - Chrome check with mocks. Files: `components/portal/estimate-v2/project-panels.tsx`.
+
+- **Estimate header: "Notes & updates" button** — client.
+  - Outline button with the notes icon next to Open job / Open invoice / More (any saved estimate).
+    Click scrolls down to the Notes & updates card on Summary (same `openView(NOTES_VIEW)` as the sidebar item).
+  - Chrome check: button shown, click scrolls the card into view.
+  - Files: `components/portal/estimate-v2/new-estimate-workspace-view.tsx`.
+
+- **Set schedule: outline button with blue border, only the clock icon blinks** — client.
+  - Was a filled blue button that blinked as a whole. Now `variant="outline"` with `border-primary
+    text-primary` while unscheduled, and `animate-pulse` on the `Clock3` icon only.
+  - Chrome check: button animation none, icon "pulse", border / text rgb(0,63,125), white background.
+  - Files: `components/portal/estimate-v2/project-stages.tsx`.
+
+- **Status banner links animate continuously** — client ("animated").
+  - Job / customer / company links: the ↗ arrow nudges up-right on a 1.6s loop and a faint underline
+    breathes (35% → 100% → 35%, 2.4s). Hover / focus stops the loop and shows the full underline with the
+    arrow raised. Keyframes `banner-link-nudge` / `banner-link-underline` and classes `.rs-banner-link`,
+    `.rs-banner-link-arrow` added to `app/globals.css`; `BannerLink` uses them.
+  - Chrome check: all three links run both animations; hover → underline 100%, arrow translate(2px,-2px).
+  - Files: `app/globals.css`, `components/portal/estimate-v2/project-panels.tsx`.
+
+- **Status banner: job, customer and company open their pages (animated); Set schedule blinks on every estimate; sidebar header aligned** — client.
+  - New `BannerLink` in `ApprovalStatus`: blue, underline slides in on hover, arrow nudges up-right.
+    JOB-… → `/pro/dashboard/jobs/:id`, customer name → `/pro/dashboard/customers/:customerId`,
+    company signer → Business Profile (`/pro/dashboard/settings`).
+  - Set schedule: blinks whenever the section has no schedule (`attention` now defaults on; was off for
+    signed estimates) and uses plain `animate-pulse` (was `motion-safe:`, which hid it when Windows
+    animation effects are off). Chrome check with reduced motion on: animation "pulse", blue fill.
+  - Sidebar header: the empty badge row (signed estimates) no longer pushes the title up; title and back
+    button are centred (`hasIdentityBadge`).
+  - Files: `components/portal/estimate-v2/project-panels.tsx`, `components/portal/estimate-v2/project-stages.tsx`,
+    `components/portal/estimate-v2/new-estimate-workspace-view.tsx`.
+
+- **Estimate page: Set schedule (blinking, required to send), Notes & updates shortcut, no Optional column, job link, sidebar border** — client.
+  - Section "Set time" button (stage time) is now **Set schedule**: blue + `motion-safe:animate-pulse`
+    while the section has no time (only on editable estimates, new `attention` prop), **Change schedule · 2d**
+    once saved. `sendNow` refuses while any section with line items has no schedule (toast names the
+    sections and scrolls to the sheet); an unsaved estimate is told to build first. Sections without
+    filled lines don't count.
+  - Sidebar Details: **Notes & updates** (when the estimate exists). Opens Summary and scrolls to the
+    Notes & updates card (`openView`, `notesSectionRef`); not a page of its own.
+  - Line items: the Optional toggle column is gone (header / cell commented out, `colSpan` adjusted). Each
+    row has a small "Mark optional" / "Include in total" link under the description (next to Add image),
+    plus an "Optional · not in total" chip on optional rows. Selections / totals unchanged.
+  - "Converted to job · JOB-…" under the estimate title is a bold blue link to the job; the banner's
+    "Converted to job JOB-…" also links to it.
+  - Project sidebar card border `#94a3b8` + the same light shadow as the main estimate card.
+  - Chrome check with mocks: no Optional column / switches, chip shows, job links go to the job, Notes &
+    updates in the menu and scrolls, nav border rgb(148,163,184). Blinking / send block not checked live
+    (test estimate is signed).
+  - Files: `components/portal/estimate-v2/project-stages.tsx`, `components/portal/estimate-v2/new-estimate-workspace-view.tsx`,
+    `components/portal/estimate-v2/project-panels.tsx`, `components/portal/estimate-v2/project-lifecycle-nav.tsx`,
+    `components/portal/line-items-editor.tsx`.
 
 - **Estimate page Change orders tab = the job's full Change Orders tab** — client.
   - Was a short list (number, title, status, amount). Now renders the job page's `JobChangeOrdersPanel`

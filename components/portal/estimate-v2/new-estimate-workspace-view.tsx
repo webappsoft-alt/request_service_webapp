@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { AiGeneratedBadge, isAiGenerated } from "@/components/portal/estimate-v2/ai-generated-badge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Handshake, HardHat, LayoutTemplate, Link2, Loader2, MapPin, MoreHorizontal, Pencil, Presentation, Printer, Route, Trash2, FileText, History, UserRound } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Handshake, HardHat, LayoutTemplate, Link2, Loader2, MapPin, MoreHorizontal, Pencil, Presentation, Printer, Route, Trash2, FileText, ExternalLink, History, MessageSquareText, UserRound } from "lucide-react";
 import { ProjectLifecycleNav, projectNavGroups } from "@/components/portal/estimate-v2/project-lifecycle-nav";
 import { ApprovalStatus, isProjectPanelView, ProjectPanel, projectFiles, useProjectData } from "@/components/portal/estimate-v2/project-panels";
 import {
@@ -147,6 +147,10 @@ const PREP_OPTIONS = [
   },
 ] as const;
 
+/** Sidebar id of the "Notes & updates" shortcut (scrolls Summary; never a centre view). */
+const NOTES_VIEW = "notes";
+/** Client: the estimate status shows in the banner at the top, not in the sidebar header (kept switchable). */
+const SHOW_SIDEBAR_STATUS: boolean = false;
 const RAIL_CARD =
   "rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
 const ACTIVITY_PREVIEW_COUNT = 4;
@@ -592,6 +596,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const { employees } = usePortalCrew();
   const { provider } = usePortalWorkspace();
   const estimateSectionRef = useRef<HTMLDivElement>(null);
+  /** "Notes & updates" card on Summary (sidebar shortcut scrolls to it). */
+  const notesSectionRef = useRef<HTMLDivElement>(null);
 
   const [mapOpen, setMapOpen] = useState(false);
   const [opportunity, setOpportunity] = useState<EstimateV2Opportunity | null>(null);
@@ -663,6 +669,18 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     }
     return seen;
   }, [lines]);
+  /** Sections with line items but no schedule (stage time) yet: sending waits for these (client). */
+  const unscheduledSections = useMemo(() => {
+    const stageSections = new Set((estimate?.stages || []).map((stage) => String(stage.section || "").trim()));
+    const missing: string[] = [];
+    for (const line of lines) {
+      if (!line.description.trim()) continue;
+      const key = String(line.section || "").trim();
+      const label = key || "General";
+      if (!stageSections.has(key) && !missing.includes(label)) missing.push(label);
+    }
+    return missing;
+  }, [lines, estimate?.stages]);
   const [taxRatePercent, setTaxRatePercent] = useState(0);
   /**
    * The tax rate loads in the background (GET /tax-rate) so it never holds up the page.
@@ -1032,7 +1050,11 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           data.prepChoice === "have_information" ||
           data.prepChoice === "schedule_assessment";
         const hasEst = Boolean(data.estimates?.[0]?.id);
-        setPrepPanelOpen(needsPrep && !hasEst);
+        // Client: Site visits / Existing information start closed every time the page opens.
+        // setPrepPanelOpen(needsPrep && !hasEst);
+        void needsPrep;
+        void hasEst;
+        setPrepPanelOpen(false);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not load estimate.");
@@ -1791,6 +1813,41 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     requestId: opportunity?.requestId,
   });
 
+  /**
+   * Change requests badge (client): blinks while requests arrived after the section was last opened.
+   * "Seen" = how many were pending when Change requests was last open, kept per job in this browser.
+   */
+  const requestsJobId = estimate?.jobId || "";
+  const pendingRequests = projectData.jobRequests.pending;
+  const [seenRequests, setSeenRequests] = useState<{ jobId: string; seen: number }>({ jobId: "", seen: 0 });
+  if (requestsJobId && seenRequests.jobId !== requestsJobId) {
+    let stored = 0;
+    try {
+      stored = Number(window.localStorage.getItem(`rs-seen-requests:${requestsJobId}`)) || 0;
+    } catch {
+      stored = 0;
+    }
+    setSeenRequests({ jobId: requestsJobId, seen: stored });
+  }
+  const seenPendingRequests = seenRequests.jobId === requestsJobId ? seenRequests.seen : 0;
+  // Opening Change requests marks what's there as seen; a decision (fewer pending) lowers it too.
+  // Only once the counts have loaded (before that they read 0 and would wipe "seen").
+  const markRequestsSeen =
+    projectData.jobRequestsLoaded &&
+    (view === "requests" || pendingRequests < seenPendingRequests) &&
+    seenPendingRequests !== pendingRequests;
+  if (requestsJobId && seenRequests.jobId === requestsJobId && markRequestsSeen) {
+    setSeenRequests({ jobId: requestsJobId, seen: pendingRequests });
+  }
+  useEffect(() => {
+    if (!seenRequests.jobId) return;
+    try {
+      window.localStorage.setItem(`rs-seen-requests:${seenRequests.jobId}`, String(seenRequests.seen));
+    } catch {
+      /* private window / blocked storage: the badge just blinks again next visit */
+    }
+  }, [seenRequests]);
+
   function saveDraftNow() {
     void saveEstimateDraft().then((saved) => {
       if (saved) offerSaveTemplate();
@@ -1798,6 +1855,21 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   }
 
   function sendNow() {
+    // Client: an estimate can't be sent until every section with line items has its schedule set.
+    if (!estimate?.id && lines.some((line) => line.description.trim())) {
+      toast.error("Set the schedule first", {
+        description: "Build the estimate, then use “Set schedule” on each section before sending.",
+      });
+      scrollToEstimate();
+      return;
+    }
+    if (unscheduledSections.length) {
+      toast.error("Set the schedule first", {
+        description: `Use “Set schedule” on: ${unscheduledSections.join(", ")}.`,
+      });
+      scrollToEstimate();
+      return;
+    }
     offerSaveTemplate(() => askStagesThen(openSendDialog));
   }
 
@@ -2148,10 +2220,14 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         </div>
   );
   */
+  /** Whether the sidebar header has any badge to show (status, or AI-generated). */
+  const hasIdentityBadge =
+    // Client: the status always sits in the banner at the top, never here; only the AI tag stays.
+    isAiGenerated(opportunity.source);
   const identityBadge = (
         <>
-        {/* Status badge; once accepted / converted the banner at the top shows it instead (client). */}
-        {estimate?.status === "accepted" || estimate?.status === "converted_to_job" ? null : estimate?.status ? (
+        {/* Status badge removed (client): the banner at the top always shows the status. */}
+        {!SHOW_SIDEBAR_STATUS ? null : estimate?.status ? (
           <span
             className={cn(
               "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
@@ -2196,8 +2272,15 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       optional: filledLines.filter((line) => line.optional).length,
       hasJob: Boolean(estimate?.jobId),
       changeOrders: projectData.job?.changeOrders?.length || 0,
+      // Client: badges only for actionable items (undecided change orders, requests waiting, money owed).
+      changeOrdersPending: (projectData.job?.changeOrders || []).filter((order) => order.status === "draft" || order.status === "pending_approval").length,
       jobNumber: projectData.job?.number,
       requests: projectData.jobRequests,
+      requestsUnseen: projectData.jobRequests.pending > seenPendingRequests,
+      invoicesDue:
+        linkedInvoice && linkedInvoice.status !== "paid" && linkedInvoice.status !== "cancelled" && Number(linkedInvoice.balanceDue ?? linkedInvoice.balance ?? 0) > 0
+          ? 1
+          : 0,
       schedule: projectData.schedule.length,
       invoices: (linkedInvoice ? 1 : 0) + (projectData.job?.changeOrders || []).filter((order) => order.billingInvoiceId).length,
       files: projectFiles({
@@ -2215,8 +2298,22 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
     ...(opportunity.title || opportunity.description ? [{ id: "request", label: "Work request", icon: FileText }] : []),
     { id: "prep", label: "Preparation", icon: Route, meta: opportunity.prepChoice ? undefined : "Choose" },
     // Follow-up is a small form at the bottom of the sidebar (client: not a page of its own).
-    ...(activityTimeline.length ? [{ id: "activity", label: "Activity", icon: History, meta: String(activityTimeline.length) }] : []),
+    // No count badge: a static number of log entries isn't something to act on (client).
+    ...(activityTimeline.length ? [{ id: "activity", label: "Activity", icon: History }] : []),
+    // Client: quick way to the Notes & updates card at the bottom of Summary (opens Summary and scrolls).
+    ...(estimate?.id ? [{ id: NOTES_VIEW, label: "Notes & updates", icon: MessageSquareText }] : []),
   ];
+  /** Sidebar clicks: "Notes & updates" is a place on Summary, not a page of its own. */
+  function openView(next: string) {
+    if (next !== NOTES_VIEW) {
+      setView(next);
+      return;
+    }
+    setView("estimate");
+    window.setTimeout(() => {
+      notesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  }
   const listedViews = new Set([...navGroups.flatMap((group) => group.items.map((item) => item.id)), ...detailTabs.map((tab) => tab.id)]);
   const centreView =
     view === "auto"
@@ -2244,12 +2341,12 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
               customer and address are the Customer tab. */}
           <ProjectLifecycleNav
             header={
-              <div className="flex items-start gap-2">
+              <div className={cn("flex gap-2", hasIdentityBadge ? "items-start" : "items-center")}>
                 <Link
                   href="/pro/dashboard/new-estimate"
                   aria-label="Back to all estimates"
                   title="Back to all estimates"
-                  className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:border-border"
+                  className={cn("flex size-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:border-border", hasIdentityBadge && "mt-0.5")}
                 >
                   <ArrowLeft className="size-3.5" />
                 </Link>
@@ -2257,13 +2354,14 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                   <p className="text-[14px] leading-snug font-semibold tracking-tight text-slate-900 dark:text-foreground">
                     {estimate?.number || opportunity.number} · {opportunity.title}
                   </p>
-                  <div className="mt-1 flex flex-wrap items-center gap-1.5">{identityBadge}</div>
+                  {/* No empty badge row (signed estimates show their status in the banner), so the title centres on the back button. */}
+                  {hasIdentityBadge ? <div className="mt-1 flex flex-wrap items-center gap-1.5">{identityBadge}</div> : null}
                 </div>
               </div>
             }
             groups={navGroups}
             view={centreView}
-            onView={setView}
+            onView={openView}
             details={detailTabs}
             footer={
               showFollowUp ? (
@@ -2300,8 +2398,33 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         {/* Main column */}
         <section className="min-w-0 space-y-4">
           {/* Client: the accepted / converted banner heads every tab. */}
-          <ApprovalStatus estimate={estimate} jobNumber={projectData.job?.number} />
-          {/* Only on the Estimate tab (before the estimate card exists); other tabs carry their own actions. */}
+          <ApprovalStatus
+            estimate={estimate}
+            jobNumber={projectData.job?.number}
+            opportunity={opportunity}
+            // Client: Assign contractor / technician and Print sit in the status bar (were a loose row of buttons).
+            actions={
+              // Whenever the estimate card has no header of its own (no estimate yet, or a prep panel is open).
+              centreView === "estimate" && (!showEstimateSection || !estimate?.id) ? (
+                <>
+                  {crewLocked ? null : (
+                    <>
+                      <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white/80" onClick={() => setCrewMode("contractor")}>
+                        <Handshake className="size-3.5 text-primary" />
+                        {contractorId ? "Change contractor" : "Assign contractor"}
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white/80" onClick={() => setCrewMode("technician")}>
+                        <HardHat className="size-3.5 text-primary" />
+                        {technicianId ? "Change technician" : "Assign technician"}
+                      </Button>
+                    </>
+                  )}
+                  {printButton}
+                </>
+              ) : null
+            }
+          />
+          {/* Old loose button row, now in the status bar above (client).
           {!showEstimateSection && centreView === "estimate" ? (
             <div className="flex flex-wrap items-center justify-end gap-2">
               {crewLocked ? null : (
@@ -2318,7 +2441,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
               )}
               {printButton}
             </div>
-          ) : null}
+          ) : null} */}
           {(estimate?.changeRequests?.length || estimate?.customerUpdates?.length) ? (
             <div>
               <ChangeRequestsRail
@@ -2668,7 +2791,17 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     <h2 className="text-lg font-semibold tracking-tight text-slate-900">
                       Estimate{estimate?.number ? ` · ${estimate.number}` : ""}
                     </h2>
-                    {estimate?.status ? (
+                    {estimate?.status === "converted_to_job" && (estimate.jobId || projectData.job?.id) ? (
+                      // Client: stands out from helper text and opens the job.
+                      <Link
+                        href={`/pro/dashboard/jobs/${estimate.jobId || projectData.job?.id}`}
+                        className="mt-0.5 inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline"
+                      >
+                        {estimateStatusLabel(estimate.status)}
+                        {projectData.job?.number ? ` · ${projectData.job.number}` : ""}
+                        <ExternalLink className="size-3.5" aria-hidden />
+                      </Link>
+                    ) : estimate?.status ? (
                       <p className="mt-0.5 text-sm text-slate-500">
                         {estimateStatusLabel(estimate.status)}
                         {estimate.status === "converted_to_job" && projectData.job?.number ? ` · ${projectData.job.number}` : ""}
@@ -2791,6 +2924,13 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                         </Button>
                       </>
                     )}
+                    {/* Client: jump to the Notes & updates card at the bottom of Summary. */}
+                    {estimate?.id ? (
+                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openView(NOTES_VIEW)}>
+                        <MessageSquareText className="size-4" />
+                        Notes &amp; updates
+                      </Button>
+                    ) : null}
                     {/* Client: Print is in More; New estimate only in the app sidebar (Estimate → Create estimate). */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -2883,6 +3023,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                             stages={estimate.stages || []}
                             sections={lineSections}
                             onSaved={(stages) => setEstimate((current) => (current ? { ...current, stages } : current))}
+                            attention
                           />
                         ) : null
                       }
@@ -3119,7 +3260,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           })()}
           {estimate?.id && !partsView ? (
             <>
-              <div className={MAIN_CARD}>
+              <div ref={notesSectionRef} className={cn(MAIN_CARD, "scroll-mt-20")}>
                 <h3 className="text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase">
                   Notes &amp; updates
                 </h3>

@@ -146,7 +146,7 @@ export function LineItemsEditor({
     onChange(lines.filter((line) => line.id !== id));
   }
 
-  const colSpan = (showUnit ? 7 : 6) - (showPricing ? 0 : 2) + (sheet ? 3 : 0);
+  const colSpan = (showUnit ? 7 : 6) - (showPricing ? 0 : 2) + (sheet ? 2 : 0);
   const cols = colWidths(wideDescription);
 
   return (
@@ -234,6 +234,7 @@ export function LineItemsEditor({
                 </TableHead>
               </>
             ) : null}
+            {/* Client: no Optional toggle column (clutter). Each row has a small "Mark optional" link instead.
             {sheet ? (
               <TableHead
                 className="h-8 w-17 bg-[#f7f8fa] px-0.5 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
@@ -241,7 +242,7 @@ export function LineItemsEditor({
               >
                 Optional
               </TableHead>
-            ) : null}
+            ) : null} */}
             <TableHead className={cn("h-8 bg-[#f7f8fa]", cols.remove)}>
               <span className="sr-only">Remove</span>
             </TableHead>
@@ -374,6 +375,31 @@ function LineItemRow({
     onChange(line.id, hasCost ? { unitPrice, profitPercent: profitFromPrice(line.unitCost, unitPrice) } : { unitPrice });
   }
 
+  // Optional add-on / alternative: a small link under the description (was its own toggle column).
+  const optionalControl =
+    spreadsheet && (!locked || line.optional) ? (
+      <span className="inline-flex items-center gap-1.5 text-[11px]">
+        {line.optional ? (
+          <span
+            className="rounded-full bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-200"
+            title="Shown to the customer, not in the total"
+          >
+            Optional · not in total
+          </span>
+        ) : null}
+        {!locked ? (
+          <button
+            type="button"
+            className="font-medium text-slate-500 hover:text-primary hover:underline"
+            title={line.optional ? "Include this item in the total" : "Optional add-on or alternative: shown to the customer, not in the total"}
+            onClick={() => onChange(line.id, line.optional ? { optional: false, optionGroup: "" } : { optional: true })}
+          >
+            {line.optional ? "Include in total" : "Mark optional"}
+          </button>
+        ) : null}
+      </span>
+    ) : null;
+
   return (
     <TableRow className={cn("hover:bg-transparent", spreadsheet && line.optional && "bg-amber-50/60 dark:bg-amber-500/5")}>
       <TableCell className="min-w-0 whitespace-normal align-top py-2">
@@ -436,6 +462,7 @@ function LineItemRow({
               className={cn(softField, "h-7 w-full min-w-0 text-xs")}
             />
           ) : null}
+          {!showImages && optionalControl ? <div className="flex items-center">{optionalControl}</div> : null}
           {showImages ? (
             <>
               <div className="flex flex-wrap items-center gap-1">
@@ -465,6 +492,7 @@ function LineItemRow({
                       ? "Replace image"
                       : "Add image"}
                 </Button>
+                {optionalControl}
               </div>
               <PhotoLightbox
                 photos={
@@ -681,7 +709,8 @@ function LineItemRow({
       </TableCell>
       </>
       ) : null}
-      {spreadsheet ? (
+      {/* Optional toggle column removed (client); see optionalControl under the description. */}
+      {false ? (
         <TableCell className="w-17 align-top px-0.5 py-2 text-center">
           <div className="flex h-8 items-center justify-center">
             <button

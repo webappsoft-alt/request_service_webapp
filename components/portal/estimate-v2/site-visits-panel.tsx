@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarClock,
   Check,
+  CalendarCheck,
   ChevronDown,
   ImagePlus,
   Loader2,
@@ -615,74 +616,72 @@ export function SiteVisitsPanel({
     await onBuildEstimate?.();
   }
 
+  // One-line summary of the visits (collapsed header).
+  const completedCount = sortedVisits.filter((visit) => visit.status === "completed").length;
+  const latestVisit = openVisit || sortedVisits[sortedVisits.length - 1];
+  const visitsSummary = latestVisit
+    ? [
+        `Visit #${latestVisit.sequenceNumber || sortedVisits.length}`,
+        latestVisit.visitTypeLabel,
+        String(latestVisit.status || "").replace(/_/g, " "),
+        latestVisit.scheduledAt ? formatDate(visitWallClock(latestVisit.scheduledAt, latestVisit.tzOffsetMinutes)) : "No time set",
+        completedCount ? `${completedCount} completed` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "No visits yet";
+
+  /** Client: same header as "Customer quote answers" (open and closed), toggle on the right. */
+  const visitsHeader = (open: boolean) => (
+    <div className="flex items-center gap-3 px-4 py-3">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setVisitsCollapsed(open)}
+        className="group flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      >
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <CalendarCheck className="size-4" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-baseline gap-x-2">
+            <span className="text-sm font-semibold tracking-tight text-slate-900 dark:text-foreground">Site visits</span>
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {sortedVisits.length} visit{sortedVisits.length === 1 ? "" : "s"}
+            </span>
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-slate-500 first-letter:uppercase">{visitsSummary}</span>
+        </span>
+        <span className="hidden text-xs font-semibold text-primary sm:inline">{open ? "Hide visits" : "View visits"}</span>
+        <ChevronDown className={cn("size-4 shrink-0 text-slate-500 transition-transform", open && "rotate-180")} aria-hidden />
+      </button>
+      {!open && showBuildEstimate && onBuildEstimate ? (
+        <Button size="sm" disabled={saving} onClick={() => void handleBuildEstimate()}>
+          {hasEstimate ? "View estimate" : "Build estimate"}
+        </Button>
+      ) : null}
+    </div>
+  );
+
   if (visitsCollapsed) {
-    const completedCount = sortedVisits.filter((visit) => visit.status === "completed").length;
     return (
-      <div className="space-y-4">
-        <div className="rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              aria-expanded={false}
-              onClick={() => setVisitsCollapsed(false)}
-              className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-            >
-              <span
-                className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-[#94a3b8] bg-[#f1f5f9] text-slate-700 transition-colors group-hover:border-slate-400 group-hover:bg-slate-200"
-                aria-hidden="true"
-              >
-                <ChevronDown className="size-4 -rotate-90 stroke-[2.5]" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold tracking-tight text-slate-900">
-                  Site visits
-                </p>
-                <p className="text-xs text-slate-500">
-                  {sortedVisits.length
-                    ? `${sortedVisits.length} visit${sortedVisits.length === 1 ? "" : "s"}${
-                        completedCount ? ` · ${completedCount} completed` : ""
-                      } — expand to manage`
-                    : "No visits yet — expand to schedule"}
-                </p>
-              </div>
-            </button>
-            {showBuildEstimate && onBuildEstimate ? (
-              <Button
-                size="sm"
-                disabled={saving}
-                onClick={() => {
-                  void handleBuildEstimate();
-                }}
-              >
-                {hasEstimate ? "View estimate" : "Build estimate"}
-              </Button>
-            ) : null}
-          </div>
-        </div>
+      <div className="overflow-hidden rounded-2xl border border-[#94a3b8] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:bg-[#fafbfd] dark:border-border dark:bg-card">
+        {visitsHeader(false)}
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <div className="overflow-hidden rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        {visitsHeader(true)}
+        <div className="border-t border-slate-200 p-5 dark:border-border-soft">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight text-slate-900">Site visits</h2>
-            <p className="mt-1 max-w-xl text-sm leading-relaxed text-slate-500">
-              One estimate can have many visits. Reschedule changes the same appointment;
-              follow-up creates a new visit.
-            </p>
-          </div>
+          <p className="max-w-xl text-sm leading-relaxed text-slate-500">
+            One estimate can have many visits. Reschedule changes the same appointment; follow-up creates a new visit.
+          </p>
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={saving}
-              onClick={() => setVisitsCollapsed(true)}
-            >
-              Collapse
-            </Button>
+            {/* "Collapse" button replaced by the Hide visits toggle in the header (client). */}
             <Button
               size="sm"
               disabled={saving || Boolean(openVisit)}
@@ -783,6 +782,7 @@ export function SiteVisitsPanel({
             known details.
           </p>
         )}
+        </div>
       </div>
 
       {selected ? (

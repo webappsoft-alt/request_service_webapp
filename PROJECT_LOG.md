@@ -67,6 +67,66 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-12
 
+- **Pro dashboard: animated "Upgrade to Premium" button** — client.
+  - A soft gold shine sweeps across the button every 3.2s and the crown (now gold-filled) gives a small wiggle; both
+    are faster on hover. Off for prefers-reduced-motion.
+  - CSS only: `.premium-cta` / `.premium-cta-crown` with keyframes `premium-shine` / `premium-crown` in
+    `app/globals.css`. Layout is unchanged.
+  - Checks: eslint clean; Chrome with mocked APIs 39/39 (adds a check that both animations run).
+  - Files: `app/globals.css`, `components/portal/premium-profile-card.tsx`.
+
+- **Pro dashboard Premium shortcut: compact, light card** — client feedback ("too big, dark colour").
+  - Replaced the large navy banner with a one-row white card in the dashboard card style: thin gold left accent, a small
+    crown chip, the title "Be the first Pro customers see in your area" with a price pill, one short line, and an outline
+    "Upgrade to Premium" button.
+  - About 60px tall on desktop (was ~170px).
+  - The Premium status strip uses the same white style ("Your business is Premium", Complimentary/Active, Manage Premium).
+  - Checks: tsc + eslint clean; Chrome with mocked APIs 38/38.
+  - Files: `components/portal/premium-profile-card.tsx`.
+
+- **Premium: dashboard shortcut, selling line, exact cancel warning, complimentary Premium** — client.
+  - Pro dashboard: new `PremiumDashboardShortcut` under the action alerts.
+    - Not Premium: a navy / gold promo ("Get to the top of local searches — before every standard listing.") with the
+      price and an "Upgrade to Premium" link to `/pro/dashboard/settings#premium`.
+    - Premium: a gold status strip ("Your business is Premium", renews / ends date, Manage Premium).
+    - Hidden while loading or when the admin has Premium switched off.
+  - Premium card: the "Be the first business customers see" selling line for Pros who haven't upgraded, plus an
+    `id="premium"` anchor.
+  - Cancel modal shows the client's exact warning: "No refund will be issued, and you will retain your Premium
+    features until the end of your current billing period."
+  - Complimentary Premium (given by an admin): "Complimentary" badge, a note that nothing is charged, no cancel / resume
+    buttons, and history rows "Given free · Free".
+  - Checks: tsc clean; eslint clean on the changed files. Chrome with all APIs mocked, 38/38 (adds the dashboard promo
+    and status, the exact cancel text and the complimentary state).
+  - Files: `components/portal/premium-profile-card.tsx`, `components/portal/views/dashboard-view.tsx`,
+    `store/providerPremiumSlice.ts`.
+
+- **Premium Business Profile (Pro upgrade + badges)** — client.
+  - Business Profile (/pro/dashboard/settings): a new `PremiumProfileCard` sits above the wallet card. It shows:
+    - the admin price per period, benefits, the wallet balance, and an "Upgrade to Premium" confirm dialog (price,
+      balance before and after; API errors shown inline; disabled with a note when the wallet can't cover it);
+    - once Premium: active-until date, auto-renew, paid so far, and Cancel (optional reason; kept until the period
+      ends) or Resume auto-renew;
+    - the last 5 Premium payments.
+  - A Premium badge sits next to the company name.
+  - Wallet card: new money-out row "Premium Business Profile". The wallet refetches fresh after any Premium action.
+  - Customer side: `PremiumBadge` (`components/shared/premium-badge.tsx`) on all three `ProviderCard` layouts (on the
+    photo for photo cards) and beside the name on the public profile. Pros arrive premium-first from the API; the order
+    is kept.
+  - Data: `PublicProfessional` / `Provider` add `isPremium` + `premiumExpiresAt` (mapped from `isPremium` /
+    `premium.expiresAt`). New `store/providerPremiumSlice.ts` and `providerCrmApi.premium*` routes; the wallet slice
+    adds `premiumFees` / `platformFees`.
+  - Checks: tsc clean; eslint clean on the changed files apart from the existing `provider-profile.tsx:91` errors.
+    Chrome with all APIs mocked, 29/29: badges, premium-first order, the upgrade error and success paths, cancel with
+    reason, resume, low balance, phone width. The Pro session came from the login form against a mocked API; .env was
+    not read.
+  - Files: `components/portal/premium-profile-card.tsx` (new), `components/shared/premium-badge.tsx` (new),
+    `store/providerPremiumSlice.ts` (new), `store/index.ts`, `store/providerWalletSlice.ts`,
+    `store/publicProfessionalsSlice.ts`, `lib/types/index.ts`, `components/api/ApiRoutesFile.ts`,
+    `components/portal/views/business-profile-detail-view.tsx`, `components/portal/wallet-balance-card.tsx`,
+    `components/shared/provider-card.tsx`, `components/marketplace/provider-profile.tsx`,
+    `components/marketplace/public-professional-detail.tsx`.
+
 - **Invoices show "Awaiting confirmation", not "Paid", until the Pro confirms; review card on the invoice page** — client.
   - New `components/portal/payment-review.tsx`:
     - `invoiceDisplayStatus()`: "Awaiting confirmation" (amber) while an invoice has unconfirmed customer-entered money.

@@ -36,6 +36,8 @@ import {
 } from "@/store/serviceAreasSlice";
 import { ProfileSetupChips, ProfileSetupSummary } from "@/components/portal/profile-setup-chips";
 import { WalletBalanceCard } from "@/components/portal/wallet-balance-card";
+import { PremiumProfileCard, useProviderPremium } from "@/components/portal/premium-profile-card";
+import { PremiumBadge } from "@/components/shared/premium-badge";
 import {
   getProfileSetupItems,
   profileSetupProgress,
@@ -78,6 +80,8 @@ export function BusinessProfileDetailView() {
   const listItems = useAppSelector((state) => state.serviceAreas?.items ?? []);
   const { provider } = usePortalWorkspace();
   const { officeHours } = usePortalSettings();
+  // Premium badge in the header (the Premium card below loads it).
+  const isPremium = Boolean(useProviderPremium().data?.isPremium);
 
   useEffect(() => {
     void dispatch(fetchServiceAreasPicker());
@@ -226,8 +230,9 @@ export function BusinessProfileDetailView() {
                   <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
                     Business profile
                   </p>
-                  <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
+                  <h2 className="mt-1 flex flex-wrap items-center gap-2 text-xl font-semibold tracking-tight text-foreground">
                     {provider.companyName || "Your company"}
+                    {isPremium ? <PremiumBadge size="xs" /> : null}
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {displayName}
@@ -381,6 +386,8 @@ export function BusinessProfileDetailView() {
 
         <div className="flex min-w-0 flex-col gap-4 lg:col-span-5">
           {/* Client: read-only wallet balance (collected − payouts − expenses), calculated by the API. */}
+          {/* Client: Premium Business Profile — top of city / state searches, paid from the wallet. */}
+          <PremiumProfileCard />
           <WalletBalanceCard />
           <Card className={softCardClass}>
             <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">

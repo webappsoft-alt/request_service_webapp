@@ -94,6 +94,8 @@ export function WalletBalanceCard({ className }: { className?: string }) {
               <Row label="Paid to technicians" value={data.technicianPayouts} />
               <Row label="Paid to contractors" value={data.contractorPayouts} />
               <Row label="Expenses" value={data.expenses} />
+              {/* Premium Business Profile is paid from the wallet. */}
+              <Row label="Premium Business Profile" value={data.premiumFees} />
               <div className="mt-2 border-t border-border-soft pt-1">
                 <Row label="Wallet balance (money in − money out)" value={data.balance} strong />
               </div>
@@ -108,7 +110,7 @@ export function WalletBalanceCard({ className }: { className?: string }) {
               </p>
             ) : null}
             <p className="mt-3 text-xs text-slate-400">
-              Calculated automatically from confirmed invoice payments and payouts. It can&apos;t be edited.
+              Calculated automatically from confirmed invoice payments, payouts and Premium payments. It can&apos;t be edited.
             </p>
           </>
         )}

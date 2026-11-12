@@ -110,6 +110,9 @@ export type PublicProfessional = {
     startingPrice: number;
     startingPriceDisplay: string;
   };
+  /** Premium Business Profile (listed first in city / state searches, shows the badge). */
+  isPremium: boolean;
+  premiumExpiresAt: string | null;
   businessGallery?: BusinessGalleryImage[];
   description?: string;
   phone?: string;
@@ -597,6 +600,11 @@ export function normalizePublicProfessional(
           ? offerings.startingPriceDisplay
           : "",
     },
+    isPremium: Boolean(record.isPremium ?? asRecord(record.premium)?.isPremium),
+    premiumExpiresAt:
+      typeof asRecord(record.premium)?.expiresAt === "string"
+        ? (asRecord(record.premium)?.expiresAt as string)
+        : null,
     createdAt:
       typeof record.createdAt === "string" ? record.createdAt : undefined,
     updatedAt:
@@ -1007,6 +1015,8 @@ export function publicProfessionalToProvider(
         )
       : [],
     reviews: professional.reviews ?? [],
+    isPremium: professional.isPremium,
+    premiumExpiresAt: professional.premiumExpiresAt ?? undefined,
     contact: professional.fullName.trim()
       ? {
           name: professional.fullName.trim(),

@@ -49,6 +49,7 @@ import paymentsReducer from "./paymentsSlice";
 import requestsReducer from "./requestsSlice";
 import reportsReducer from "./reportsSlice";
 import providerWalletReducer from "./providerWalletSlice";
+import providerPremiumReducer from "./providerPremiumSlice";
 import dashboardReducer from "./dashboardSlice";
 import pipelineReducer from "./pipelineSlice";
 import technicianReducer from "./technicianSlice";
@@ -115,6 +116,7 @@ const rootReducer = combineReducers({
   requests: requestsReducer,
   reports: reportsReducer,
   providerWallet: providerWalletReducer,
+  providerPremium: providerPremiumReducer,
   dashboard: dashboardReducer,
   pipeline: pipelineReducer,
   technician: technicianReducer,

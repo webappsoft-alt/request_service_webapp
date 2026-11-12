@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, MapPin, ShieldCheck, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { PremiumBadge } from "@/components/shared/premium-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CredentialMark, credentialLabel } from "@/components/shared/credential-mark";
@@ -251,8 +252,9 @@ export function ProviderCard({
         <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-stretch sm:gap-6">
           <div className="flex min-w-0 flex-1 flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <h3 className="text-xl leading-snug font-semibold tracking-tight">
+              <h3 className="flex flex-wrap items-center gap-2 text-xl leading-snug font-semibold tracking-tight">
                 {provider.companyName}
+                {provider.isPremium ? <PremiumBadge size="xs" /> : null}
               </h3>
               {contactName ? (
                 <p className="text-sm text-muted-foreground">
@@ -335,6 +337,9 @@ export function ProviderCard({
             style={{ objectFit: "cover" }}
             unoptimized={!canOptimizeImage(coverImage)}
           />
+          {provider.isPremium ? (
+            <PremiumBadge tone="solid" size="xs" className="absolute top-2.5 left-2.5 z-10" />
+          ) : null}
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-2 px-0.5">
@@ -512,6 +517,7 @@ export function ProviderCard({
             >
               <span className="line-clamp-2 break-words">{provider.companyName}</span>
             </h3>
+            {provider.isPremium ? <PremiumBadge size="xs" className="self-start" /> : null}
             <ProviderCardLocation
               city={provider.city}
               state={provider.state}

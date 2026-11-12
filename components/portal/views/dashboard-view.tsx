@@ -28,6 +28,7 @@ import {
 import { CreateJobDialog, CreateLeadDialog } from "@/components/portal/create-work-dialogs";
 import { CreateTaskDialog } from "@/components/portal/create-person-dialogs";
 import { PortalPage } from "@/components/portal/portal-page";
+import { PremiumDashboardShortcut } from "@/components/portal/premium-profile-card";
 import { LiveTeamMap } from "@/components/tracking/live-team-map";
 import { ProfileSetupChips, ProfileSetupSummary } from "@/components/portal/profile-setup-chips";
 import { getProfileSetupItems, profileSetupProgress } from "@/lib/business-profile-setup";
@@ -285,6 +286,8 @@ export function DashboardView() {
     >
       <div className={cn("flex flex-col gap-3", showLoading && "opacity-60")}>
         <DashboardActionAlerts />
+        {/* Client: Premium shortcut — status for Premium Pros, upgrade prompt for everyone else. */}
+        <PremiumDashboardShortcut />
 
         {setup.percent < 100 ? (
           <Card className="border-input/80 bg-primary/[0.03] shadow-[0_1px_2px_rgba(15,23,42,0.04)]">

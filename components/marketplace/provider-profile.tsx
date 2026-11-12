@@ -40,6 +40,7 @@ import { formatHoursValue, formatLocation, formatWorkingDay, getTodayWeekday } f
 import { formatPaymentMethodsLabel } from "@/lib/provider-preferences";
 import { servicesForProviderHref } from "@/lib/search";
 import { cn } from "@/lib/utils";
+import { PremiumBadge } from "@/components/shared/premium-badge";
 import type { Provider, ProviderProject, ServiceCategory } from "@/lib/types";
 
 export type ProviderCoverageAreaLink = {
@@ -180,6 +181,7 @@ export function ProviderProfile({
                 <div className="min-w-0 flex-1">
                   <h1 className="text-3xl font-semibold md:text-4xl">{provider.companyName}</h1>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
+                    {provider.isPremium ? <PremiumBadge size="md" /> : null}
                     <Rating value={provider.rating} count={provider.reviewCount} size="md" />
                     <CredentialMark licensed={provider.licensed} insured={provider.insured} />
                     <span className="text-sm text-muted-foreground">

@@ -269,6 +269,14 @@ export const providerCrmApi = {
   reports: "provider/reports",
   /** GET read-only wallet balance: collected − technician / contractor payouts − expenses */
   wallet: "provider/wallet",
+  /** GET Premium Business Profile status (price, expiry, wallet balance, recent charges) */
+  premium: "provider/premium",
+  /** POST upgrade to Premium — paid from the wallet ({ expectedPrice }) */
+  premiumSubscribe: "provider/premium/subscribe",
+  /** POST cancel Premium (auto-renew off; stays until the period ends) */
+  premiumCancel: "provider/premium/cancel",
+  /** POST turn Premium auto-renew back on */
+  premiumResume: "provider/premium/resume",
   /** GET Main / Sales / Service dashboard aggregates */
   dashboard: "provider/dashboard",
   /** GET pipeline board (leads → estimates → booked → in-progress → invoices) */

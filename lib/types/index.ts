@@ -654,6 +654,9 @@ export interface Provider {
   paymentMethods?: string[];
   reviews: Review[];
   featured?: boolean;
+  /** Premium Business Profile: listed first in city / state searches and shows the Premium badge. */
+  isPremium?: boolean;
+  premiumExpiresAt?: string;
 }
 
 export interface ProviderProject {

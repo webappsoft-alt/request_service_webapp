@@ -20,6 +20,11 @@ export type ProviderWallet = {
   payoutsCount: number;
   expenses: number;
   paidOut: number;
+  /** Premium Business Profile charges paid from the wallet. */
+  premiumFees: number;
+  premiumChargesCount: number;
+  /** All platform fees (Premium for now) — in the balance, kept apart from payouts. */
+  platformFees: number;
   currency: string;
   asOf: string;
 };
@@ -57,6 +62,9 @@ function parseWallet(response: unknown): ProviderWallet {
     payoutsCount: toNumber(raw.payoutsCount),
     expenses: toNumber(raw.expenses),
     paidOut: toNumber(raw.paidOut),
+    premiumFees: toNumber(raw.premiumFees),
+    premiumChargesCount: toNumber(raw.premiumChargesCount),
+    platformFees: toNumber(raw.platformFees),
     currency: typeof raw.currency === "string" ? raw.currency : "USD",
     asOf: typeof raw.asOf === "string" ? raw.asOf : new Date().toISOString(),
   };
@@ -69,9 +77,12 @@ export const fetchProviderWallet = createAsyncThunk<
   { state: { providerWallet: ProviderWalletState }; rejectValue: string }
 >(
   "providerWallet/fetch",
-  async (_arg, { rejectWithValue }) => {
+  async (arg, { rejectWithValue }) => {
     try {
-      return parseWallet(await getData(providerCrmApi.wallet, undefined, { silent: true }));
+      // `force` also skips the short GET reuse cache (money just changed, e.g. a Premium charge).
+      return parseWallet(
+        await getData(providerCrmApi.wallet, undefined, { silent: true, force: Boolean(arg?.force) }),
+      );
     } catch (error) {
       return rejectWithValue(extractErrorMessage(error));
     }

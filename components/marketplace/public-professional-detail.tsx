@@ -368,6 +368,8 @@ function stashRelatedProfessional(related: Provider): PublicProfessional {
     companyName: related.companyName,
     slug: related.slug,
     avatarUrl: related.logoUrl || "",
+    isPremium: Boolean(related.isPremium),
+    premiumExpiresAt: related.premiumExpiresAt ?? null,
     businessGallery: related.coverImage
       ? [{ url: related.coverImage, isBanner: true, sortOrder: 0 }]
       : undefined,

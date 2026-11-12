@@ -464,6 +464,8 @@ export interface Invoice {
   tax: number;
   total: number;
   amountPaid: number;
+  /** Customer-entered payments on this invoice still waiting for the Pro's confirmation. */
+  awaitingConfirmation?: number;
   balanceDue: number;
   /** Alias some API payloads use for remaining balance. */
   balance?: number;

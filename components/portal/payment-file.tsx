@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { PortalCustomerCrm } from "@/lib/data/crm-people";
 import {
-  invoiceStatusLabel,
   paymentKind,
   paymentKindLabel,
   paymentMethodLabel,
@@ -15,6 +14,7 @@ import {
 } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
 import type { Invoice, Job, Payment } from "@/lib/types";
+import { invoiceDisplayStatus } from "@/components/portal/payment-review";
 
 export function PaymentFileChrome({
   payment,
@@ -279,8 +279,8 @@ export function PaymentSummaryTab({
                   label="Invoice status"
                   value={
                     <StatusDot
-                      label={invoiceStatusLabel(invoice.status)}
-                      tone={moneyTone(invoice.status)}
+                      label={invoiceDisplayStatus(invoice).label}
+                      tone={invoiceDisplayStatus(invoice).tone}
                     />
                   }
                 />

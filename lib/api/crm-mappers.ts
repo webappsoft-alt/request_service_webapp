@@ -1835,6 +1835,7 @@ export function mapInvoice(raw: unknown): Invoice | null {
     total: numberValue(record.total),
     amountPaid: numberValue(record.amountPaid),
     balanceDue: numberValue(record.balanceDue, Math.max(0, numberValue(record.total) - numberValue(record.amountPaid))),
+    awaitingConfirmation: numberValue(record.awaitingConfirmation) || undefined,
     items: mapInvoiceItems(id, record.items),
     address,
     notes: trimmed(record.notes) || undefined,

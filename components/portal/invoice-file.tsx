@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { StatusDot, StatusPill, moneyTone } from "@/components/portal/status-pill";
+import { StatusDot, StatusPill } from "@/components/portal/status-pill";
 import { LocalFilterTabs } from "@/components/portal/local-filter-tabs";
 import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-select";
 import { CreateCustomerDialog } from "@/components/portal/create-person-dialogs";
@@ -58,6 +58,7 @@ import { selectAuth, selectAuthUser } from "@/store/authSlice";
 import { recordInvoicePaymentRecord } from "@/store/invoicesSlice";
 import { updateInvoice } from "@/lib/api/crm-client";
 import { syncCalendarAssignment } from "@/lib/portal-schedule-sync";
+import { invoiceDisplayStatus } from "@/components/portal/payment-review";
 
 const PAYMENT_METHODS: PaymentMethodType[] = ["card", "ach", "check", "cash"];
 
@@ -606,7 +607,7 @@ export function InvoiceSummaryTab({
           <span className="text-muted-foreground">Status:</span>
           <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
             <span className="size-2 shrink-0 rounded-full bg-primary" aria-hidden />
-            {invoiceStatusLabel(invoice.status)}
+            {invoiceDisplayStatus(invoice).label}
           </span>
         </span>
       </div>
@@ -620,7 +621,7 @@ export function InvoiceSummaryTab({
             {invoice.number}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {invoiceStatusLabel(invoice.status)} · {kind}
+            {invoiceDisplayStatus(invoice).label} · {kind}
             {overdueDays ? ` · ${overdueDays} days overdue` : ""}
           </p>
         </div>
@@ -715,7 +716,7 @@ export function InvoiceSummaryTab({
             <Detail label="Invoice type" value={kind} />
             <Detail
               label="Status"
-              value={<StatusDot label={invoiceStatusLabel(invoice.status)} tone={moneyTone(invoice.status)} />}
+              value={<StatusDot label={invoiceDisplayStatus(invoice).label} tone={invoiceDisplayStatus(invoice).tone} />}
             />
             <Detail label="Date issued" value={formatDate(invoice.issuedAt)} />
             <Detail label="Due date" value={invoice.dueAt ? formatDate(invoice.dueAt) : "—"} />

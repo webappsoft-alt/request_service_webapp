@@ -3,17 +3,17 @@
 import Link from "next/link";
 import { LocationCell, locationText, type AddressLike } from "@/components/portal/location-cell";
 import type { PortalTableColumn } from "@/components/portal/portal-data-table";
-import { StatusDot, moneyTone } from "@/components/portal/status-pill";
+import { StatusDot } from "@/components/portal/status-pill";
 import {
   invoiceDaysOverdue,
   invoiceKind,
   invoiceKindLabel,
-  invoiceStatusLabel,
   jobServiceLabel,
   type PortalRequest,
 } from "@/lib/data/portal";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { Estimate, Invoice, Job } from "@/lib/types";
+import { invoiceDisplayStatus } from "@/components/portal/payment-review";
 
 export function invoiceBoardColumns({
   jobs,
@@ -86,9 +86,10 @@ export function invoiceBoardColumns({
       id: "status",
       header: "Status",
       sortValue: (row) => row.status,
-      searchValue: (row) => invoiceStatusLabel(row.status),
-      exportValue: (row) => invoiceStatusLabel(row.status),
-      cell: (row) => <StatusDot label={invoiceStatusLabel(row.status)} tone={moneyTone(row.status)} />,
+      // "Awaiting confirmation" while a customer-entered payment isn't confirmed (not "Paid").
+      searchValue: (row) => invoiceDisplayStatus(row).label,
+      exportValue: (row) => invoiceDisplayStatus(row).label,
+      cell: (row) => <StatusDot label={invoiceDisplayStatus(row).label} tone={invoiceDisplayStatus(row).tone} />,
     },
     {
       id: "due",

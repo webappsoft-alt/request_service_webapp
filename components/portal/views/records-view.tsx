@@ -2001,7 +2001,10 @@ export function PaymentsView() {
   const [archiveTarget, setArchiveTarget] = useState<(typeof payments)[number] | null>(null);
   const [archiving, setArchiving] = useState(false);
   // Pro review of customer-entered payments ("Not received" asks first — it reverses the invoice).
-  const [rejectTarget, setRejectTarget] = useState<(typeof payments)[number] | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<{
+    row: (typeof payments)[number];
+    decision: "confirm" | "reject";
+  } | null>(null);
   const [reviewing, setReviewing] = useState(false);
   async function reviewPayment(row: (typeof payments)[number], decision: "confirm" | "reject") {
     setReviewing(true);
@@ -2015,7 +2018,7 @@ export function PaymentsView() {
           ? `${paymentNumber(row)} confirmed — added to your wallet balance.`
           : `${paymentNumber(row)} marked not received and taken off the invoice.`,
       );
-      setRejectTarget(null);
+      setReviewTarget(null);
     } catch (err) {
       toast.error(typeof err === "string" ? err : "Could not update this payment.");
     } finally {
@@ -2320,8 +2323,8 @@ export function PaymentsView() {
               : []),
             ...(useApi && row.confirmationStatus === "pending"
               ? [
-                  { label: "Confirm received", onSelect: () => void reviewPayment(row, "confirm") },
-                  { label: "Not received", onSelect: () => setRejectTarget(row) },
+                  { label: "Confirm received", onSelect: () => setReviewTarget({ row, decision: "confirm" }) },
+                  { label: "Not received", onSelect: () => setReviewTarget({ row, decision: "reject" }) },
                 ]
               : []),
             archived
@@ -2405,21 +2408,24 @@ export function PaymentsView() {
         }}
       />
       <DeleteConfirmDialog
-        open={Boolean(rejectTarget)}
+        open={Boolean(reviewTarget)}
         onOpenChange={(next) => {
-          if (!next && !reviewing) setRejectTarget(null);
+          if (!next && !reviewing) setReviewTarget(null);
         }}
-        title="Payment not received?"
+        tone={reviewTarget?.decision === "confirm" ? "primary" : "danger"}
+        title={reviewTarget?.decision === "confirm" ? "Confirm payment received?" : "Payment not received?"}
         description={
-          rejectTarget
-            ? `${paymentNumber(rejectTarget)} was entered by the customer. Marking it not received takes it off the invoice, so the balance is due again. It never counted in your wallet.`
-            : ""
+          !reviewTarget
+            ? ""
+            : reviewTarget.decision === "confirm"
+              ? `Confirm you received ${formatMoney(reviewTarget.row.amount)} for ${paymentNumber(reviewTarget.row)}? It will be added to your wallet balance. This can't be undone.`
+              : `${paymentNumber(reviewTarget.row)} was entered by the customer. Marking it not received takes it off the invoice, so the balance is due again. It never counted in your wallet.`
         }
-        confirmLabel="Not received"
+        confirmLabel={reviewTarget?.decision === "confirm" ? "Confirm received" : "Not received"}
         loadingLabel="Updating…"
         loading={reviewing}
         onConfirm={() => {
-          if (rejectTarget) void reviewPayment(rejectTarget, "reject");
+          if (reviewTarget) void reviewPayment(reviewTarget.row, reviewTarget.decision);
         }}
       />
     </PortalPage>

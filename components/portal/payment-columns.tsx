@@ -97,7 +97,15 @@ export function paymentBoardColumns({
       // Customer-entered payments show "Awaiting confirmation" until the Pro reviews them.
       cell: (row) =>
         row.confirmationStatus === "pending" ? (
-          <StatusDot label="Awaiting confirmation" tone="warning" />
+          <span className="inline-flex items-center gap-2">
+            <StatusDot label="Awaiting confirmation" tone="warning" />
+            <Link
+              href={`/pro/dashboard/payments/${row.id}`}
+              className="rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+            >
+              Review
+            </Link>
+          </span>
         ) : (
           <StatusDot label={paymentStatusLabel(row.status)} tone={moneyTone(row.status)} />
         ),

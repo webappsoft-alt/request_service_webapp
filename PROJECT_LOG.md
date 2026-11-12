@@ -67,6 +67,33 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-12
 
+- **Invoices show "Awaiting confirmation", not "Paid", until the Pro confirms; review card on the invoice page** — client.
+  - New `components/portal/payment-review.tsx`:
+    - `invoiceDisplayStatus()`: "Awaiting confirmation" (amber) while an invoice has unconfirmed customer-entered money.
+    - `PaymentReviewCard`: an amber card with Confirm received / Not received per pending payment. Each action asks first, then refreshes payments, invoices and the wallet.
+  - The correct status now shows on the invoices board column, the invoice page header and summary (3 spots in `invoice-file.tsx`), and the payment page's "Invoice status".
+  - The invoice page shows the review card; the payment page uses the same card (replaces the inline copy).
+  - Files: `components/portal/payment-review.tsx` (new), `components/portal/views/record-detail-views.tsx`, `components/portal/invoice-columns.tsx`, `components/portal/invoice-file.tsx`, `components/portal/payment-file.tsx`, `lib/types/index.ts`, `lib/api/crm-mappers.ts`.
+
+- **Payment review: buttons only in the card; both actions ask first** — client feedback.
+  - Removed the duplicate Confirm received / Not received buttons from the payment page header; they stay in the amber card.
+  - Both actions open a confirmation dialog: Confirm received in green / primary, Not received in red. The Payments board row menu asks first too.
+  - `DeleteConfirmDialog` gets an optional `tone="primary"` (green icon, primary button). The default red delete style is unchanged everywhere else.
+  - Files: `components/portal/delete-confirm-dialog.tsx`, `components/portal/views/record-detail-views.tsx`, `components/portal/views/records-view.tsx`.
+
+- **Payment page: Confirm received / Not received buttons; wallet card without minus signs** — client feedback.
+  - The confirm actions were only in the Payments board row menu, so the client couldn't find them.
+  - Payment page, while a customer-entered payment is pending:
+    - an "Awaiting confirmation" pill replaces "Succeeded";
+    - **Confirm received** and **Not received** buttons sit in the header (Not received asks first);
+    - an amber banner on Summary explains it and repeats the buttons;
+    - the body shows the status as Pending.
+  - Payments board: pending rows show a **Review** button next to "Awaiting confirmation" that opens the payment.
+  - Wallet card: "− $0.02" read like negative money. The rows now sit under **Money in** / **Money out**
+    with no minus signs, and the last line reads "Wallet balance (money in − money out)".
+  - Files: `components/portal/views/record-detail-views.tsx`, `components/portal/payment-columns.tsx`,
+    `components/portal/wallet-balance-card.tsx`.
+
 - **Payments board: confirm customer-entered payments; wallet shows what's awaiting confirmation** — client.
   - The Status column shows "Awaiting confirmation" for customer-entered payments not yet reviewed.
   - Row actions:

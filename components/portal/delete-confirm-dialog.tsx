@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,6 +20,7 @@ export function DeleteConfirmDialog({
   loadingLabel = "Deleting…",
   loading = false,
   onConfirm,
+  tone = "danger",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -29,6 +30,8 @@ export function DeleteConfirmDialog({
   loadingLabel?: string;
   loading?: boolean;
   onConfirm: () => void | Promise<void>;
+  /** "primary" = a positive confirmation (green icon, primary button). Default stays the red delete style. */
+  tone?: "danger" | "primary";
 }) {
   return (
     <Dialog
@@ -41,9 +44,15 @@ export function DeleteConfirmDialog({
       <DialogContent className="max-w-md" data-lenis-prevent>
         <DialogHeader className="border-b-0 bg-transparent">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-400">
-              <AlertTriangle className="size-5" />
-            </div>
+            {tone === "primary" ? (
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                <CheckCircle2 className="size-5" />
+              </div>
+            ) : (
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-400">
+                <AlertTriangle className="size-5" />
+              </div>
+            )}
             <DialogTitle className="text-base font-semibold">{title}</DialogTitle>
           </div>
         </DialogHeader>
@@ -61,7 +70,7 @@ export function DeleteConfirmDialog({
           </Button>
           <Button
             type="button"
-            variant="destructive"
+            variant={tone === "primary" ? "default" : "destructive"}
             disabled={loading}
             onClick={() => {
               void onConfirm();

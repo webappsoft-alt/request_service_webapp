@@ -71,6 +71,7 @@ import {
   patchPaymentArchive,
   upsertPaymentItem,
 } from "@/store/paymentsSlice";
+import { PaymentReviewCard, invoiceDisplayStatus, pendingCustomerPayments } from "@/components/portal/payment-review";
 import {
   PaymentFileChrome,
   PaymentSummaryTab,
@@ -3581,6 +3582,14 @@ export function InvoiceDetailView({ id }: { id: string }) {
     Boolean(invoice.isArchived) || records.isArchived("invoice", invoice.id);
   const invoiceId = invoice.id;
   const invoiceNumber = invoice.number;
+  // Client: show "Awaiting confirmation" (not "Paid") while a customer-entered payment is unconfirmed.
+  const pendingOnInvoice = useApi ? pendingCustomerPayments(relatedPayments) : [];
+  const shownInvoice = {
+    ...invoice,
+    awaitingConfirmation: pendingOnInvoice.length
+      ? pendingOnInvoice.reduce((sum, item) => sum + item.amount, 0)
+      : invoice.awaitingConfirmation,
+  };
 
   // The invoice's saved totals, same as the Summary tab.
   const printMoney = storedInvoiceMoney(invoice);
@@ -3757,8 +3766,8 @@ export function InvoiceDetailView({ id }: { id: string }) {
       badge={
         <>
           <StatusPill
-            label={invoiceStatusLabel(invoice.status)}
-            className={invoiceStatusTone(invoice.status)}
+            label={invoiceDisplayStatus(shownInvoice).label}
+            className={invoiceDisplayStatus(shownInvoice).pillClass}
           />
           <StatusPill label={invoiceKindLabel(invoiceKind(invoice))} />
           {invoiceDaysOverdue(invoice) ? (
@@ -3864,16 +3873,25 @@ export function InvoiceDetailView({ id }: { id: string }) {
         switch (tab) {
           case "summary":
             return (
-              <InvoiceSummaryTab
-                invoice={invoice}
-                customer={customer}
-                customerLabel={customerLabel}
-                service={service}
-                job={job}
-                estimate={estimate}
-                payments={relatedPayments}
-                onPaid={handlePaymentApplied}
-              />
+              <>
+                {useApi ? (
+                  <PaymentReviewCard
+                    className="mx-5 mt-5"
+                    payments={relatedPayments}
+                    onReviewed={() => void dispatch(fetchInvoiceDetail(invoice.id))}
+                  />
+                ) : null}
+                <InvoiceSummaryTab
+                  invoice={shownInvoice}
+                  customer={customer}
+                  customerLabel={customerLabel}
+                  service={service}
+                  job={job}
+                  estimate={estimate}
+                  payments={relatedPayments}
+                  onPaid={handlePaymentApplied}
+                />
+              </>
             );
           case "materials":
             return (
@@ -4103,6 +4121,9 @@ export function PaymentDetailView({ id }: { id: string }) {
   const archived =
     Boolean(payment?.isArchived) ||
     (payment ? records.isArchived("payment", payment.id) : false);
+  // Client: a payment the customer entered waits for the Pro before it counts in the wallet.
+  const awaitingConfirmation = useApi && payment?.confirmationStatus === "pending";
+  // Confirm received / Not received: shared PaymentReviewCard (asks first, refreshes wallet + lists).
 
   async function toggleArchive() {
     if (!payment || archiving) return;
@@ -4162,10 +4183,14 @@ export function PaymentDetailView({ id }: { id: string }) {
       ]}
       badge={
         <>
-          <StatusPill
-            label={paymentStatusLabel(payment.status)}
-            className={paymentStatusTone(payment.status)}
-          />
+          {awaitingConfirmation ? (
+            <StatusPill label="Awaiting confirmation" className="bg-amber-50 text-amber-800" />
+          ) : (
+            <StatusPill
+              label={paymentStatusLabel(payment.status)}
+              className={paymentStatusTone(payment.status)}
+            />
+          )}
           <StatusPill label={paymentKindLabel(paymentKind(payment))} />
           {archived ? (
             <StatusPill label="Archived" className="bg-slate-100 text-slate-700" />
@@ -4176,6 +4201,7 @@ export function PaymentDetailView({ id }: { id: string }) {
       }
       actions={
         <>
+          {/* Confirm received / Not received live in the summary card only (client: no duplicates). */}
           {payment.invoiceId ? (
             <Button size="sm" variant="outline" className="h-8" asChild>
               <Link href={`/pro/dashboard/invoices/${payment.invoiceId}`}>
@@ -4226,14 +4252,24 @@ export function PaymentDetailView({ id }: { id: string }) {
           case "summary":
           default:
             return (
-              <PaymentSummaryTab
-                payment={payment}
-                invoice={invoice}
-                customer={customer}
-                customerLabel={customerLabel}
-                service={service}
-                job={job}
-              />
+              <>
+                {awaitingConfirmation ? (
+                  <PaymentReviewCard
+                    className="mx-5 mt-5"
+                    payments={[payment]}
+                    onReviewed={() => void dispatch(fetchPaymentDetail(payment.id))}
+                  />
+                ) : null}
+                <PaymentSummaryTab
+                  // Body shows "Pending" (not "Succeeded") until the Pro confirms.
+                  payment={awaitingConfirmation ? { ...payment, status: "pending" } : payment}
+                  invoice={invoice}
+                  customer={customer}
+                  customerLabel={customerLabel}
+                  service={service}
+                  job={job}
+                />
+              </>
             );
         }
       }}

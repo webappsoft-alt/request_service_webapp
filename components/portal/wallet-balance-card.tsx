@@ -25,14 +25,22 @@ export function insufficientBalanceText(balance: number) {
   return `Insufficient balance to complete this payout. Wallet balance: ${formatMoney(balance)}.`;
 }
 
-function Row({ label, value, negative }: { label: string; value: number; negative?: boolean }) {
+// Client: no "−" signs (read as negative money). Rows sit under "Money in" / "Money out" and the
+// balance is the total line at the bottom.
+function Row({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-1.5 text-sm">
-      <span className="text-slate-600 dark:text-muted-foreground">{label}</span>
-      <span className={cn("font-medium tabular-nums", negative && value > 0 ? "text-slate-700" : "text-slate-900 dark:text-foreground")}>
-        {negative && value > 0 ? `− ${formatMoney(value)}` : formatMoney(value)}
+    <div className={cn("flex items-center justify-between gap-3 py-1.5 text-sm", strong && "font-semibold")}>
+      <span className={strong ? "text-slate-900 dark:text-foreground" : "text-slate-600 dark:text-muted-foreground"}>
+        {label}
       </span>
+      <span className="font-medium tabular-nums text-slate-900 dark:text-foreground">{formatMoney(value)}</span>
     </div>
+  );
+}
+
+function GroupLabel({ children }: { children: string }) {
+  return (
+    <p className="pt-2 text-[11px] font-semibold tracking-[0.08em] text-slate-400 uppercase">{children}</p>
   );
 }
 
@@ -79,11 +87,16 @@ export function WalletBalanceCard({ className }: { className?: string }) {
               {formatMoney(data.balance)}
             </p>
             <p className="mt-1 text-xs text-slate-400">Available to pay your team and contractors.</p>
-            <div className="mt-4 border-t border-border-soft pt-2">
+            <div className="mt-4 border-t border-border-soft pt-1">
+              <GroupLabel>Money in</GroupLabel>
               <Row label="Collected from customers" value={data.collected} />
-              <Row label="Paid to technicians" value={data.technicianPayouts} negative />
-              <Row label="Paid to contractors" value={data.contractorPayouts} negative />
-              <Row label="Expenses" value={data.expenses} negative />
+              <GroupLabel>Money out</GroupLabel>
+              <Row label="Paid to technicians" value={data.technicianPayouts} />
+              <Row label="Paid to contractors" value={data.contractorPayouts} />
+              <Row label="Expenses" value={data.expenses} />
+              <div className="mt-2 border-t border-border-soft pt-1">
+                <Row label="Wallet balance (money in − money out)" value={data.balance} strong />
+              </div>
             </div>
             {data.awaitingConfirmationCount > 0 ? (
               <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">

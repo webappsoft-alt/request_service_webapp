@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { History, Minus, RotateCcw, Sparkles, X } from "lucide-react";
+import { History, Maximize2, Minimize2, Minus, RotateCcw, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BOT_NAME, BOT_STATUS } from "./systemPromptGuide";
 
@@ -25,11 +25,13 @@ function HeaderButton({
   label,
   onClick,
   active,
+  className,
   children,
 }: {
   label: string;
   onClick: () => void;
   active?: boolean;
+  className?: string;
   children: ReactNode;
 }) {
   return (
@@ -42,6 +44,7 @@ function HeaderButton({
       className={cn(
         "flex size-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         active && "bg-muted text-foreground",
+        className,
       )}
     >
       {children}
@@ -55,12 +58,17 @@ export function BotHeader({
   onReset,
   onMinimize,
   onClose,
+  expanded = false,
+  onToggleExpanded,
 }: {
   historyOpen: boolean;
   onToggleHistory: () => void;
   onReset: () => void;
   onMinimize: () => void;
   onClose: () => void;
+  /** Large centred view (desktop / tablet). */
+  expanded?: boolean;
+  onToggleExpanded?: () => void;
 }) {
   return (
     <header className="relative flex items-center gap-2.5 border-b bg-linear-to-b from-primary/[0.07] to-transparent px-3 py-2.5">
@@ -92,6 +100,17 @@ export function BotHeader({
         <HeaderButton label="Chat history" onClick={onToggleHistory} active={historyOpen}>
           <History className="size-4" />
         </HeaderButton>
+        {onToggleExpanded ? (
+          // Phones are already full screen, so the button is shown from 640px up.
+          <HeaderButton
+            label={expanded ? "Restore to small window" : "Expand chat"}
+            onClick={onToggleExpanded}
+            active={expanded}
+            className="hidden sm:flex"
+          >
+            {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+          </HeaderButton>
+        ) : null}
         <HeaderButton label="Minimize" onClick={onMinimize}>
           <Minus className="size-4" />
         </HeaderButton>

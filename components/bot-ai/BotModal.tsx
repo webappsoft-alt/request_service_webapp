@@ -18,6 +18,8 @@ import { useVisualViewportBox } from "./hooks/useVisualViewportBox";
 export function BotModal() {
   const { open, minimize, close, reset, sendText, typing, addressEditorOpen, closeAddressEditor } = useBot();
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Client: Maximize / Restore. Every open starts as the usual floating widget.
+  const [expanded, setExpanded] = useState(false);
   const viewportBox = useVisualViewportBox(open);
 
   return (
@@ -26,13 +28,18 @@ export function BotModal() {
       onOpenChange={(next) => {
         if (!next) {
           setHistoryOpen(false);
+          setExpanded(false);
           minimize();
         }
       }}
     >
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
-          className="fixed inset-0 z-[60] bg-black/30 duration-300 supports-backdrop-filter:backdrop-blur-[2px] data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 sm:bg-black/15 sm:supports-backdrop-filter:backdrop-blur-none"
+          className={cn(
+            "fixed inset-0 z-[60] bg-black/30 transition-[background-color,backdrop-filter] duration-300 supports-backdrop-filter:backdrop-blur-[2px] data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 sm:bg-black/15 sm:supports-backdrop-filter:backdrop-blur-none",
+            // Expanded: dim the page a little more so the big chat has focus.
+            expanded && "sm:bg-slate-950/40 sm:supports-backdrop-filter:backdrop-blur-[3px]",
+          )}
         />
         <DialogPrimitive.Content
           onOpenAutoFocus={(event) => event.preventDefault()}
@@ -43,12 +50,15 @@ export function BotModal() {
             if (target?.closest?.("[data-google-address-menu]")) event.preventDefault();
           }}
           style={viewportBox}
+          data-expanded={expanded ? "true" : "false"}
           className={cn(
+            "bot-panel",
             "fixed z-[61] flex flex-col overflow-hidden bg-popover text-popover-foreground outline-none",
             // Phones: full screen (dvh, then the visible viewport above the keyboard via
             // viewportBox), never wider than the screen.
             "inset-0 h-dvh w-full max-w-[100vw] overscroll-none",
-            "sm:inset-auto sm:right-5 sm:bottom-5 sm:h-[min(44rem,calc(100dvh-2.5rem))] sm:w-[26.5rem] sm:rounded-2xl sm:border sm:shadow-2xl sm:shadow-black/25",
+            // ≥640px size / position live in globals.css (.bot-panel) so Expand / Restore can animate.
+            "sm:inset-auto sm:rounded-2xl sm:border sm:shadow-2xl sm:shadow-black/25",
             "duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-bottom-6 sm:data-open:zoom-in-95",
             "data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-bottom-4",
             "sm:origin-bottom-right",
@@ -63,12 +73,16 @@ export function BotModal() {
             }}
             onMinimize={() => {
               setHistoryOpen(false);
+              setExpanded(false);
               minimize();
             }}
             onClose={() => {
               setHistoryOpen(false);
+              setExpanded(false);
               close();
             }}
+            expanded={expanded}
+            onToggleExpanded={() => setExpanded((value) => !value)}
           />
 
           <div className="relative flex min-h-0 flex-1 flex-col">

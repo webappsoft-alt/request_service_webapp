@@ -67,6 +67,22 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-12
 
+- **AI assistant: Maximize / Restore button** — client (frontend only; no backend or AI logic touched).
+  - New header button between History and Minimize: "Expand chat" (Maximize2 icon) / "Restore to small window"
+    (Minimize2 icon, shown as pressed).
+  - Expanded on 640px+: a large centred window (up to 64rem × 52rem, 2rem from the screen edges) with the page dimmed
+    a little more. Width, height and position animate smoothly (420 ms ease-out) both ways; off for reduced motion.
+  - Default unchanged: every open starts as the usual bottom-right floating widget. Minimize / close / Esc / outside
+    click reset it.
+  - Phones are already full screen, so the button is hidden below 640px.
+  - The assistant is mounted once (marketing shell), so this covers customers and Pros alike.
+  - Sizing moved from Tailwind classes to `.bot-panel` in `app/globals.css` (same 26.5rem × min(44rem, 100dvh − 2.5rem)
+    at 1.25rem from the corner) so it can animate.
+  - Checks: tsc + eslint clean. Chrome, 9/9: default 424px at 20px / 20px; expands to 1024px, centred, animated
+    (width mid-transition 759px); Restore and reopen go back to the widget; phone full screen with the button hidden;
+    no page errors.
+  - Files: `components/bot-ai/BotHeader.tsx`, `components/bot-ai/BotModal.tsx`, `app/globals.css`.
+
 - **Pro dashboard: animated "Upgrade to Premium" button** — client.
   - A soft gold shine sweeps across the button every 3.2s and the crown (now gold-filled) gives a small wiggle; both
     are faster on hover. Off for prefers-reduced-motion.

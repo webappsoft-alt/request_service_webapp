@@ -2584,3 +2584,36 @@ body.rs-cal-dragging [data-cal-overlay] {
     animation: none;
   }
 }
+
+/* Client: AI assistant Maximize / Restore (components/bot-ai/BotModal.tsx). Phones stay full
+   screen; from 640px the panel docks bottom-right and grows into a centred window when expanded.
+   Width / height / right / bottom are all lengths, so the change animates smoothly. */
+@media (min-width: 640px) {
+  .bot-panel {
+    --bot-w: 26.5rem;
+    --bot-h: min(44rem, calc(100dvh - 2.5rem));
+    --bot-right: 1.25rem;
+    --bot-bottom: 1.25rem;
+    width: var(--bot-w);
+    height: var(--bot-h);
+    right: var(--bot-right);
+    bottom: var(--bot-bottom);
+    transition:
+      width 420ms cubic-bezier(0.16, 1, 0.3, 1),
+      height 420ms cubic-bezier(0.16, 1, 0.3, 1),
+      right 420ms cubic-bezier(0.16, 1, 0.3, 1),
+      bottom 420ms cubic-bezier(0.16, 1, 0.3, 1),
+      border-radius 420ms ease;
+  }
+  .bot-panel[data-expanded="true"] {
+    --bot-w: min(64rem, calc(100vw - 4rem));
+    --bot-h: min(52rem, calc(100dvh - 4rem));
+    --bot-right: calc((100vw - var(--bot-w)) / 2);
+    --bot-bottom: calc((100dvh - var(--bot-h)) / 2);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bot-panel {
+    transition: none;
+  }
+}

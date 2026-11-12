@@ -35,6 +35,7 @@ import { setPortalInboxCleared } from "@/components/portal/portal-inbox-clears";
 import { usePortalWorkspace } from "@/components/portal/use-portal-workspace";
 import { canStartJobNow } from "@/lib/portal-schedule-sync";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { fetchProviderWallet } from "@/store/providerWalletSlice";
 import { getPendingRequestsByJob } from "@/lib/api/contractor-portal-client";
 import { JobNotCompleteDialog, jobCompletionBlockers, type CompletionBlocker } from "@/components/portal/job-not-complete-dialog";
 import { selectAuth, selectAuthUser } from "@/store/authSlice";
@@ -83,6 +84,7 @@ import {
   PAYMENTS_DEFAULT_LIMIT,
   paymentsCacheKey,
   patchPaymentArchive,
+  reviewPaymentThunk,
   setPaymentsListFilter,
   setPaymentsPage,
   setPaymentsSearch,
@@ -1675,6 +1677,12 @@ export function InvoicesView() {
 
   async function handleSetStatus(row: Invoice, next: Invoice["status"]) {
     if (row.status === next) return;
+    // Ledger fix: "Mark paid" opens Record payment (amount = the balance), so the money lands in
+    // Payments, Reports and the wallet. It used to only flip the status.
+    if (next === "paid" && useApi && Number(row.balanceDue ?? row.total) > 0) {
+      setPaying(row);
+      return;
+    }
     setBusyIds((prev) => [...prev, row.id]);
     try {
       if (useApi) {
@@ -1992,6 +2000,28 @@ export function PaymentsView() {
   const records = usePortalRecords();
   const [archiveTarget, setArchiveTarget] = useState<(typeof payments)[number] | null>(null);
   const [archiving, setArchiving] = useState(false);
+  // Pro review of customer-entered payments ("Not received" asks first — it reverses the invoice).
+  const [rejectTarget, setRejectTarget] = useState<(typeof payments)[number] | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  async function reviewPayment(row: (typeof payments)[number], decision: "confirm" | "reject") {
+    setReviewing(true);
+    try {
+      await dispatch(reviewPaymentThunk({ id: row.id, decision })).unwrap();
+      void dispatch(fetchPayments({ force: true, silent: true }));
+      void dispatch(fetchInvoices({ force: true, silent: true }));
+      void dispatch(fetchProviderWallet({ force: true }));
+      toast.success(
+        decision === "confirm"
+          ? `${paymentNumber(row)} confirmed — added to your wallet balance.`
+          : `${paymentNumber(row)} marked not received and taken off the invoice.`,
+      );
+      setRejectTarget(null);
+    } catch (err) {
+      toast.error(typeof err === "string" ? err : "Could not update this payment.");
+    } finally {
+      setReviewing(false);
+    }
+  }
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2288,6 +2318,12 @@ export function PaymentsView() {
             ...(job
               ? [{ label: "Open job", href: `/pro/dashboard/jobs/${job.id}` }]
               : []),
+            ...(useApi && row.confirmationStatus === "pending"
+              ? [
+                  { label: "Confirm received", onSelect: () => void reviewPayment(row, "confirm") },
+                  { label: "Not received", onSelect: () => setRejectTarget(row) },
+                ]
+              : []),
             archived
               ? {
                   label: restoringId === row.id ? "Restoring…" : "Restore",
@@ -2366,6 +2402,24 @@ export function PaymentsView() {
               setArchiving(false);
             }
           })();
+        }}
+      />
+      <DeleteConfirmDialog
+        open={Boolean(rejectTarget)}
+        onOpenChange={(next) => {
+          if (!next && !reviewing) setRejectTarget(null);
+        }}
+        title="Payment not received?"
+        description={
+          rejectTarget
+            ? `${paymentNumber(rejectTarget)} was entered by the customer. Marking it not received takes it off the invoice, so the balance is due again. It never counted in your wallet.`
+            : ""
+        }
+        confirmLabel="Not received"
+        loadingLabel="Updating…"
+        loading={reviewing}
+        onConfirm={() => {
+          if (rejectTarget) void reviewPayment(rejectTarget, "reject");
         }}
       />
     </PortalPage>

@@ -2561,6 +2561,19 @@ export async function updatePaymentArchive(id: string, isArchived: boolean) {
   return mapCrmEntity(response, mapPayment);
 }
 
+/** Pro confirms (received) or rejects (not received) a payment the customer entered. */
+export async function reviewCustomerPayment(id: string, decision: "confirm" | "reject", note?: string) {
+  const response = await patchData(
+    providerCrmApi.paymentReview(id),
+    { decision, ...(note ? { note } : {}) },
+    { silent: true },
+  );
+  invalidateGetCache(providerCrmApi.payments);
+  invalidateGetCache(providerCrmApi.payment(id));
+  invalidateGetCache(providerCrmApi.invoices);
+  return mapCrmEntity(response, mapPayment);
+}
+
 export async function listSchedule(options?: CrmRequestOptions) {
   const response = await getData(providerCrmApi.schedule, undefined, {
     silent: options?.silent ?? true,

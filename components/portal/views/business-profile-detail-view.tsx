@@ -35,6 +35,7 @@ import {
   type ServiceArea,
 } from "@/store/serviceAreasSlice";
 import { ProfileSetupChips, ProfileSetupSummary } from "@/components/portal/profile-setup-chips";
+import { WalletBalanceCard } from "@/components/portal/wallet-balance-card";
 import {
   getProfileSetupItems,
   profileSetupProgress,
@@ -379,6 +380,8 @@ export function BusinessProfileDetailView() {
         </div>
 
         <div className="flex min-w-0 flex-col gap-4 lg:col-span-5">
+          {/* Client: read-only wallet balance (collected − payouts − expenses), calculated by the API. */}
+          <WalletBalanceCard />
           <Card className={softCardClass}>
             <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
               <CardTitle>Services</CardTitle>

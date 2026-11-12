@@ -51,6 +51,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { recordTechnicianPaymentThunk } from "@/store/timeTrackingSlice";
+import { fetchProviderWallet } from "@/store/providerWalletSlice";
+import { insufficientBalanceText, useProviderWallet } from "@/components/portal/wallet-balance-card";
 
 export type RecordKind = "job" | "estimate";
 export type HrefFor = (kind: RecordKind, id: string) => string;
@@ -898,7 +900,11 @@ export function PayTechnicianDialog({
 
   const value = Number(amount);
   const tooMuch = Boolean(row) && value > (row?.remaining ?? 0) + 0.001;
-  const invalid = !row || !Number.isFinite(value) || value <= 0 || tooMuch;
+  // Payouts can't go above the wallet balance (the API enforces it too).
+  const wallet = useProviderWallet(open);
+  const walletBalance = wallet.data?.balance;
+  const overWallet = !tooMuch && walletBalance != null && value > walletBalance + 0.004;
+  const invalid = !row || !Number.isFinite(value) || value <= 0 || tooMuch || overWallet;
   const kind = row ? ledgerRowKind(row) : "job";
   const record = row ? (kind === "job" ? row.job : row.estimate) : null;
 
@@ -921,6 +927,7 @@ export function PayTechnicianDialog({
       return;
     }
     toast.success(`${formatMoney(value)} paid to ${row.employeeName || "technician"}.`);
+    void dispatch(fetchProviderWallet({ force: true }));
     onPaid?.();
     onOpenChange(false);
   }
@@ -963,13 +970,17 @@ export function PayTechnicianDialog({
                 max={row.remaining}
                 value={amount}
                 disabled={saving}
-                aria-invalid={tooMuch || undefined}
+                aria-invalid={tooMuch || overWallet || undefined}
                 onChange={(event) => setAmount(event.target.value)}
               />
               {tooMuch ? (
                 <span className="text-xs font-normal text-destructive">
                   Cannot exceed the remaining {formatMoney(row.remaining)}.
                 </span>
+              ) : overWallet && walletBalance != null ? (
+                <span className="text-xs font-normal text-destructive">{insufficientBalanceText(walletBalance)}</span>
+              ) : walletBalance != null ? (
+                <span className="text-xs font-normal text-muted-foreground">Wallet balance {formatMoney(walletBalance)}</span>
               ) : null}
             </label>
             <label className="grid gap-1.5 text-sm font-medium">

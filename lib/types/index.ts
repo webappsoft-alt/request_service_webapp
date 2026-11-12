@@ -512,6 +512,8 @@ export interface Payment {
   /** Who entered the payment: provider (manual record) or customer (self-pay). */
   recordedBy?: "provider" | "customer";
   recordedByName?: string;
+  /** Customer-entered payments wait for the Pro: "pending" doesn't count in the wallet yet. */
+  confirmationStatus?: "confirmed" | "pending" | "rejected";
 }
 
 export type PaymentScheduleType = "upfront" | "completion" | "milestone";

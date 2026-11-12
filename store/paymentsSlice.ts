@@ -7,6 +7,7 @@ import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import {
   getPayment,
   queryPayments,
+  reviewCustomerPayment,
   updatePaymentArchive,
 } from "@/lib/api/crm-client";
 import type { Payment } from "@/lib/types";
@@ -181,6 +182,21 @@ export const patchPaymentArchive = createAsyncThunk<
   }
 });
 
+/** Pro review of a customer-entered payment: confirm (counts in the wallet) or reject (not received). */
+export const reviewPaymentThunk = createAsyncThunk<
+  Payment,
+  { id: string; decision: "confirm" | "reject"; note?: string },
+  { rejectValue: string }
+>("payments/review", async ({ id, decision, note }, { rejectWithValue }) => {
+  try {
+    const updated = await reviewCustomerPayment(id, decision, note);
+    if (!updated) return rejectWithValue("The payment was updated but could not be read.");
+    return updated;
+  } catch (error) {
+    return rejectWithValue(extractErrorMessage(error));
+  }
+});
+
 const paymentsSlice = createSlice({
   name: "payments",
   initialState,
@@ -339,6 +355,17 @@ const paymentsSlice = createSlice({
           state.items = state.items.filter((item) => item.id !== action.payload.id);
           state.total = Math.max(0, state.total - 1);
         }
+      })
+      .addCase(reviewPaymentThunk.pending, (state) => {
+        state.mutating = true;
+      })
+      .addCase(reviewPaymentThunk.fulfilled, (state, action) => {
+        state.mutating = false;
+        state.pagesCache = {};
+        applyPaymentToState(state, action.payload);
+      })
+      .addCase(reviewPaymentThunk.rejected, (state) => {
+        state.mutating = false;
       })
       .addCase(patchPaymentArchive.rejected, (state, action) => {
         state.mutating = false;

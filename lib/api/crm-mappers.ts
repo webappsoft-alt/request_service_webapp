@@ -1920,6 +1920,13 @@ export function mapPayment(raw: unknown): Payment | null {
     transactionReference: trimmed(record.transactionReference) || undefined,
     recordedBy: trimmed(record.recordedBy) === "customer" ? "customer" : "provider",
     recordedByName: trimmed(record.recordedByName) || undefined,
+    // Customer entries without a review yet are pending; Pro-recorded payments are confirmed.
+    confirmationStatus:
+      trimmed(record.confirmationStatus) === "rejected"
+        ? "rejected"
+        : trimmed(record.confirmationStatus) === "confirmed" || trimmed(record.recordedBy) !== "customer"
+          ? "confirmed"
+          : "pending",
   };
 }
 

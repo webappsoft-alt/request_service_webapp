@@ -94,7 +94,13 @@ export function paymentBoardColumns({
       sortValue: (row) => row.status,
       searchValue: (row) => paymentStatusLabel(row.status),
       exportValue: (row) => paymentStatusLabel(row.status),
-      cell: (row) => <StatusDot label={paymentStatusLabel(row.status)} tone={moneyTone(row.status)} />,
+      // Customer-entered payments show "Awaiting confirmation" until the Pro reviews them.
+      cell: (row) =>
+        row.confirmationStatus === "pending" ? (
+          <StatusDot label="Awaiting confirmation" tone="warning" />
+        ) : (
+          <StatusDot label={paymentStatusLabel(row.status)} tone={moneyTone(row.status)} />
+        ),
     },
     {
       id: "method",

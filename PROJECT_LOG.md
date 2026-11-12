@@ -67,6 +67,38 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-12
 
+- **Payments board: confirm customer-entered payments; wallet shows what's awaiting confirmation** — client.
+  - The Status column shows "Awaiting confirmation" for customer-entered payments not yet reviewed.
+  - Row actions:
+    - **Confirm received**: the payment is added to the wallet balance.
+    - **Not received**: asks first, then takes the payment off the invoice so the balance is due again.
+    - Both use `reviewPaymentThunk` → `PATCH provider/payments/:id/review`, then refresh payments,
+      invoices and the wallet.
+  - Wallet card: an amber note "$X from N customer-entered payments awaiting your confirmation — not in the
+    balance yet" with a link to Payments.
+  - `Payment.confirmationStatus`: the mapper treats customer entries with no review as pending.
+  - Checked: tsc clean; lint shows only the existing `records-view.tsx:248` error. Not checked in a browser.
+  - Files: `lib/types/index.ts`, `lib/api/crm-mappers.ts`, `lib/api/crm-client.ts`, `components/api/ApiRoutesFile.ts`,
+    `store/paymentsSlice.ts`, `store/providerWalletSlice.ts`, `components/portal/payment-columns.tsx`,
+    `components/portal/views/records-view.tsx`, `components/portal/wallet-balance-card.tsx`.
+
+- **Wallet balance on Business Profile; payouts blocked above it; Mark paid records a payment** — client.
+  - New read-only **Current wallet balance** card (`components/portal/wallet-balance-card.tsx`) at the top
+    of the Business Profile's right column. It shows the balance, Collected from customers, Paid to
+    technicians, Paid to contractors and Expenses. There's no input, and it carries a "Read-only" chip.
+    The data comes from the new `store/providerWalletSlice.ts` (`GET provider/wallet`, forced refresh on
+    mount).
+  - Pay contractor (`job-crew.tsx`) and Pay technician (`timesheet-ui.tsx`) dialogs show the wallet
+    balance. An amount above it shows "Insufficient balance to complete this payout. Wallet balance: $X."
+    and disables Record payment. The API enforces the same rule, and the wallet refreshes after a payout.
+  - Invoices list "Mark paid" now opens Record payment, pre-filled with the balance. The API no longer
+    marks an invoice paid without a payment record.
+  - Checked: tsc clean; lint shows only the existing `records-view.tsx:246` error. Not checked in a
+    browser (a signed-in session would need the key from `.env`).
+  - Files: `store/providerWalletSlice.ts` (new), `components/portal/wallet-balance-card.tsx` (new),
+    `store/index.ts`, `components/api/ApiRoutesFile.ts`, `components/portal/views/business-profile-detail-view.tsx`,
+    `components/portal/job-crew.tsx`, `components/time-tracking/timesheet-ui.tsx`, `components/portal/views/records-view.tsx`.
+
 - **Performance follow-up: own-pro cover on the service detail page kept; parity verified** — client: no regressions.
   - `public-fixed-service-detail.tsx`: the cover lookup is restored for this package's own pro only. Its cover is the
     package photo; with no photo, the old code fell back to the pro's banner from their profile, which the

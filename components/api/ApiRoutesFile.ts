@@ -253,6 +253,8 @@ export const providerCrmApi = {
   invoicePayments: (id: string) => `provider/invoices/${id}/payments`,
   payments: "provider/payments",
   payment: (id: string) => `provider/payments/${id}`,
+  /** PATCH { decision: "confirm" | "reject" } — Pro review of a customer-entered payment */
+  paymentReview: (id: string) => `provider/payments/${id}/review`,
   chats: "provider/chats",
   chat: (id: string) => `provider/chats/${id}`,
   chatMessages: (id: string) => `provider/chats/${id}/messages`,
@@ -265,6 +267,8 @@ export const providerCrmApi = {
   note: (id: string) => `provider/notes/${id}`,
   /** GET aggregated business reports dashboard */
   reports: "provider/reports",
+  /** GET read-only wallet balance: collected − technician / contractor payouts − expenses */
+  wallet: "provider/wallet",
   /** GET Main / Sales / Service dashboard aggregates */
   dashboard: "provider/dashboard",
   /** GET pipeline board (leads → estimates → booked → in-progress → invoices) */

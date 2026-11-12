@@ -30,6 +30,9 @@ import {
   type ContractorPayoutInput,
 } from "@/lib/api/contractor-portal-client";
 import { formatMoney } from "@/lib/format";
+import { insufficientBalanceText, useProviderWallet } from "@/components/portal/wallet-balance-card";
+import { useAppDispatch } from "@/store/hooks";
+import { fetchProviderWallet } from "@/store/providerWalletSlice";
 import type { Job, JobContractorAssignment } from "@/lib/types";
 import { ADD_CONTRACTOR_HREF } from "@/lib/crew-links";
 
@@ -312,8 +315,18 @@ function PayForm({
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const value = Number(amount);
+  const dispatch = useAppDispatch();
+  // Payouts can't go above the wallet balance (the API enforces it too).
+  const wallet = useProviderWallet();
+  const walletBalance = wallet.data?.balance;
   const amountError =
-    !(value > 0) ? "Enter an amount." : value > row.balance + 0.004 ? `No more than ${formatMoney(row.balance)}.` : null;
+    !(value > 0)
+      ? "Enter an amount."
+      : value > row.balance + 0.004
+        ? `No more than ${formatMoney(row.balance)}.`
+        : walletBalance != null && value > walletBalance + 0.004
+          ? insufficientBalanceText(walletBalance)
+          : null;
 
   async function pay() {
     if (amountError || saving) return;
@@ -329,6 +342,7 @@ function PayForm({
         notes: notes.trim(),
       });
       toast.success(`${formatMoney(value)} paid to ${contractorName}.`);
+      void dispatch(fetchProviderWallet({ force: true }));
       await onPaid();
       onOpenChange(false);
     } catch (error) {
@@ -353,7 +367,14 @@ function PayForm({
           <Field data-invalid={amountError ? true : undefined}>
             <FieldLabel htmlFor="pay-amount">Amount</FieldLabel>
             <Input id="pay-amount" type="number" min={0.01} step="0.01" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} />
-            {amountError ? <FieldError>{amountError}</FieldError> : <FieldDescription>Balance {formatMoney(row.balance)}</FieldDescription>}
+            {amountError ? (
+              <FieldError>{amountError}</FieldError>
+            ) : (
+              <FieldDescription>
+                Owed {formatMoney(row.balance)}
+                {walletBalance != null ? ` · Wallet ${formatMoney(walletBalance)}` : ""}
+              </FieldDescription>
+            )}
           </Field>
           <Field>
             <FieldLabel htmlFor="pay-method">Method</FieldLabel>

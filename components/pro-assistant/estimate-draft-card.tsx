@@ -2,10 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, FileText, Loader2, Plus, Search, Trash2, UserRound, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, Loader2, MapPin, Plus, Search, Trash2, UserRound, X } from "lucide-react";
 import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
+import { getServiceCategoryById } from "@/lib/data/services";
+import { findTemplateCategory, getEstimateTemplateCatalog } from "@/lib/api/estimate-templates-client";
+import { useAppSelector } from "@/store/hooks";
+import { selectAuthProvider } from "@/store/authSlice";
 import {
   createAssistantEstimate,
   searchAssistantCustomers,
@@ -15,45 +19,64 @@ import {
 } from "./pro-assistant-api";
 
 const KIND_LABEL: Record<PaDraftItem["kind"], string> = { labor: "Labor", material: "Material", equipment: "Equipment" };
+const PROFILE_CATEGORIES_HREF = "/pro/dashboard/profile?step=categories";
 
 function money2(n: number) {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
-/** Search + pick one of the Pro's customers. */
+const fieldClass =
+  "h-8 w-full rounded-lg border bg-background px-2.5 text-xs outline-none focus:border-primary/50 disabled:opacity-70";
+
+/**
+ * Pick one of the Pro's customers — the same list as the Customers tab, 20 at a time; scrolling to
+ * the bottom loads more, typing searches.
+ */
 function CustomerPicker({
   value,
   initialQuery,
-  candidates,
   onChange,
   disabled,
 }: {
   value: PaCustomerOption | null;
   initialQuery: string;
-  candidates: PaCustomerOption[];
   onChange: (customer: PaCustomerOption | null) => void;
   disabled?: boolean;
 }) {
   const [query, setQuery] = useState(initialQuery);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<PaCustomerOption[]>(candidates);
+  const [items, setItems] = useState<PaCustomerOption[]>([]);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [total, setTotal] = useState(0);
   const requestRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
 
-  function search(term: string) {
+  function load(term: string, nextPage: number) {
     const request = ++requestRef.current;
     setLoading(true);
-    searchAssistantCustomers(term)
-      .then((rows) => {
-        if (request === requestRef.current) setResults(rows);
+    searchAssistantCustomers(term, nextPage)
+      .then((res) => {
+        if (request !== requestRef.current) return;
+        setItems((prev) => {
+          const base = nextPage === 1 ? [] : prev;
+          const seen = new Set(base.map((c) => c.id));
+          return [...base, ...res.items.filter((c) => !seen.has(c.id))];
+        });
+        setPage(nextPage);
+        setHasMore(res.hasMore);
+        setTotal(res.total);
       })
       .catch(() => {
-        if (request === requestRef.current) setResults([]);
+        if (request === requestRef.current) setHasMore(false);
       })
       .finally(() => {
         if (request === requestRef.current) setLoading(false);
@@ -88,7 +111,7 @@ function CustomerPicker({
           disabled={disabled}
           onFocus={() => {
             setOpen(true);
-            search(query);
+            if (page === 0) load(query, 1);
           }}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onChange={(event) => {
@@ -96,7 +119,7 @@ function CustomerPicker({
             setQuery(next);
             setOpen(true);
             if (timerRef.current) clearTimeout(timerRef.current);
-            timerRef.current = setTimeout(() => search(next), 250);
+            timerRef.current = setTimeout(() => load(next, 1), 250);
           }}
           placeholder="Search your customers…"
           aria-label="Customer for this estimate"
@@ -105,28 +128,43 @@ function CustomerPicker({
         {loading ? <Loader2 className="size-3.5 animate-spin text-muted-foreground" /> : null}
       </div>
       {open ? (
-        <div className="absolute inset-x-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-lg border bg-popover shadow-lg">
-          {results.length ? (
-            results.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  onChange(c);
-                  setOpen(false);
-                }}
-                className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left hover:bg-muted"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-xs font-medium">{c.name}</span>
-                  {c.subtitle ? <span className="block truncate text-[11px] text-muted-foreground">{c.subtitle}</span> : null}
-                </span>
-                {c.hasAddress === false ? <span className="shrink-0 text-[10px] text-amber-700">No address</span> : null}
-              </button>
-            ))
+        <div
+          role="listbox"
+          aria-label="Customers"
+          onScroll={(event) => {
+            const el = event.currentTarget;
+            if (hasMore && !loading && el.scrollTop + el.clientHeight >= el.scrollHeight - 24) load(query, page + 1);
+          }}
+          className="absolute inset-x-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-lg border bg-popover shadow-lg"
+        >
+          {items.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              role="option"
+              aria-selected={false}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(c);
+                setOpen(false);
+              }}
+              className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left hover:bg-muted"
+            >
+              <span className="min-w-0">
+                <span className="block truncate text-xs font-medium">{c.name}</span>
+                {c.subtitle ? <span className="block truncate text-[11px] text-muted-foreground">{c.subtitle}</span> : null}
+              </span>
+              {c.hasAddress === false ? <span className="shrink-0 text-[10px] text-amber-700">No address</span> : null}
+            </button>
+          ))}
+          {loading ? (
+            <p className="px-2.5 py-2 text-[11px] text-muted-foreground">{items.length ? "Loading more…" : "Loading…"}</p>
+          ) : !items.length ? (
+            <p className="px-2.5 py-2 text-[11px] text-muted-foreground">No customers match.</p>
           ) : (
-            <p className="px-2.5 py-2 text-[11px] text-muted-foreground">{loading ? "Searching…" : "No customers match."}</p>
+            <p className="border-t px-2.5 py-1.5 text-[10px] text-muted-foreground">
+              {items.length} of {total} customers{hasMore ? " · scroll for more" : ""}
+            </p>
           )}
         </div>
       ) : null}
@@ -135,8 +173,9 @@ function CustomerPicker({
 }
 
 /**
- * AI-drafted estimate in the chat: editable title, customer, line items and notes, then
- * "Create estimate" (creates the estimate workspace + estimate through the existing services).
+ * AI-drafted estimate in the chat. Same details as the portal's Create estimate — customer,
+ * property, service category (required), sub-service — plus editable line items and notes.
+ * "Create estimate" goes through the existing estimate services (flow unchanged).
  */
 export function EstimateDraftCard({
   draft,
@@ -146,31 +185,94 @@ export function EstimateDraftCard({
   messageId,
 }: {
   draft: PaEstimateDraft;
+  created: { href: string; number: string } | null | undefined;
+  onCreated: (result: { href: string; number: string }) => void;
   /** Saved chat + message this draft belongs to (marked "created" in history). */
   conversationId?: string | null;
   messageId?: string;
-  created: { href: string; number: string } | null | undefined;
-  onCreated: (result: { href: string; number: string }) => void;
 }) {
+  const authProvider = useAppSelector(selectAuthProvider);
+  const categoryIds = authProvider?.services?.categoryIds;
+  // The Pro's own service categories (same list as Create estimate).
+  const providerCategories = useMemo(() => {
+    const ids = Array.isArray(categoryIds) ? categoryIds : [];
+    const seen = new Set<string>();
+    const list: Array<{ id: string; name: string }> = [];
+    for (const id of ids) {
+      const category = getServiceCategoryById(String(id));
+      const name = (category?.name || category?.shortName || "").trim();
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      list.push({ id: String(id), name });
+    }
+    return list;
+  }, [categoryIds]);
+
+  // Category the AI read from the scope → the matching one of the Pro's categories (else the only one).
+  const suggestedCategory = useMemo(() => {
+    const hint = String(draft.serviceCategory || "").trim().toLowerCase();
+    if (hint) {
+      const match = providerCategories.find(
+        (c) => c.name.toLowerCase() === hint || c.name.toLowerCase().includes(hint) || hint.includes(c.name.toLowerCase()),
+      );
+      if (match) return match.name;
+    }
+    return providerCategories.length === 1 ? providerCategories[0].name : "";
+  }, [draft.serviceCategory, providerCategories]);
+
   const [title, setTitle] = useState(draft.title);
   const [customer, setCustomer] = useState<PaCustomerOption | null>(draft.customer);
+  const [addressId, setAddressId] = useState("");
+  const [categoryName, setCategoryName] = useState<string | null>(null);
+  const [subcategoryName, setSubcategoryName] = useState("");
   const [items, setItems] = useState<PaDraftItem[]>(() =>
     draft.items.map(({ description, kind, quantity, unit, unitPrice }) => ({ description, kind, quantity, unit, unitPrice })),
   );
   const [notes, setNotes] = useState(draft.notes);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof getEstimateTemplateCatalog>>>([]);
   const locked = Boolean(created) || saving;
+  const category = categoryName ?? suggestedCategory;
+
+  // Sub-services (offered jobs) for the category — same catalog as Create estimate.
+  useEffect(() => {
+    let cancelled = false;
+    getEstimateTemplateCatalog()
+      .then((rows) => {
+        if (!cancelled) setCatalog(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const subcategoryOptions = useMemo(() => findTemplateCategory(catalog, category)?.subcategories || [], [catalog, category]);
+  const validSubcategory = subcategoryOptions.some((s) => s.name === subcategoryName) ? subcategoryName : "";
+
+  const addresses = customer?.addresses || [];
+  const selectedAddressId = addresses.some((a) => a.id === addressId) ? addressId : addresses[0]?.id || "";
 
   const total = useMemo(() => money2(items.reduce((t, i) => t + (Number(i.quantity) || 0) * (Number(i.unitPrice) || 0), 0)), [items]);
   const validItems = items.filter((i) => i.description.trim() && Number(i.quantity) > 0);
+  const missing = !customer
+    ? "Pick a customer to create"
+    : customer.hasAddress === false
+      ? "Customer needs a service address"
+      : !category
+        ? "Pick a service category"
+        : !validItems.length
+          ? "Add a line item"
+          : !title.trim()
+            ? "Add a title"
+            : null;
 
   function update(index: number, patch: Partial<PaDraftItem>) {
     setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   }
 
   async function create() {
-    if (!customer || !validItems.length || !title.trim()) return;
+    if (missing || !customer) return;
     setSaving(true);
     setError(null);
     try {
@@ -179,6 +281,9 @@ export function EstimateDraftCard({
         title: title.trim(),
         notes: notes.trim(),
         items: validItems.map((i) => ({ ...i, quantity: money2(i.quantity), unitPrice: money2(i.unitPrice) })),
+        addressId: selectedAddressId || undefined,
+        categoryName: category,
+        subcategoryName: validSubcategory || undefined,
         conversationId: conversationId || null,
         messageId,
       });
@@ -214,18 +319,92 @@ export function EstimateDraftCard({
           <CustomerPicker
             value={customer}
             initialQuery={draft.customerName || ""}
-            candidates={draft.customerCandidates}
-            onChange={setCustomer}
+            onChange={(next) => {
+              setCustomer(next);
+              setAddressId("");
+            }}
             disabled={locked}
           />
           {draft.customerName && !draft.customer && !customer ? (
-            <p className="text-[11px] text-muted-foreground">
-              {draft.customerCandidates.length ? `Pick the right “${draft.customerName}”.` : `No customer named “${draft.customerName}” yet — search or add them first.`}
-            </p>
+            <p className="text-[11px] text-muted-foreground">Pick the right “{draft.customerName}”, or search another customer.</p>
           ) : null}
           {customer?.hasAddress === false ? (
-            <p className="text-[11px] text-amber-700">This customer has no service address — add one before creating.</p>
+            <p className="text-[11px] text-amber-700">
+              This customer has no service address —{" "}
+              <Link href={`/pro/dashboard/customers/${customer.id}`} className="font-semibold underline underline-offset-2">
+                add one
+              </Link>{" "}
+              first.
+            </p>
           ) : null}
+        </div>
+
+        {customer && addresses.length ? (
+          <label className="flex flex-col gap-1">
+            <span className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+              <MapPin className="size-3" aria-hidden /> Property
+            </span>
+            <select
+              value={selectedAddressId}
+              disabled={locked || addresses.length === 1}
+              onChange={(event) => setAddressId(event.target.value)}
+              aria-label="Property address"
+              className={fieldClass}
+            >
+              {addresses.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label ? `${a.label} — ` : ""}
+                  {a.line || "Address"}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex min-w-0 flex-col gap-1">
+            <span className="text-[11px] font-medium text-muted-foreground">Service category *</span>
+            {providerCategories.length ? (
+              <select
+                value={category}
+                disabled={locked}
+                onChange={(event) => {
+                  setCategoryName(event.target.value);
+                  setSubcategoryName("");
+                }}
+                aria-label="Service category"
+                className={fieldClass}
+              >
+                <option value="">Select category</option>
+                {providerCategories.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <Link href={PROFILE_CATEGORIES_HREF} className="text-[11px] font-semibold text-primary underline underline-offset-2">
+                Set your service categories first
+              </Link>
+            )}
+          </label>
+          <label className="flex min-w-0 flex-col gap-1">
+            <span className="text-[11px] font-medium text-muted-foreground">Sub-service</span>
+            <select
+              value={validSubcategory}
+              disabled={locked || !subcategoryOptions.length}
+              onChange={(event) => setSubcategoryName(event.target.value)}
+              aria-label="Sub-service"
+              className={fieldClass}
+            >
+              <option value="">{category ? (subcategoryOptions.length ? "Optional" : "None listed") : "Pick a category first"}</option>
+              {subcategoryOptions.map((s) => (
+                <option key={s.name} value={s.name}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         <div className="overflow-hidden rounded-lg border">
@@ -244,7 +423,19 @@ export function EstimateDraftCard({
                   aria-label={`Line ${index + 1} description`}
                   className="min-w-0 flex-1 resize-none bg-transparent text-xs leading-snug font-medium outline-none [field-sizing:content]"
                 />
-                <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{KIND_LABEL[item.kind]}</span>
+                <select
+                  value={item.kind}
+                  disabled={locked}
+                  onChange={(event) => update(index, { kind: event.target.value as PaDraftItem["kind"] })}
+                  aria-label={`Line ${index + 1} type`}
+                  className="h-6 shrink-0 rounded-full border-0 bg-muted px-2 text-[10px] text-muted-foreground outline-none"
+                >
+                  {(Object.keys(KIND_LABEL) as PaDraftItem["kind"][]).map((k) => (
+                    <option key={k} value={k}>
+                      {KIND_LABEL[k]}
+                    </option>
+                  ))}
+                </select>
                 {!locked && items.length > 1 ? (
                   <button
                     type="button"
@@ -340,13 +531,13 @@ export function EstimateDraftCard({
           <button
             type="button"
             onClick={() => void create()}
-            disabled={saving || !customer || !validItems.length || !title.trim()}
+            disabled={saving || Boolean(missing)}
             className={cn(
               "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50",
             )}
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
-            {saving ? "Creating…" : !customer ? "Pick a customer to create" : "Create estimate"}
+            {saving ? "Creating…" : missing || "Create estimate"}
           </button>
         )}
       </div>

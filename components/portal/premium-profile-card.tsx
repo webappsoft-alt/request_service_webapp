@@ -17,7 +17,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { PremiumBadge } from "@/components/shared/premium-badge";
-import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog";
+// import { DeleteConfirmDialog } from "@/components/portal/delete-confirm-dialog"; // was the Resume dialog (removed)
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -88,7 +88,7 @@ export function PremiumProfileCard({ className }: { className?: string }) {
         kind === "subscribe"
           ? "Your business profile is now Premium."
           : kind === "cancel"
-            ? "Premium cancelled. It stays active until the end of this period."
+            ? "Premium cancelled. Your profile is back to the standard listing."
             : "Premium auto-renew is back on.",
       );
       return;
@@ -125,7 +125,7 @@ export function PremiumProfileCard({ className }: { className?: string }) {
         {data?.isPremium ? (
           <PremiumBadge
             size="xs"
-            label={data.subscription?.source === "admin_grant" ? "Complimentary" : data.autoRenew ? "Active" : "Ending"}
+            label={data.subscription?.source === "admin_grant" ? "Complimentary" : "Active"}
           />
         ) : loaded ? (
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-muted dark:text-muted-foreground">
@@ -173,20 +173,16 @@ export function PremiumProfileCard({ className }: { className?: string }) {
                 Renews on {renewsOn} at the current price ({formatMoney(price)} / {days} days) if your wallet covers it.
               </p>
             ) : (
-              <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
-                Cancelled — Premium ends on {renewsOn}. Resume to keep it renewing.
-              </p>
+              // Client rule: cancelling ends Premium at once, so a "cancelled but still Premium" state no longer exists.
+              <p className="text-xs text-muted-foreground">Premium runs until {renewsOn}.</p>
             )}
             <div className={cn("flex flex-wrap gap-2", isGrant && "hidden")}>
               {data.autoRenew ? (
                 <Button size="sm" variant="outline" onClick={() => open("cancel")} disabled={Boolean(acting)}>
                   Cancel Premium
                 </Button>
-              ) : (
-                <Button size="sm" onClick={() => open("resume")} disabled={Boolean(acting) || !settings?.isEnabled}>
-                  Resume auto-renew
-                </Button>
-              )}
+              ) : null}
+              {/* Client: no "Resume auto-renew" — a cancelled Premium has ended; the Pro upgrades again. */}
             </div>
           </div>
         ) : !settings?.isEnabled ? (
@@ -280,8 +276,8 @@ export function PremiumProfileCard({ className }: { className?: string }) {
               Upgrade to Premium?
             </DialogTitle>
             <DialogDescription>
-              {formatMoney(price)} is paid from your wallet now. Premium renews every {days} days at the current price;
-              cancel anytime and keep it until the period ends.
+              {formatMoney(price)} is paid from your wallet now. Premium renews every {days} days at the current price.
+              Cancelling ends Premium immediately, with no refund.
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-md border border-border-soft px-3 py-1">
@@ -302,25 +298,24 @@ export function PremiumProfileCard({ className }: { className?: string }) {
         </DialogContent>
       </Dialog>
 
-      {/* Cancel: auto-renew off, Premium kept to the end of the paid period. */}
+      {/* Cancel (client rule): Premium ends immediately — badge and top ranking removed, no refund. */}
       <Dialog open={dialog === "cancel"} onOpenChange={(value) => !acting && setDialog(value ? "cancel" : null)}>
         <DialogContent className="max-w-md" data-lenis-prevent>
           <DialogHeader className="border-b-0 bg-transparent">
             <DialogTitle className="text-base font-semibold">Cancel Premium?</DialogTitle>
             <DialogDescription>
-              Auto-renew turns off. Your Premium badge and top placement stay until {renewsOn}; after that your profile
-              goes back to the standard order.
+              Your profile goes back to the standard listing right away: the Premium badge and top placement in city and
+              state searches are removed.
             </DialogDescription>
           </DialogHeader>
-          {/* Client wording (exact). */}
+          {/* Client: Premium ends at once (was "…retain your Premium features until the end of your current billing period"). */}
           <div
             role="alert"
             className="flex items-start gap-2.5 rounded-md border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
           >
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden />
             <p>
-              No refund will be issued, and you will retain your Premium features until the end of your current billing
-              period.
+              No refund will be issued, and your Premium features end immediately. You can upgrade again any time.
             </p>
           </div>
           <label className="flex flex-col gap-1.5 text-sm">
@@ -340,17 +335,17 @@ export function PremiumProfileCard({ className }: { className?: string }) {
         </DialogContent>
       </Dialog>
 
+      {/* Client: "Resume auto-renew" removed — cancelling ends Premium immediately.
       <DeleteConfirmDialog
         open={dialog === "resume"}
         onOpenChange={(value) => setDialog(value ? "resume" : null)}
         tone="primary"
         title="Turn auto-renew back on?"
-        description={`Premium renews on ${renewsOn} for ${formatMoney(price)} from your wallet.${actionError ? ` ${actionError}` : ""}`}
         confirmLabel="Resume auto-renew"
-        loadingLabel="Saving…"
         loading={acting === "resume"}
         onConfirm={() => run("resume")}
       />
+      */}
     </Card>
   );
 }

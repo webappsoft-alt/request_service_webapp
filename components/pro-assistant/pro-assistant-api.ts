@@ -24,11 +24,21 @@ export type PaDraftItem = {
   unitPrice: number;
 };
 
-export type PaCustomerOption = { id: string; name: string; subtitle?: string; hasAddress?: boolean };
+export type PaCustomerAddress = { id: string; label: string; line: string };
+export type PaCustomerOption = {
+  id: string;
+  name: string;
+  subtitle?: string;
+  hasAddress?: boolean;
+  /** Service addresses (the estimate's property). */
+  addresses?: PaCustomerAddress[];
+};
 
 export type PaEstimateDraft = {
   title: string;
   customerName: string | null;
+  /** Trade the AI read from the scope (matched to the Pro's categories in the card). */
+  serviceCategory?: string;
   customer: PaCustomerOption | null;
   customerCandidates: PaCustomerOption[];
   items: Array<PaDraftItem & { total?: number }>;
@@ -109,11 +119,17 @@ export async function deleteAssistantConversation(id: string) {
   return deleteData(PRO_ASSISTANT_API.conversation(id), { silent: true });
 }
 
-export async function searchAssistantCustomers(q: string) {
-  const data = unwrap<PaCustomerOption[]>(
-    await getData(PRO_ASSISTANT_API.customers, { q }, { silent: true, force: true }),
-  );
-  return Array.isArray(data) ? data : [];
+/** Customers tab list (same customers), 20 per page. */
+export async function searchAssistantCustomers(q: string, page = 1) {
+  const res = (await getData(PRO_ASSISTANT_API.customers, { q, page, limit: 20 }, { silent: true, force: true })) as {
+    data?: PaCustomerOption[];
+    pagination?: { hasMore?: boolean; total?: number };
+  };
+  return {
+    items: Array.isArray(res?.data) ? res.data : [],
+    hasMore: Boolean(res?.pagination?.hasMore),
+    total: Number(res?.pagination?.total) || 0,
+  };
 }
 
 export async function createAssistantEstimate(body: {
@@ -123,6 +139,9 @@ export async function createAssistantEstimate(body: {
   notes: string;
   conversationId?: string | null;
   messageId?: string;
+  addressId?: string;
+  categoryName: string;
+  subcategoryName?: string;
 }) {
   return unwrap<{ opportunityId: string; estimateId: string; number: string; href: string }>(
     await postData(PRO_ASSISTANT_API.estimates, body, { silent: true }),

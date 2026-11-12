@@ -67,6 +67,35 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-12
 
+- **Pro co-pilot estimate card: proper customer list + Create-estimate fields** — client. Files in
+  `components/pro-assistant/` only.
+  - The customer picker shows the same customers as the Customers tab (no hidden visitor records), 20 at a time.
+    Scrolling to the bottom loads the next page; typing searches; a footer shows "20 of 45 customers".
+  - New fields, same as the portal's Create estimate (same helpers: the Pro's categories via
+    `getServiceCategoryById`, sub-services via the estimate template catalog):
+    - **Property**: the customer's service addresses.
+    - **Service category**: required; only the Pro's own categories; preselected from the AI's reading of the scope.
+    - **Sub-service**: optional.
+    - **Line item type**: labor / material / equipment, editable.
+  - The Create button names what's missing (customer, address, category, line item, title). The create request sends
+    the property, category and sub-service.
+  - Checks: tsc + eslint clean. Chrome with mocked APIs, 42/42 (adds: 20 → scroll → 40, search, 2 properties,
+    category preselected and limited to the Pro's own, sub-service, create body).
+  - Files: `components/pro-assistant/estimate-draft-card.tsx`, `pro-assistant-api.ts`.
+
+- **Premium: cancel ends Premium immediately; no Resume** — client feedback.
+  - Premium card: Resume auto-renew button and dialog removed (commented). The cancel modal now says the badge and top
+    placement are removed right away, with the warning "No refund will be issued, and your Premium features end
+    immediately. You can upgrade again any time."
+    - This replaces the earlier client wording "…retain your Premium features until the end of your current billing
+      period", which no longer matches the behaviour.
+  - Cancel toast and the upgrade dialog text updated. The header pill shows "Active" (or "Complimentary") only while
+    Premium.
+  - After cancelling: the card goes back to Upgrade, the badge leaves the company name, and the dashboard shows the
+    upgrade card instead of "Your business is Premium".
+  - Checks: tsc + eslint clean; Chrome with mocked APIs, 40/40 (adds the after-cancel checks).
+  - Files: `components/portal/premium-profile-card.tsx`.
+
 - **Pro co-pilot: voice auto-send, auto-close after navigation, conversation history** — client. Files in
   `components/pro-assistant/` only.
   - Voice: when speech recognition ends, what was heard is sent automatically (no Send click).

@@ -67,6 +67,36 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-12
 
+- **Performance follow-up: own-pro cover on the service detail page kept; parity verified** — client: no regressions.
+  - `public-fixed-service-detail.tsx`: the cover lookup is restored for this package's own pro only. Its cover is the
+    package photo; with no photo, the old code fell back to the pro's banner from their profile, which the
+    package API doesn't send. Related pros still make no lookups.
+  - Parity: the new backend list code was compared with the running old API on live data, read-only.
+    33 requests (16 professionals, 17 fixed services; filters, sorts, pages, location, category, provider) and
+    217 rows were all identical field by field. For every pro, the list and related banners match the profile
+    banner, so the removed lookups never changed anything shown.
+  - Files: `components/marketplace/public-fixed-service-detail.tsx`.
+
+- **Customer side loads faster (home Pros list, Services page, pro / service detail)** — client: performance.
+  - The Pros list no longer waits on browser location detection. That wait covered the permission prompt,
+    up to 8 s, then a reverse geocode; if the prompt was ignored the skeleton never cleared. While
+    detecting, it now loads all areas after `LOCATION_WAIT_MS` (1.2 s), and the local list replaces it
+    when the location arrives. Same on the Services page. Old early-returns kept as comments.
+  - Removed a client N+1: `attachMissingGalleries` fetched the full profile of every pro without a
+    banner (up to 10 extra requests per page) and the list waited for them. The list API already returns
+    `businessGallery` from the same data, so those calls never found a banner. The same applies to
+    `hydrateProviderCardCovers` on the pro and service detail pages (related pros). Calls are commented
+    out; the functions are kept.
+  - Both public list slices: newest search wins (`latestRequestId`; an older response that lands later is
+    dropped), and the in-flight key is the resolved one (`getPendingMeta`). The pros slice used to drop a
+    new search while one was loading, which would have lost the local search above.
+  - Measured with a mocked API and an ignored location prompt: before, the Pros section never loaded;
+    after, cards show at about 2.8 s from navigation (dev server), with 0 profile requests. When the
+    location arrives later, the local list replaces the all-areas list.
+  - Files: `store/publicProfessionalsSlice.ts`, `store/publicFixedServicesSlice.ts`, `store/locationSlice.ts`,
+    `components/home/featured-providers-section.tsx`, `components/marketplace/services-directory.tsx`,
+    `components/marketplace/public-professional-detail.tsx`, `components/marketplace/public-fixed-service-detail.tsx`.
+
 - **Services directory: "Clear all" also removes the location chip** — client.
   - Clear all now runs `resetFilters()` and `dispatch(clearLocation())`. The sidebar Reset and the empty
     state's "Reset filters" are unchanged (location kept). Pre-existing lint errors at lines 795 / 798

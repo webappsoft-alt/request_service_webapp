@@ -682,8 +682,20 @@ function PublicFixedServiceDetailInner({
         }));
 
         if (!cancelled) {
-          const withCovers = await hydrateProviderCardCovers(
-            providers.slice(0, RELATED_LIMIT),
+          // Performance: no per-pro profile requests — related / list APIs already return
+          // the gallery the cover comes from.
+          // const withCovers = await hydrateProviderCardCovers(providers.slice(0, RELATED_LIMIT));
+          // Exception kept: this package's own pro. Its cover is the package photo; with none, the
+          // pro's banner comes from their profile (the package API doesn't send it) — one lookup.
+          const top = providers.slice(0, RELATED_LIMIT);
+          const ownWithoutCover = top.filter(
+            (item) => item.id === ownProvider?.id && !item.coverImage?.trim(),
+          );
+          const hydratedOwn = ownWithoutCover.length
+            ? await hydrateProviderCardCovers(ownWithoutCover)
+            : [];
+          const withCovers = top.map(
+            (item) => hydratedOwn.find((own) => own.id === item.id) ?? item,
           );
           if (!cancelled) {
             setRelatedProviders(withCovers);

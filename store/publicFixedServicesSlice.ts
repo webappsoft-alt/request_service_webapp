@@ -110,6 +110,8 @@ type PublicFixedServicesState = {
   queryKey: string;
   /** Query key of the in-flight non-append request (blocks duplicate loops). */
   requestKey: string | null;
+  /** Newest non-append request — an older search that finishes later is dropped. */
+  latestRequestId: string | null;
   page: number;
   limit: number;
   total: number;
@@ -136,6 +138,7 @@ const initialState: PublicFixedServicesState = {
   query: initialQuery,
   queryKey: buildPublicFixedServicesQueryKey(initialQuery),
   requestKey: null,
+  latestRequestId: null,
   page: 0,
   limit: PUBLIC_FIXED_SERVICES_LIMIT,
   total: 0,
@@ -536,6 +539,7 @@ export const fetchPublicFixedServices = createAsyncThunk<
       location: LiveLocationState;
     };
     rejectValue: string;
+    pendingMeta: { queryKey: string | null };
   }
 >(
   "publicFixedServices/fetch",
@@ -603,6 +607,22 @@ export const fetchPublicFixedServices = createAsyncThunk<
       if (state.requestKey === queryKey) return false;
       if (state.loaded && state.queryKey === queryKey) return false;
       return true;
+    },
+    // Resolved key of a new search (the old pending key ignored the live location, so the
+    // duplicate check above rarely matched).
+    getPendingMeta: ({ arg }, { getState }) => {
+      if (arg && typeof arg === "object" && arg.append) return { queryKey: null };
+      const root = getState();
+      const incoming = arg && typeof arg === "object" ? arg.query : undefined;
+      return {
+        queryKey: buildPublicFixedServicesQueryKey(
+          resolveQueryWithLiveLocation(
+            incoming,
+            root.location,
+            root.publicFixedServices.query.sortBy,
+          ),
+        ),
+      };
     },
   },
 );
@@ -713,7 +733,9 @@ const publicFixedServicesSlice = createSlice({
           const nextQuery: PublicFixedServicesQuery = incoming
             ? { ...incoming }
             : { ...state.query };
-          state.requestKey = buildPublicFixedServicesQueryKey(nextQuery);
+          state.requestKey =
+            action.meta.queryKey ?? buildPublicFixedServicesQueryKey(nextQuery);
+          state.latestRequestId = action.meta.requestId;
           state.loading = true;
           // Keep previous items visible while refreshing (overlay loading in UI).
           if (!state.items.length) {
@@ -725,9 +747,16 @@ const publicFixedServicesSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchPublicFixedServices.fulfilled, (state, action) => {
-        state.loading = false;
-        state.loadingMore = false;
-        state.requestKey = null;
+        if (action.payload.append) {
+          state.loadingMore = false;
+          // A new search replaced the list while this page loaded — drop the page.
+          if (state.loading || action.payload.queryKey !== state.queryKey) return;
+        } else {
+          // An older search finished after a newer one started — keep the newer one.
+          if (action.meta.requestId !== state.latestRequestId) return;
+          state.loading = false;
+          state.requestKey = null;
+        }
         state.loaded = true;
         state.query = action.payload.query;
         state.queryKey = action.payload.queryKey;
@@ -751,9 +780,13 @@ const publicFixedServicesSlice = createSlice({
         state.items = action.payload.items;
       })
       .addCase(fetchPublicFixedServices.rejected, (state, action) => {
-        state.loading = false;
-        state.loadingMore = false;
-        state.requestKey = null;
+        if (action.meta.arg && typeof action.meta.arg === "object" && action.meta.arg.append) {
+          state.loadingMore = false;
+        } else {
+          if (action.meta.requestId !== state.latestRequestId) return;
+          state.loading = false;
+          state.requestKey = null;
+        }
         state.error =
           action.payload ||
           action.error.message ||

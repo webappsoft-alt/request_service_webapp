@@ -35,7 +35,7 @@ import {
 import {
   fetchPublicProfessionalBySlug,
   hasProfessionalDetailFields,
-  hydrateProviderCardCovers,
+  // hydrateProviderCardCovers, (no longer used — see below)
   normalizePublicProfessional,
   publicProfessionalToProvider,
   selectPublicProfessionalBySlug,
@@ -627,9 +627,10 @@ export function PublicProfessionalDetail({
         }
 
         if (!cancelled) {
-          const withCovers = await hydrateProviderCardCovers(
-            providers.slice(0, RELATED_LIMIT),
-          );
+          // Performance: no per-pro profile requests — related / list APIs already return
+          // the gallery the cover comes from.
+          // const withCovers = await hydrateProviderCardCovers(providers.slice(0, RELATED_LIMIT));
+          const withCovers = providers.slice(0, RELATED_LIMIT);
           if (!cancelled) {
             setRelatedProviders(withCovers);
             setRelatedLoading(false);

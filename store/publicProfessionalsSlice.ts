@@ -185,6 +185,8 @@ type PublicProfessionalsState = {
   query: PublicProfessionalsQuery;
   queryKey: string;
   requestKey: string | null;
+  /** Newest non-append request — an older search that finishes later is dropped. */
+  latestRequestId: string | null;
   page: number;
   limit: number;
   total: number;
@@ -211,6 +213,7 @@ const initialState: PublicProfessionalsState = {
   query: initialQuery,
   queryKey: buildPublicProfessionalsQueryKey(initialQuery),
   requestKey: null,
+  latestRequestId: null,
   page: 0,
   limit: PUBLIC_PROFESSIONALS_LIMIT,
   total: 0,
@@ -720,6 +723,12 @@ function extractDetailEntity(response: unknown): PublicProfessional | null {
   return normalizePublicProfessional(response);
 }
 
+/**
+ * No longer called (performance): it fetched the full profile of every pro without a banner
+ * (up to 10 extra requests per page) and the list waited for all of them. The list API already
+ * returns `businessGallery` from the same data as the profile, so those calls never found a banner.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function attachMissingGalleries(items: PublicProfessional[]) {
   const missing = items.filter(
     (item) => !galleryBanner(normalizeBusinessGallery(item.businessGallery)),
@@ -799,6 +808,8 @@ export function selectPublicProfessionalBySlug(
 }
 
 /** Map API professional → existing Provider shape for map + cards. */
+// (hydrateProviderCardCovers above is no longer called by the detail pages — same reason as
+// attachMissingGalleries: the related / list APIs already return the gallery.)
 export function publicProfessionalToProvider(
   professional: PublicProfessional,
 ): Provider {
@@ -1171,6 +1182,7 @@ export const fetchPublicProfessionals = createAsyncThunk<
       };
     };
     rejectValue: string;
+    pendingMeta: { queryKey: string | null };
   }
 >(
   "publicProfessionals/fetch",
@@ -1220,7 +1232,9 @@ export const fetchPublicProfessionals = createAsyncThunk<
         { silent: true },
       );
       const parsed = parsePublicProfessionalsResponse(response);
-      const items = await attachMissingGalleries(parsed.items);
+      // Performance: no per-pro profile requests — the list already carries businessGallery.
+      // const items = await attachMissingGalleries(parsed.items);
+      const items = parsed.items;
       return {
         items,
         page: parsed.page,
@@ -1243,7 +1257,8 @@ export const fetchPublicProfessionals = createAsyncThunk<
       if (arg?.append) {
         return !state.loading && !state.loadingMore && state.hasNextPage;
       }
-      if (state.loading) return false;
+      // Was: `if (state.loading) return false;` — that dropped the search for the customer's
+      // location when it arrived while the first (all areas) load was still running.
       const incoming =
         arg && typeof arg === "object" ? arg.query : undefined;
       const { query } = resolvePublicProfessionalsQuery(
@@ -1251,10 +1266,26 @@ export const fetchPublicProfessionals = createAsyncThunk<
         location,
       );
       const queryKey = buildPublicProfessionalsQueryKey(query);
-      if (state.loaded && state.items.length && state.queryKey === queryKey) {
+      // The same search is already on its way.
+      if (state.loading && state.requestKey === queryKey) return false;
+      if (
+        !state.loading &&
+        state.loaded &&
+        state.items.length &&
+        state.queryKey === queryKey
+      ) {
         return false;
       }
       return true;
+    },
+    // Resolved key of a new search, so the reducer can track what is in flight.
+    getPendingMeta: ({ arg }, { getState }) => {
+      if (arg?.append) return { queryKey: null };
+      const { query } = resolvePublicProfessionalsQuery(
+        arg?.query,
+        getState().location,
+      );
+      return { queryKey: buildPublicProfessionalsQueryKey(query) };
     },
   },
 );
@@ -1372,7 +1403,9 @@ const publicProfessionalsSlice = createSlice({
           const nextQuery: PublicProfessionalsQuery = incoming
             ? { ...incoming }
             : { ...state.query };
-          state.requestKey = buildPublicProfessionalsQueryKey(nextQuery);
+          state.requestKey =
+            action.meta.queryKey ?? buildPublicProfessionalsQueryKey(nextQuery);
+          state.latestRequestId = action.meta.requestId;
           state.loading = true;
           if (!state.items.length) {
             state.total = 0;
@@ -1383,9 +1416,16 @@ const publicProfessionalsSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchPublicProfessionals.fulfilled, (state, action) => {
-        state.loading = false;
-        state.loadingMore = false;
-        state.requestKey = null;
+        if (action.payload.append) {
+          state.loadingMore = false;
+          // A new search replaced the list while this page loaded — drop the page.
+          if (state.loading || action.payload.queryKey !== state.queryKey) return;
+        } else {
+          // An older search finished after a newer one started — keep the newer one.
+          if (action.meta.requestId !== state.latestRequestId) return;
+          state.loading = false;
+          state.requestKey = null;
+        }
         state.loaded = true;
         state.query = action.payload.query;
         state.queryKey = action.payload.queryKey;
@@ -1409,9 +1449,13 @@ const publicProfessionalsSlice = createSlice({
         state.items = action.payload.items;
       })
       .addCase(fetchPublicProfessionals.rejected, (state, action) => {
-        state.loading = false;
-        state.loadingMore = false;
-        state.requestKey = null;
+        if (action.meta.arg?.append) {
+          state.loadingMore = false;
+        } else {
+          if (action.meta.requestId !== state.latestRequestId) return;
+          state.loading = false;
+          state.requestKey = null;
+        }
         state.error =
           action.payload ||
           action.error.message ||

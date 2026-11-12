@@ -14,6 +14,7 @@ import { ProviderCardSkeleton } from "@/components/shared/loading-skeletons";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   detectCurrentLocation,
+  LOCATION_WAIT_MS,
   hasLocation,
 } from "@/store/locationSlice";
 import {
@@ -60,10 +61,13 @@ export function FeaturedProvidersSection({
   ]);
 
   useEffect(() => {
-    if (customerLocation.detecting) return;
-
-    const usable = hasLocation(customerLocation);
-    void dispatch(
+    // Performance: don't hold the list on the browser's location prompt (it can wait 8s+,
+    // or forever if the visitor ignores it). After a short wait, load all areas; the
+    // local list replaces it as soon as the location arrives.
+    // Was: if (customerLocation.detecting) return;
+    const usable = !customerLocation.detecting && hasLocation(customerLocation);
+    const load = () =>
+      dispatch(
       fetchPublicProfessionals({
         query: {
           zipCode:
@@ -87,6 +91,11 @@ export function FeaturedProvidersSection({
         },
       }),
     );
+    if (customerLocation.detecting) {
+      const timer = window.setTimeout(() => void load(), LOCATION_WAIT_MS);
+      return () => window.clearTimeout(timer);
+    }
+    void load();
   }, [
     customerLocation.address,
     customerLocation.city,

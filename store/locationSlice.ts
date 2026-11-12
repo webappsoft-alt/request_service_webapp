@@ -150,6 +150,12 @@ export function hasLocation(location: CustomerLocation): boolean {
   );
 }
 
+/**
+ * How long customer listings wait for location detection before loading all areas
+ * (the local results replace them when the location arrives).
+ */
+export const LOCATION_WAIT_MS = 1200;
+
 function getCurrentPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {

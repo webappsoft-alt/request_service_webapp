@@ -70,6 +70,7 @@ import {
 import {
   clearLocation,
   detectCurrentLocation,
+  LOCATION_WAIT_MS,
   hasServiceGeoLocation,
   hydrateLocationIfEmpty,
   isCommittedLocation,
@@ -889,10 +890,11 @@ export function ServicesDirectory({
 
   // Fetch with location filters when set; without them when address is cleared.
   useEffect(() => {
-    if (customerLocation.detecting) {
-      setPendingRefresh(false);
-      return;
-    }
+    // Performance: don't hold the list on the browser's location prompt (it can wait 8s+,
+    // or forever if ignored). While detecting, load all areas after a short wait; the
+    // local results replace them when the location arrives (newest search wins in the slice).
+    // Was: if (customerLocation.detecting) { setPendingRefresh(false); return; }
+    if (customerLocation.detecting) setPendingRefresh(false);
 
     const queryChanged = prevApiQueryKeyRef.current !== apiQueryKey;
     prevApiQueryKeyRef.current = apiQueryKey;
@@ -938,7 +940,7 @@ export function ServicesDirectory({
           },
         }),
       );
-    }, 220);
+    }, customerLocation.detecting ? LOCATION_WAIT_MS : 220);
     return () => window.clearTimeout(timer);
   }, [
     answers,

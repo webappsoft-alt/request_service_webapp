@@ -67,6 +67,45 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-12
 
+- **Pro co-pilot: voice auto-send, auto-close after navigation, conversation history** — client. Files in
+  `components/pro-assistant/` only.
+  - Voice: when speech recognition ends, what was heard is sent automatically (no Send click).
+  - After a page or record opens (reply navigation, picking from a list, creating an estimate), the co-pilot closes so
+    the page is fully visible. The chat is kept, and reopening shows it.
+  - History: a header History button opens the saved-conversation list (search, newest first, time + message count +
+    preview). Open one to continue it, rename inline, delete with a confirm step, or start New. Deleting the open
+    chat starts a fresh one.
+  - The current conversation id is kept for this tab; messages and estimate creation send it, so drafts reopen as
+    "created".
+  - Checks: tsc + eslint clean. Chrome with mocked APIs and a mocked login, 34/34. Covered: auto-close after
+    navigation / invoice / pick / estimate, conversationId sent, the voice command sent automatically and navigated,
+    history list / rename / open / delete, Expand / Restore, phone.
+  - Files: `components/pro-assistant/history-panel.tsx` (new), `pro-assistant.tsx`, `pro-assistant-input.tsx`,
+    `estimate-draft-card.tsx`, `use-pro-assistant-socket.ts`, `pro-assistant-api.ts`.
+
+- **Pro Co-pilot — operations assistant in the Pro portal (new folder `components/pro-assistant/`)** — client.
+  - Separate from the customer bot (`components/bot-ai` untouched). One existing file changed: `portal-shell.tsx`
+    renders `<ProAssistant />` (+ import). Shown to Pros only.
+  - Launcher "Pro Co-pilot" bottom-right (Ctrl/⌘+J toggles). The panel uses the same look as the customer assistant:
+    floating bottom-right, Expand / Restore to a large centred window (animated), full screen on phones, Esc closes.
+  - Talks to the backend socket namespace `/pro-assistant` with the Pro's token (socket.io-client, same as the
+    existing bot) and streams replies. Falls back to REST if the socket isn't connected.
+  - Replies:
+    - Opens pages and records automatically (expanded view shrinks so the page is visible), with a chip to reopen.
+    - Several matches → a pick list.
+    - Estimate drafts → an editable card: title, customer search, line items with qty × unit price = total, add /
+      remove lines, notes, live total. "Create estimate" creates it and opens the new estimate.
+  - Voice-to-text mic (browser speech recognition); Enter sends, Shift+Enter = new line.
+  - The conversation is kept across pages and reloads in this tab (sessionStorage); "New conversation" clears it.
+  - Only `/pro/dashboard/...` links are followed from replies.
+  - Styles live in `components/pro-assistant/pro-assistant.css` (not globals.css).
+  - Checks: tsc + eslint clean. Chrome with all APIs mocked and a mocked login, 21/21: launcher, Ctrl+J,
+    time-tracking navigation, invoice INV-874, the choice list, estimate card → customer pick → price edit
+    ($160) → Create (correct body) → opens the estimate, Expand / Restore, the conversation kept, phone full screen,
+    no page errors.
+  - Files (new): `components/pro-assistant/{pro-assistant.tsx,pro-assistant-input.tsx,estimate-draft-card.tsx,
+    use-pro-assistant-socket.ts,pro-assistant-api.ts,pro-assistant.css}`; changed: `components/portal/portal-shell.tsx`.
+
 - **AI assistant: Maximize / Restore button** — client (frontend only; no backend or AI logic touched).
   - New header button between History and Minimize: "Expand chat" (Maximize2 icon) / "Restore to small window"
     (Minimize2 icon, shown as pressed).

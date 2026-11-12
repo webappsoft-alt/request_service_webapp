@@ -44,6 +44,7 @@ import { cn } from "@/lib/utils";
 import { SidebarCollapseToggle } from "@/components/layout/sidebar-collapse-toggle";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuthUser } from "@/store/authSlice";
+import { ProAssistant } from "@/components/pro-assistant/pro-assistant";
 import { selectPendingReviewTotal } from "@/store/contractorReviewsSlice";
 import {
   bumpPortalInboxCount,
@@ -562,6 +563,8 @@ export function PortalShell({ children }: { children: ReactNode }) {
           </div>
         </main>
       </div>
+      {/* Pro operations co-pilot (separate module: components/pro-assistant). */}
+      <ProAssistant />
     </div>
   );
 }

@@ -18,6 +18,8 @@ import {
 const REFETCH_DEBOUNCE_MS = 400;
 /** Coming back to the tab after this long refetches (events may have been missed). */
 const STALE_AFTER_MS = 30_000;
+/** A socket (re)connect this soon after a load has nothing new to fetch. */
+const RECONNECT_DEDUPE_MS = 5_000;
 /** Search waits for a pause in typing. */
 const SEARCH_DEBOUNCE_MS = 350;
 
@@ -91,7 +93,10 @@ export function usePipelineBoard() {
     const onRealtime = (event: Event) => {
       if (
         (event as CustomEvent<{ type?: string }>).detail?.type ===
-        "SOCKET_RECONNECTED"
+          "SOCKET_RECONNECTED" &&
+        // The first connect right after opening the board has nothing to catch up on
+        // (it used to download the board a second time).
+        Date.now() - (fetchedAtRef.current ?? 0) > RECONNECT_DEDUPE_MS
       )
         scheduleLoad();
     };

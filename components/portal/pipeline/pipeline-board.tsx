@@ -869,7 +869,7 @@ function CardMenu({
           {card.number || noun} · {card.customerName}
         </DropdownMenuLabel>
         <DropdownMenuItem asChild className="text-[12px] font-medium">
-          <Link href={card.href}>
+          <Link href={card.href} prefetch={false}>
             <ExternalLink aria-hidden />
             Open {noun}
           </Link>
@@ -932,6 +932,10 @@ const PipelineCardItem = memo(function PipelineCardItem({
   const date = cardDate(card);
   const status = cardStatus(card);
   const origin = leadOrigin(card);
+  // Cards don't prefetch their page on scroll (one request per visible card); the page is
+  // prefetched when the Pro shows intent (hover / focus / touch), so opening it stays fast.
+  const router = useRouter();
+  const prefetchCard = useCallback(() => router.prefetch(card.href), [router, card.href]);
   return (
     <Draggable draggableId={card.key} index={index}>
       {(provided, snapshot) => {
@@ -952,6 +956,10 @@ const PipelineCardItem = memo(function PipelineCardItem({
           >
             <Link
               href={card.href}
+              prefetch={false}
+              onMouseEnter={prefetchCard}
+              onFocus={prefetchCard}
+              onTouchStart={prefetchCard}
               draggable={false}
               className="block rounded-md px-2.5 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             >

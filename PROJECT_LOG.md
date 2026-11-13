@@ -67,6 +67,16 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-13
 
+- **Pipeline page: no prefetch per card, no double board load** — client.
+  - Each card's `<Link>` prefetched its record page as it scrolled into view: about 12 `<id>?_rsc` requests on
+    open, more while scrolling (production only). Cards now use `prefetch={false}` and prefetch on hover / focus /
+    touch (`router.prefetch`), so opening a card stays fast. The same applies to the card menu's "Open" link.
+  - The board reloaded on the first socket connect right after the initial load (a second board download).
+    A reconnect within 5 s of a load is now skipped; real reconnects and stale-tab refreshes are unchanged.
+  - Checks: tsc + eslint clean. Chrome with mocked APIs, 5/5: board renders, 1 board request on open, card links
+    open. In that test the socket was blocked, so the reconnect skip was checked by reading the code.
+  - Files: `components/portal/pipeline/pipeline-board.tsx`, `components/portal/pipeline/use-pipeline-board.ts`.
+
 - **Pro dashboard: no duplicate / repeated API calls; Messages paged 10 at a time** — client.
   - Dashboard "Recent messages": one request for 10 threads (`limit=10&sort=unread`) instead of 100 full threads.
     Before, it was fetched again on every dashboard refresh, and the whole dashboard was refetched on every chat

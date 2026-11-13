@@ -238,7 +238,12 @@ export function CustomersView() {
             cell: (row) => (
               <div>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <Link href={`/pro/dashboard/customers/${row.id}`} className="font-medium text-primary hover:underline">
+                  {/* No prefetch per visible row (one page request each); the row prefetches on hover. */}
+                  <Link
+                    href={`/pro/dashboard/customers/${row.id}`}
+                    prefetch={false}
+                    className="font-medium text-primary hover:underline"
+                  >
                     {crmCustomerName(row)}
                   </Link>
                   <AccountBadge account={row.account} />

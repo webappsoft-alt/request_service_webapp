@@ -368,6 +368,9 @@ export function PortalDataTable<T>({
                   <TableRow
                     key={rowKey(row)}
                     className={cn(clickable && "cursor-pointer", rowClassName?.(row))}
+                    // The row's page loads in the background once the pointer is on it (intent),
+                    // not for every visible row; router.prefetch skips pages already prefetched.
+                    onMouseEnter={href ? () => router.prefetch(href) : undefined}
                     onClick={
                       clickable
                         ? (event) => {

@@ -67,6 +67,15 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-13
 
+- **Customers list: no page prefetch per row** — client.
+  - Each row's customer-name `<Link>` prefetched that customer's file in production: the `<id>?_rsc` requests,
+    two per row. The link now has `prefetch={false}`.
+  - The shared `PortalDataTable` prefetches a row's page on hover (`router.prefetch`), so opening a customer stays
+    fast. This applies to every list built on that table.
+  - Checks: tsc + eslint clean. Chrome with mocked APIs, 6/6: list renders, links kept, a row opens the customer
+    file, detail renders.
+  - Files: `components/portal/views/customers-view.tsx`, `components/portal/portal-data-table.tsx`.
+
 - **Pipeline page: no prefetch per card, no double board load** — client.
   - Each card's `<Link>` prefetched its record page as it scrolled into view: about 12 `<id>?_rsc` requests on
     open, more while scrolling (production only). Cards now use `prefetch={false}` and prefetch on hover / focus /

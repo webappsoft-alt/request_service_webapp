@@ -2089,9 +2089,12 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         headerless
       >
         <div className="grid gap-5 lg:grid-cols-[232px_minmax(0,1fr)]" role="status" aria-label="Opening estimate…">
-          {/* Same shape as the project menu: one full-height card. */}
-          <section className="flex flex-col rounded-2xl border border-slate-200/70 bg-white lg:h-[calc(100dvh-72px)] dark:border-border dark:bg-card">
-            <div className="flex items-start gap-2 border-b border-slate-100 px-3.5 pt-3.5 pb-3 dark:border-border-soft">
+          {/* Same shape and border as the project menu (ProjectLifecycleNav): one full-height card.
+              Previous (border too faint next to the loaded page):
+              "flex flex-col rounded-2xl border border-slate-200/70 bg-white lg:h-[calc(100dvh-72px)] dark:border-border dark:bg-card"
+              header divider: "border-slate-100" */}
+          <section className="flex flex-col overflow-hidden rounded-2xl border border-[#94a3b8] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] lg:h-[calc(100dvh-72px)] dark:border-border dark:bg-card">
+            <div className="flex items-start gap-2 border-b border-slate-200/70 px-3.5 pt-3.5 pb-3 dark:border-border-soft">
               <Skeleton className="size-7 rounded-full" />
               <div className="flex-1 space-y-2">
                 <Skeleton className="h-4 w-32" />

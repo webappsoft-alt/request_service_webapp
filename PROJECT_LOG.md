@@ -67,6 +67,11 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-13
 
+- **Estimate page loading skeleton: sidebar border matches the loaded page** — client. The left menu skeleton used
+  `border-slate-200/70` (almost invisible); it now uses the same `border-[#94a3b8]` + light shadow as
+  `ProjectLifecycleNav` and the main cards, and the header divider matches too. Old classes kept in a comment.
+  File: `components/portal/estimate-v2/new-estimate-workspace-view.tsx`.
+
 - **Customers list: no page prefetch per row** — client.
   - Each row's customer-name `<Link>` prefetched that customer's file in production: the `<id>?_rsc` requests,
     two per row. The link now has `prefetch={false}`.

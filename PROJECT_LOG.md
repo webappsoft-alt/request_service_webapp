@@ -65,6 +65,44 @@ Modules, layout, notification channels and API conventions: see
 
 Newest first. Format: **what** — why · files.
 
+### 2026-11-13
+
+- **Pro dashboard: no duplicate / repeated API calls; Messages paged 10 at a time** — client.
+  - Dashboard "Recent messages": one request for 10 threads (`limit=10&sort=unread`) instead of 100 full threads.
+    Before, it was fetched again on every dashboard refresh, and the whole dashboard was refetched on every chat
+    message. Chat socket events now update the rows in place; only a new conversation reloads the 10. Lead events
+    still refresh the dashboard, coalesced. The old effects are kept as a comment.
+  - Notification bell: loads once, then follows the socket. It no longer refetches:
+    - on opening, while the socket is connected;
+    - on the first connect right after the initial load;
+    - when the tab becomes visible, while the socket is connected.
+    A real reconnect still re-syncs once.
+  - Live team map: a location ping from a worker the map doesn't have reloaded the whole map every time; now once,
+    then a 2-minute cooldown for that worker. Switching tabs reloads only after 30 s away.
+  - Messages page:
+    - 10 conversations per page, unread first; more load on scroll, or with a "Load more conversations" button.
+    - Search (debounced) and the All / Unread / Leads tabs run on the server.
+    - Tab totals come from the server and cover every page.
+    - A `?thread=` link to an older conversation fetches just that thread.
+    - Removed the duplicate first request (commented out).
+  - Lead detail → Messages tab: loads only that lead's thread (by request or customer email), not every thread.
+  - Checks:
+    - tsc clean. The remaining eslint errors in these files are in older code and appear without these changes too.
+    - Chrome with mocked APIs, 18/18:
+      - dashboard requests 10 chats, never 100; 1 notifications call; 0 requests while idle for 8 s;
+      - Messages loads 10 → 20 → 25; tab totals 25 / 3 / 10;
+      - one debounced search request;
+      - an older-thread link opens that thread.
+  - Files: `lib/api/chat-client.ts`, `components/portal/use-chat-threads.ts`,
+    `components/portal/views/{dashboard-view,messages-view,request-detail-view}.tsx`,
+    `components/notifications/notification-bell.tsx`, `components/tracking/use-live-workers.ts`.
+
+- **Premium badge hidden on the customer side** — client request. Display only: Premium Pros still rank first in
+  every listing, and the API still returns `isPremium` / `premium`. The badge is commented out (not deleted) on all three
+  `ProviderCard` layouts (cover-image corner, title, list row) and the public profile header. The Pro portal (dashboard
+  shortcut, Business Profile, Premium card) still shows it.
+  - Files: `components/shared/provider-card.tsx`, `components/marketplace/provider-profile.tsx`.
+
 ### 2026-11-12
 
 - **Pro co-pilot estimate card: proper customer list + Create-estimate fields** — client. Files in

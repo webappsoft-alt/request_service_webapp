@@ -4,6 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useCrmApiData } from "@/components/portal/use-crm-api-data";
 import {
   listProviderChatThreads,
+  listProviderChatThreadsPage,
+  getProviderChatThread,
+  type ProviderChatFilter,
+  type ProviderChatPage,
   markProviderChatRead,
   sendProviderChatMessage,
   fetchAdminDirectChatForPeer,
@@ -90,8 +94,34 @@ function mergeThreads(existing: ChatThread[], incoming: ChatThread[]): ChatThrea
   );
 }
 
-export function useChatThreads(options?: { enabled?: boolean }) {
+type ChatPaging = {
+  page: number;
+  hasMore: boolean;
+  total: number;
+  counts: ProviderChatPage["counts"];
+};
+
+const NO_PAGING: ChatPaging = { page: 0, hasMore: false, total: 0, counts: null };
+
+/**
+ * Provider chat threads.
+ * - `paged` (Messages page): 10 threads per page, unread first; search and tab filter run on the
+ *   server; `loadMore()` fetches the next page (infinite scroll); `counts` has the tab totals.
+ * - `match` (request detail): only the thread(s) for that request / customer email.
+ * - Neither: the previous behaviour (one list of up to 100 threads).
+ */
+export function useChatThreads(options?: {
+  enabled?: boolean;
+  paged?: { q: string; filter: ProviderChatFilter };
+  match?: { requestId?: string | null; email?: string | null };
+}) {
   const isEnabled = options?.enabled ?? true;
+  const pagedMode = Boolean(options?.paged);
+  const pagedQ = options?.paged?.q.trim() ?? "";
+  const pagedFilter: ProviderChatFilter = options?.paged?.filter ?? "all";
+  const matchRequestId = options?.match?.requestId || "";
+  const matchEmail = (options?.match?.email || "").trim().toLowerCase();
+  const queryKey = `${pagedMode}|${pagedQ}|${pagedFilter}|${matchRequestId}|${matchEmail}`;
   const { session, provider } = usePortalWorkspace();
   const crm = useCrmApiData();
   const auth = useAppSelector(selectAuth);
@@ -107,6 +137,20 @@ export function useChatThreads(options?: { enabled?: boolean }) {
   const [apiThreads, setApiThreads] = useState<ChatThread[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const inFlightRef = useRef(false);
+  const queryRef = useRef({ pagedMode, pagedQ, pagedFilter, matchRequestId, matchEmail });
+  useEffect(() => {
+    queryRef.current = { pagedMode, pagedQ, pagedFilter, matchRequestId, matchEmail };
+  }, [pagedMode, pagedQ, pagedFilter, matchRequestId, matchEmail]);
+  const [paging, setPagingState] = useState<ChatPaging>(NO_PAGING);
+  const pagingRef = useRef<ChatPaging>(NO_PAGING);
+  const setPaging = useCallback((next: ChatPaging) => {
+    pagingRef.current = next;
+    setPagingState(next);
+  }, []);
+  /** Newest list request; an older response (e.g. a previous search) is ignored. */
+  const seqRef = useRef(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false);
 
   const threads = useSyncExternalStore(
     subscribeChat,
@@ -117,31 +161,106 @@ export function useChatThreads(options?: { enabled?: boolean }) {
   const fetchThreads = useCallback(
     async (options?: { silent?: boolean; force?: boolean }) => {
       if (!isLive || !isEnabled) return;
-      if (inFlightRef.current) return;
+      const query = queryRef.current;
+      const matched = Boolean(query.matchRequestId || query.matchEmail);
+      const scoped = query.pagedMode || matched;
+      // The unscoped list keeps its old one-at-a-time guard; scoped lists let the newest win.
+      if (!scoped && inFlightRef.current) return;
+      const seq = ++seqRef.current;
       inFlightRef.current = true;
       try {
-        const [items, adminChat] = await Promise.all([
-          listProviderChatThreads({
-            silent: options?.silent ?? true,
-            force: options?.force ?? true,
-          }),
-          fetchAdminDirectChatForPeer("provider", {
-            silent: options?.silent ?? true,
-          }).catch(() => null),
+        const [result, adminChat] = await Promise.all([
+          scoped
+            ? listProviderChatThreadsPage({
+                page: 1,
+                q: query.pagedMode ? query.pagedQ : "",
+                filter: query.pagedMode ? query.pagedFilter : "all",
+                requestId: query.matchRequestId || null,
+                email: query.matchEmail || null,
+                counts: query.pagedMode,
+                silent: options?.silent ?? true,
+              })
+            : listProviderChatThreads({
+                silent: options?.silent ?? true,
+                force: options?.force ?? true,
+              }).then((items) => ({ items, page: 1, total: items.length, hasMore: false, counts: null })),
+          matched
+            ? Promise.resolve(null)
+            : fetchAdminDirectChatForPeer("provider", {
+                silent: options?.silent ?? true,
+              }).catch(() => null),
         ]);
+        if (seq !== seqRef.current) return;
+        const items = result.items;
         const withAdmin = adminChat
           ? [adminChat, ...items.filter((t) => t.id !== ADMIN_DIRECT_THREAD_ID)]
           : items;
         setApiThreads((prev) => mergeThreads(prev, withAdmin));
+        if (query.pagedMode) {
+          setPaging({
+            page: 1,
+            hasMore: result.hasMore,
+            total: result.total,
+            counts: result.counts ?? pagingRef.current.counts,
+          });
+        }
       } catch (err) {
         console.error("Failed to load provider chats:", err);
       } finally {
-        inFlightRef.current = false;
+        if (seq === seqRef.current) inFlightRef.current = false;
         setInitialLoading(false);
       }
     },
-    [isLive, isEnabled],
+    [isLive, isEnabled, setPaging],
   );
+
+  /** Paged mode: the next 10 threads (infinite scroll). */
+  const loadMore = useCallback(async () => {
+    const query = queryRef.current;
+    if (!query.pagedMode || !isLive || !isEnabled) return;
+    const current = pagingRef.current;
+    if (!current.hasMore || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    const seq = seqRef.current;
+    try {
+      const result = await listProviderChatThreadsPage({
+        page: current.page + 1,
+        q: query.pagedQ,
+        filter: query.pagedFilter,
+      });
+      if (seq !== seqRef.current) return; // a newer search / refresh replaced the list
+      setApiThreads((prev) => mergeThreads(prev, result.items));
+      setPaging({ ...current, page: result.page, hasMore: result.hasMore, total: result.total });
+    } catch (err) {
+      console.error("Failed to load more chats:", err);
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [isLive, isEnabled, setPaging]);
+
+  /** A conversation opened by link that isn't in the loaded pages. */
+  const ensureThread = useCallback(
+    async (threadId: string) => {
+      if (!isLive || !threadId || threadId === ADMIN_DIRECT_THREAD_ID) return;
+      try {
+        const thread = await getProviderChatThread(threadId);
+        if (thread) setApiThreads((prev) => mergeThreads(prev, [thread]));
+      } catch {
+        // Not this Pro's thread / deleted: the page shows "Select a conversation".
+      }
+    },
+    [isLive],
+  );
+
+  // New search / tab / request: reload page 1 (the first load is done by the effect below).
+  const lastQueryKey = useRef(queryKey);
+  useEffect(() => {
+    if (lastQueryKey.current === queryKey) return;
+    lastQueryKey.current = queryKey;
+    void fetchThreads({ silent: true, force: true });
+  }, [queryKey, fetchThreads]);
 
   useEffect(() => {
     if (!isLive || !isEnabled) {
@@ -534,5 +653,11 @@ export function useChatThreads(options?: { enabled?: boolean }) {
     markRead,
     loading,
     refresh: fetchThreads,
+    loadMore,
+    loadingMore,
+    hasMore: paging.hasMore,
+    total: paging.total,
+    counts: paging.counts,
+    ensureThread,
   };
 }

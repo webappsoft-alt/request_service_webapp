@@ -32,6 +32,8 @@ import {
 
 /** Re-sync when the tab comes back after this long (events can be missed while asleep). */
 const RESYNC_AFTER_MS = 30_000;
+/** A socket (re)connect this soon after a load has nothing new to fetch. */
+const RECONNECT_DEDUPE_MS = 5_000;
 /** First load when the live connection hasn't come up by then. */
 const FIRST_LOAD_FALLBACK_MS = 3_000;
 
@@ -115,6 +117,10 @@ export function NotificationBell({
   // still connecting, its connect re-sync (SOCKET_RECONNECTED below) is that first load, so the
   // list isn't fetched twice; the timer covers a socket that doesn't connect.
   const { isConnected } = useSocket();
+  const connectedRef = useRef(isConnected);
+  useEffect(() => {
+    connectedRef.current = isConnected;
+  }, [isConnected]);
   useEffect(() => {
     if (isConnected) {
       void dispatch(loadNotificationFeed());
@@ -159,7 +165,9 @@ export function NotificationBell({
         return;
       }
       if (type === "SOCKET_RECONNECTED") {
-        // Events may have been missed while offline.
+        // Events may have been missed while offline. The first connect right after the initial
+        // load (a few seconds) has nothing to catch up on, so it doesn't fetch the same page again.
+        if (Date.now() - loadedAtRef.current < RECONNECT_DEDUPE_MS) return;
         void dispatch(loadNotificationFeed({ force: true }));
       }
     });
@@ -168,6 +176,9 @@ export function NotificationBell({
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
+      // While the socket is connected every change already arrived as an event (a dropped
+      // connection re-syncs on reconnect above), so coming back to the tab needs no request.
+      if (connectedRef.current) return;
       if (Date.now() - loadedAtRef.current < RESYNC_AFTER_MS) return;
       void dispatch(loadNotificationFeed({ force: true }));
     };
@@ -177,8 +188,10 @@ export function NotificationBell({
 
   function onOpenChange(next: boolean) {
     setOpen(next);
-    // Opening shows the newest 10 again.
-    if (next) void dispatch(loadNotificationFeed({ force: true }));
+    // Opening shows the list kept current by the socket. It only fetches when there is no list
+    // yet, or the socket is down (so the list may be stale).
+    // Previously: if (next) void dispatch(loadNotificationFeed({ force: true }));
+    if (next) void dispatch(loadNotificationFeed({ force: !connectedRef.current }));
   }
 
   function onScroll(event: UIEvent<HTMLDivElement>) {

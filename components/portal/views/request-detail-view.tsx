@@ -321,7 +321,8 @@ export function RequestDetailView({ id }: { id: string }) {
   const records = usePortalRecords();
   const searchParams = useSearchParams();
   const tab = (searchParams.get("tab") ?? "summary") as LeadTab;
-  const chat = useChatThreads({ enabled: tab === "messages" });
+  // Moved below `request` so the chat list can be limited to this request's thread.
+  // const chat = useChatThreads({ enabled: tab === "messages" });
   const [estimateOpen, setEstimateOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
@@ -371,6 +372,11 @@ export function RequestDetailView({ id }: { id: string }) {
     cachedLead ||
     (apiLead?.id === id ? apiLead : null) ||
     allRequests.find((item) => item.id === id);
+  // Only this request's conversation (by request, or the customer's email) — not every thread.
+  const chat = useChatThreads({
+    enabled: tab === "messages",
+    match: { requestId: request?.id || id, email: request?.customerEmail || null },
+  });
 
   const tabKey = leadTabCacheKey(id, request?.customerId);
   const cachedCustomer = request?.customerId ? reduxRequests.customerCache[request.customerId] : undefined;

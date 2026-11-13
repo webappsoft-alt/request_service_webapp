@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -192,7 +192,25 @@ function CustomerMessages() {
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const viewingThreadIdRef = useRef<string | null>(null);
 
-  const { threads, send, markRead, loading, refresh } = useChatThreads();
+  // Server-side search (debounced) + tab filter; 10 conversations per page, more on scroll.
+  const [serverQuery, setServerQuery] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setServerQuery(query.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+  // const { threads, send, markRead, loading, refresh } = useChatThreads();
+  const {
+    threads,
+    send,
+    markRead,
+    loading,
+    refresh,
+    loadMore,
+    loadingMore,
+    hasMore,
+    counts,
+    ensureThread,
+  } = useChatThreads({ paged: { q: serverQuery, filter: filterTab } });
   const {
     joinThread,
     leaveThread,
@@ -206,11 +224,25 @@ function CustomerMessages() {
 
   const lastMarkedThreadIdRef = useRef<string | null>(null);
 
-  // Actively fetch live chat threads once on mount
+  // The hook already loads the first page on mount; a second request here was a duplicate.
+  // useEffect(() => {
+  //   void refresh({ force: true, silent: true });
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, []);
+
+  // A ?thread= link to a conversation that isn't in the loaded pages: fetch just that one.
+  const ensuredThreadIdsRef = useRef(new Set<string>());
   useEffect(() => {
-    void refresh({ force: true, silent: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!selectedId || loading || ensuredThreadIdsRef.current.has(selectedId)) return;
+    if (threads.some((item) => item.id === selectedId)) return;
+    ensuredThreadIdsRef.current.add(selectedId);
+    void ensureThread(selectedId);
+  }, [selectedId, loading, threads, ensureThread]);
+
+  const onThreadListScroll = (event: UIEvent<HTMLDivElement>) => {
+    const el = event.currentTarget;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) void loadMore();
+  };
 
   // Filter threads by search query and active tab; unread + recent first
   const filtered = useMemo(() => {
@@ -376,15 +408,25 @@ function CustomerMessages() {
             false,
         );
 
-  const unreadCount = useMemo(
+  // Tab totals come from the server (all pages); the loaded threads are the fallback.
+  const loadedUnreadCount = useMemo(
     () => threads.filter((item) => item.unreadForProvider > 0).length,
     [threads],
   );
 
-  const leadsCount = useMemo(
+  const loadedLeadsCount = useMemo(
     () => threads.filter((item) => Boolean(item.requestId)).length,
     [threads],
   );
+  // Server totals cover customer threads; Platform Support (admin) is added on top, as before.
+  const adminThread = threads.find((item) => item.id === ADMIN_DIRECT_THREAD_ID);
+  const unreadCount = counts
+    ? counts.unread + (adminThread && adminThread.unreadForProvider > 0 ? 1 : 0)
+    : loadedUnreadCount;
+  const leadsCount = counts ? counts.leads : loadedLeadsCount;
+  const allCount = counts
+    ? Math.max(counts.all + (adminThread ? 1 : 0), threads.length)
+    : threads.length;
 
   if (loading && !threads.length) {
     return (
@@ -413,7 +455,7 @@ function CustomerMessages() {
                       Messages
                     </h1>
                     <span className="inline-flex h-5 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground">
-                      {threads.length}
+                      {allCount}
                     </span>
                     <button
                       type="button"
@@ -466,7 +508,7 @@ function CustomerMessages() {
                       : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
-                  All ({threads.length})
+                  All ({allCount})
                 </button>
                 <button
                   type="button"
@@ -496,7 +538,10 @@ function CustomerMessages() {
             </div>
 
             {/* Threads List */}
-            <div className="flex-1 overflow-y-auto divide-y divide-border/60">
+            <div
+              className="flex-1 overflow-y-auto divide-y divide-border/60"
+              onScroll={onThreadListScroll}
+            >
               {filtered.length ? (
                 filtered.map((thread) => {
                   const active = selected?.id === thread.id;
@@ -649,6 +694,22 @@ function CustomerMessages() {
                   ) : null}
                 </div>
               )}
+              {hasMore ? (
+                <div className="flex justify-center p-3">
+                  {loadingMore ? (
+                    <span className="text-xs text-muted-foreground">Loading more…</span>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => void loadMore()}
+                    >
+                      Load more conversations
+                    </Button>
+                  )}
+                </div>
+              ) : null}
             </div>
           </aside>
 

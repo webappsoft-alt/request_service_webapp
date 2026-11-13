@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { AiCallActivityCard } from "@/components/ai-calling/ai-call-activity-card";
@@ -62,6 +62,7 @@ import {
   listProviderChatThreads,
 } from "@/lib/api/chat-client";
 import { sortChatThreadsByUnreadThenRecent } from "@/lib/chat-format";
+import type { ChatThread } from "@/lib/booking/chat-store";
 
 type RecentMessageRow = {
   id: string;
@@ -70,7 +71,49 @@ type RecentMessageRow = {
   detail: string;
   kind: "chat" | "lead";
   unread?: number;
+  updatedAt?: string;
 };
+
+/** Dashboard "Recent messages" row for a thread (same text as before). */
+function recentChatRow(thread: ChatThread): RecentMessageRow {
+  const last = thread.messages?.[thread.messages.length - 1];
+  const lastText = String(last?.text || "").trim();
+  const hasAttachment = Boolean(last?.attachments?.length);
+  const from =
+    last?.from === "provider"
+      ? "You"
+      : last?.from === "admin"
+        ? "Support"
+        : null;
+  const detail = lastText
+    ? from
+      ? `${from}: ${lastText}`
+      : lastText
+    : hasAttachment
+      ? from
+        ? `${from}: Sent an attachment`
+        : "Sent an attachment"
+      : "Open conversation";
+  const isAdmin = thread.id === ADMIN_DIRECT_THREAD_ID;
+  return {
+    id: thread.id,
+    href: isAdmin
+      ? "/pro/dashboard/messages?direct=admin"
+      : `/pro/dashboard/messages?thread=${encodeURIComponent(thread.id)}`,
+    title: thread.customerName || thread.customerEmail || "Customer",
+    detail,
+    kind: "chat" as const,
+    unread: thread.unreadForProvider || 0,
+    updatedAt: thread.updatedAt,
+  };
+}
+
+/** Unread first, then newest — the order the server returns (sort=unread). */
+function sortRecentRows(rows: RecentMessageRow[]) {
+  return sortChatThreadsByUnreadThenRecent(rows, (row) => row.unread || 0);
+}
+
+const RECENT_CHAT_ROWS = 7;
 
 export function DashboardView() {
   const dispatch = useAppDispatch();
@@ -114,6 +157,113 @@ export function DashboardView() {
     };
   }, []);
 
+  // Recent messages: one request for the newest 10 threads (unread first; 7 are shown).
+  // Previously this loaded 100 full threads, again after every dashboard refresh.
+  useEffect(() => {
+    let cancelled = false;
+    setRecentChatsLoading(true);
+    void (async () => {
+      try {
+        const threads = await listProviderChatThreads({
+          silent: true,
+          force: true,
+          limit: 10,
+          sort: "unread",
+        });
+        if (cancelled) return;
+        setRecentChatRows(sortRecentRows(threads.map(recentChatRow)).slice(0, RECENT_CHAT_ROWS));
+      } catch {
+        if (!cancelled) setRecentChatRows([]);
+      } finally {
+        if (!cancelled) setRecentChatsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [chatRefreshKey]);
+
+  // Socket events update the dashboard in place. A chat message moves / updates its row (a new
+  // conversation reloads the 10 threads once); only lead events reload the dashboard, coalesced.
+  const recentRowsRef = useRef(recentChatRows);
+  useEffect(() => {
+    recentRowsRef.current = recentChatRows;
+  }, [recentChatRows]);
+  useEffect(() => {
+    let dashboardTimer = 0;
+    let chatsTimer = 0;
+    const reloadDashboard = () => {
+      window.clearTimeout(dashboardTimer);
+      dashboardTimer = window.setTimeout(() => {
+        void dispatch(fetchProviderDashboard({ force: true, silent: true }));
+      }, 600);
+    };
+    const reloadChats = () => {
+      window.clearTimeout(chatsTimer);
+      chatsTimer = window.setTimeout(() => setChatRefreshKey((key) => key + 1), 600);
+    };
+    const onRealtime = (event: Event) => {
+      const detail = (event as CustomEvent<{ type?: string; payload?: Record<string, unknown> }>)
+        .detail;
+      const type = detail?.type;
+      if (type === "LEAD_CREATED" || type === "LEAD_UPDATED") {
+        reloadDashboard();
+        return;
+      }
+      if (type === "CHAT_MESSAGE") {
+        const payload = detail?.payload || {};
+        const threadId = String(payload.threadId || "");
+        const message = payload.message as ChatThread["messages"][number] | undefined;
+        const known = recentRowsRef.current.find((row) => row.id === threadId);
+        if (!threadId || !message || !known) {
+          reloadChats();
+          return;
+        }
+        const at = String(
+          (message as { at?: string; createdAt?: string }).at ||
+            (message as { createdAt?: string }).createdAt ||
+            new Date().toISOString(),
+        );
+        const updated = recentChatRow({
+          id: threadId,
+          customerName: known.title,
+          customerEmail: "",
+          messages: [message],
+          unreadForProvider:
+            message.from === "customer" ? (known.unread || 0) + 1 : known.unread || 0,
+          updatedAt: at,
+        } as unknown as ChatThread);
+        setRecentChatRows((rows) =>
+          sortRecentRows([updated, ...rows.filter((row) => row.id !== threadId)]).slice(
+            0,
+            RECENT_CHAT_ROWS,
+          ),
+        );
+        return;
+      }
+      if (type === "CHAT_READ_RECEIPT") {
+        const payload = detail?.payload || {};
+        if (payload.readBy !== "provider") return;
+        const threadId = String(payload.threadId || "");
+        setRecentChatRows((rows) =>
+          rows.some((row) => row.id === threadId && row.unread)
+            ? sortRecentRows(rows.map((row) => (row.id === threadId ? { ...row, unread: 0 } : row)))
+            : rows,
+        );
+        return;
+      }
+      if (type === "NEW_CHAT_MESSAGE") reloadChats();
+      // INBOX_SUMMARY_INVALIDATE follows every sent message; CHAT_MESSAGE already covers it.
+    };
+    window.addEventListener("rs-realtime", onRealtime);
+    return () => {
+      window.clearTimeout(dashboardTimer);
+      window.clearTimeout(chatsTimer);
+      window.removeEventListener("rs-realtime", onRealtime);
+    };
+  }, [dispatch]);
+
+  /* Previous version (kept for reference, replaced for performance 2026-11-13):
   useEffect(() => {
     let cancelled = false;
     setRecentChatsLoading(true);
@@ -195,6 +345,7 @@ export function DashboardView() {
     window.addEventListener("rs-realtime", onRealtime);
     return () => window.removeEventListener("rs-realtime", onRealtime);
   }, [dispatch]);
+  */
 
   useEffect(() => {
     if (!error || loading) return;

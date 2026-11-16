@@ -67,6 +67,67 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-16
 
+- **Fix: app crashed on load ("Cannot access default export before initialization", store/index.ts)** — the new
+  `aiCallsSlice` imported `components/ai-calling/call-logs.ts`, which imported `apiFuntions` (that imports the store):
+  a circular init. `call-logs.ts` now uses the lazy `sliceHttp` helpers like every other slice (same requests).
+  File: `components/ai-calling/call-logs.ts`.
+
+- **AI call detail: Estimate / View on schedule / Lead buttons in the page header (right)** — client. The header
+  (title, back arrow) is now rendered by `AiCallLogDetail` (calls/[id]/page.tsx only renders it) so the buttons can be
+  its `actions`, across from "AI Receptionist / Call history". Files: `components/ai-calling/ai-call-log-detail.tsx`,
+  `app/(portal)/pro/dashboard/ai-receptionist/calls/[id]/page.tsx`.
+
+- **AI call history like the Leads table; real loading skeleton on the call page** — client.
+  - Call history: the table sits straight on the page (no box inside a box) with search (customer, phone, service,
+    lead / estimate number, call number), an "All calls" filter (Type: phone / test; Outcome: lead or estimate saved,
+    transferred, hung up, out of scope, no response) next to Export, server paging. Search is debounced; each
+    page + search + filter is cached in `aiCallsSlice` (key `aiCallsPageKey`).
+  - Call detail: the first-load skeleton now mirrors the page (stats bar, chat bubbles, captured-detail rows, cards)
+    instead of three plain blocks (`CallDetailSkeleton`); later visits show the cached call.
+  - Files: `components/ai-calling/ai-call-history-table.tsx`, `ai-call-log-detail.tsx`, `call-logs.ts`,
+    `store/aiCallsSlice.ts`, `app/(portal)/pro/dashboard/ai-receptionist/calls/page.tsx`.
+
+- **AI Receptionist call history: portal table, cached in the store, buttons on the right** — client.
+  - Call history uses `PortalDataTable` (like Estimates): same bordered card, columns Customer name / Call no. / Date &
+    time / Summary, row opens the call, eye = "View call history", Delete in the row menu (confirm dialog), server
+    paging (20 per page, count shown). The All / Phone / Test filter and the Refresh button are removed (all calls).
+  - New `store/aiCallsSlice.ts` (registered as `aiCalls`, cleared on sign-out): pages and call details are cached, so
+    going back to the list or reopening a call shows it at once and refreshes in the background (skeleton only the
+    first time); delete removes the call from every cached page.
+  - Call detail: Estimate / View on schedule / Lead buttons aligned right; data from the slice.
+  - Files: `store/aiCallsSlice.ts` (new), `store/index.ts`, `components/ai-calling/ai-call-history-table.tsx`,
+    `components/ai-calling/ai-call-log-detail.tsx`, `app/(portal)/pro/dashboard/ai-receptionist/calls/page.tsx`.
+
+- **AI call detail: empty space under the page fixed, "All calls" button removed** — client. The conversation box's
+  screen-reader labels (sr-only, absolutely positioned) were laid out along the full transcript outside the scroll box
+  (it wasn't positioned), stretching the page; the box is now `relative`. The "All calls" button is commented out
+  (header back arrow + sidebar do the same). File: `components/ai-calling/ai-call-log-detail.tsx`.
+
+- **AI Receptionist: Settings / Call history are sidebar sub-items (like Estimate)** — client. The in-page tabs
+  (`AiReceptionistTabs`) are commented out of both pages; the sidebar group opens with Settings and Call history
+  (most specific link is highlighted, so a call detail page highlights Call history). The calls page header is
+  "Call history" again. Files: `lib/data/portal-nav.ts`, `app/(portal)/pro/dashboard/ai-receptionist/page.tsx`,
+  `calls/page.tsx`.
+
+- **AI Receptionist: Settings / Call history tabs, call table, new call detail page, "View call" on estimates** — client.
+  - Two tabs (`AiReceptionistTabs`): Settings = configuration only (the "Recent calls" card is commented out of
+    `ai-calling-settings-panel.tsx`); Call history = a table (`AiCallHistoryTable`): customer name, call number, date &
+    time, summary (outcome badge + what the AI did), "View call history" + delete (confirm dialog). The whole row opens
+    the call (keyboard too). Filters (All / Phone / Test) and paging kept.
+  - Call detail (`ai-call-log-detail.tsx`, rewritten after the reference, no audio player): stats bar (call length,
+    details captured, distance, humans needed) + one-line summary; compact scrollable conversation with chips of what
+    the AI did; activity log folded under it; right panel with the captured details (✓ each), the "Booked" card
+    (time, estimator, visit / estimate) and the route-optimized slot card (miles from the nearest estimate / job on the
+    calendar and from the business); links to the estimate, schedule and lead; delete. Old page kept as
+    `ai-call-log-detail-legacy.tsx` (unused).
+  - Estimate workspace: "View call" next to Scope of work on AI receptionist estimates (`LinkedCallButton`). Older AI
+    notes that still end with the call transcript have it left out where they're copied into visit findings / the
+    scope (`withoutCallTranscript`).
+  - Files: `components/ai-calling/` (ai-receptionist-tabs, ai-call-history-table, ai-call-log-detail,
+    ai-call-log-detail-legacy, linked-call-button — new or rewritten; call-logs.ts, index.ts, ai-calling-settings-panel),
+    `app/(portal)/pro/dashboard/ai-receptionist/page.tsx`, `calls/page.tsx`, `calls/[id]/page.tsx`,
+    `components/portal/estimate-v2/new-estimate-workspace-view.tsx`, `site-visits-panel.tsx`.
+
 - **Schedule month cards show a time** — client. Cards without a booked time showed "DAY". Now: estimates, invoices,
   payments and tasks show their record's time of day (estimate date / site visit, invoice due-or-issued, payment
   paid, task due; local time; date-only values show none). Invoices / payments keep "Due: …" on the right and the

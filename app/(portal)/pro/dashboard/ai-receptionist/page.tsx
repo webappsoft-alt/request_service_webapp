@@ -15,6 +15,7 @@ export default function AiReceptionistPage() {
       title="AI Receptionist"
       description="Let AI answer your business calls, capture leads, and transfer callers to your team when needed."
     >
+      {/* Sidebar sub-items now (AI Receptionist → Settings / Call history). Previous: <AiReceptionistTabs active="settings" /> */}
       <AiCallingSettingsPanel />
     </PortalPage>
   );

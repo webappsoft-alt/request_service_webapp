@@ -59,6 +59,7 @@ import contractorReviewsReducer from "./contractorReviewsSlice";
 import notificationFeedReducer from "./notificationFeedSlice";
 import trackingReducer from "./trackingSlice";
 import aiRedesignerReducer from "./aiRedesignerSlice";
+import aiCallsReducer from "./aiCallsSlice";
 import {
   contractorNotesModule,
   customerNotesModule,
@@ -126,6 +127,7 @@ const rootReducer = combineReducers({
   notificationFeed: notificationFeedReducer,
   tracking: trackingReducer,
   aiRedesigner: aiRedesignerReducer,
+  aiCalls: aiCallsReducer,
   customerNotes: customerNotesModule.reducer,
   estimateNotes: estimateNotesModule.reducer,
   requestNotes: requestNotesModule.reducer,

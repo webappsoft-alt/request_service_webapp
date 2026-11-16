@@ -6,6 +6,8 @@ export { AiCallPreview } from "./ai-call-preview";
 export { AiCallTestHarness } from "./ai-call-test-harness";
 export { AiCallHistory, AiCallOutcomeBadge, CALL_HISTORY_PATH } from "./ai-call-history";
 export { AiCallLogDetail } from "./ai-call-log-detail";
+export { AiCallHistoryTable } from "./ai-call-history-table";
+export { AiReceptionistTabs, AI_RECEPTIONIST_PATH } from "./ai-receptionist-tabs";
 export * from "./call-logs";
 export { fetchGreetingPreview, fetchVoiceSample, testStreamUrl } from "./audio";
 export { useAudioPreview } from "./use-audio-preview";

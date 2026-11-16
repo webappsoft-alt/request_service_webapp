@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { withoutCallTranscript } from "@/components/ai-calling/linked-call-button";
 import {
   CalendarClock,
   Check,
@@ -319,8 +320,10 @@ export function SiteVisitsPanel({
       selected.visitType === "initial_assessment" ||
       Number(selected.sequenceNumber || 0) <= 1;
     const defaultRequirements = String(opportunityDescription || "").trim();
+    // Older AI receptionist notes end with the raw call transcript: left out (it's on the call).
+    // Previous: String(opportunityInternalNotes || "").trim() || defaultRequirements;
     const defaultFindings =
-      String(opportunityInternalNotes || "").trim() || defaultRequirements;
+      withoutCallTranscript(opportunityInternalNotes).trim() || defaultRequirements;
 
     setEmployeeId(String(selected.assignedEmployeeId || ""));
     setScheduledAt(toLocalInput(selected.scheduledAt));

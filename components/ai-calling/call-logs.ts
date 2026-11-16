@@ -1,4 +1,10 @@
-import { getData } from "@/components/api/apiFuntions";
+// sliceHttp (lazy) — not apiFuntions: this file is used by store/aiCallsSlice, and apiFuntions
+// imports the store (circular init: "Cannot access default export before initialization").
+// Previous: import { deleteData, getData } from "@/components/api/apiFuntions";
+import { deleteData, getData } from "@/components/api/sliceHttp";
+
+/** apiFuntions.getData's generic signature (sliceHttp forwards to it). */
+type SliceGet = typeof import("@/components/api/apiFuntions").getData;
 import { AI_CALLING_ENDPOINT } from "./api";
 
 export type AiCallChannel = "phone" | "browser_test";
@@ -44,32 +50,114 @@ export type AiCallSummary = {
   transferredTo: string;
   turns?: number;
   preview?: string;
+  /** Display number (CALL-1A2B3C), from the server. */
+  callNumber?: string;
+  /** One line: what the AI did on the call. */
+  summary?: string;
+};
+
+export type AiCallCapturedField = { key: string; label: string; value: string };
+
+/** Detail page: captured details, the visit booked and how far the job is (GET /calls/:id). */
+export type AiCallOverview = {
+  callNumber: string;
+  summary: string;
+  captured: AiCallCapturedField[];
+  detailsCaptured: number;
+  booking: {
+    label: string;
+    scheduledAt: string | null;
+    durationMinutes: number | null;
+    visitNumber: string;
+    estimator: string;
+    status: string;
+  } | null;
+  distance: {
+    fromBusinessMiles: number | null;
+    nearest: {
+      miles: number;
+      kind: string;
+      number: string;
+      title: string;
+      date: string;
+      startMinutes: number;
+      href: string;
+    } | null;
+  };
 };
 
 export type AiCallLog = AiCallSummary & {
   transcript: AiCallTranscriptLine[];
   events: AiCallEvent[];
+  /** What the caller gave the AI (saved with the lead / estimate). */
+  intake?: {
+    serviceCategory?: string;
+    subService?: string;
+    issue?: string;
+    address?: string;
+    preferredTime?: string;
+    urgent?: boolean;
+    email?: string;
+    recordNumber?: string;
+  } | null;
+  overview?: AiCallOverview;
 };
+
+/** Display number for a call (same rule as the server): CALL-1A2B3C. */
+export function callNumberOf(call: Pick<AiCallSummary, "id" | "callNumber">) {
+  return call.callNumber || `CALL-${String(call.id || "").slice(-6).toUpperCase()}`;
+}
+
+/** Still marked in progress hours after it started: the connection dropped without ending the call. */
+export function isStaleCall(call: Pick<AiCallSummary, "status" | "startedAt">) {
+  return call.status === "in_progress" && Date.now() - new Date(call.startedAt).getTime() > 2 * 3600_000;
+}
+
+/** Call length in seconds: the stored duration, else (dropped / running call) up to its last line or event. */
+export function callLengthSec(call: AiCallLog) {
+  if (call.status === "completed") return call.durationSec || 0;
+  const times = [...call.transcript.map((line) => line.at), ...call.events.map((event) => event.at)]
+    .map((value) => new Date(value).getTime())
+    .filter(Number.isFinite);
+  const last = times.length ? Math.max(...times) : new Date(call.startedAt).getTime();
+  return Math.max(0, Math.round((last - new Date(call.startedAt).getTime()) / 1000));
+}
+
+export function deleteAiCall(id: string) {
+  return deleteData(`${AI_CALLING_ENDPOINT}/calls/${id}`, { silent: true });
+}
 
 export type AiCallListResponse = {
   data: AiCallSummary[];
   pagination: { page: number; limit: number; total: number; totalPages: number };
 };
 
-export function fetchAiCalls(params: { page?: number; limit?: number; channel?: AiCallChannel | "" }) {
-  return getData<AiCallListResponse>(
+export function fetchAiCalls(params: {
+  page?: number;
+  limit?: number;
+  channel?: AiCallChannel | "";
+  /** Only the calls that created / updated this estimate (opportunity). */
+  opportunityId?: string;
+  /** Customer, phone, service, lead / estimate number or call number. */
+  search?: string;
+  outcome?: string;
+}) {
+  return (getData as SliceGet)<AiCallListResponse>(
     `${AI_CALLING_ENDPOINT}/calls`,
     {
       page: params.page || 1,
       limit: params.limit || 20,
       ...(params.channel ? { channel: params.channel } : {}),
+      ...(params.opportunityId ? { opportunityId: params.opportunityId } : {}),
+      ...(params.search?.trim() ? { search: params.search.trim() } : {}),
+      ...(params.outcome ? { outcome: params.outcome } : {}),
     },
     { silent: true, force: true },
   );
 }
 
 export async function fetchAiCall(id: string) {
-  const res = await getData<{ data: AiCallLog }>(`${AI_CALLING_ENDPOINT}/calls/${id}`, undefined, {
+  const res = await (getData as SliceGet)<{ data: AiCallLog }>(`${AI_CALLING_ENDPOINT}/calls/${id}`, undefined, {
     silent: true,
     force: true,
   });

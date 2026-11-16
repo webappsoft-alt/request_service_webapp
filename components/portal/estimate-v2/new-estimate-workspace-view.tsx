@@ -128,6 +128,7 @@ import {
   invoiceStatusTone,
 } from "@/lib/data/portal";
 import { stripChangeRequestLinesFromNotes } from "@/lib/data/estimate-change-requests";
+import { LinkedCallButton, withoutCallTranscript } from "@/components/ai-calling/linked-call-button";
 
 const PREP_OPTIONS = [
   {
@@ -972,8 +973,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         freshEstimate =
           (bundled.estimate?.id === linked.id ? bundled.estimate : await getEstimate(linked.id)) || linked;
         setEstimate(freshEstimate);
+        // withoutCallTranscript: a visit's findings copied from older AI notes carry the call transcript.
         loadedScope = stripChangeRequestLinesFromNotes(
-          freshEstimate.notes || data.description || data.prepFindings || "",
+          freshEstimate.notes || data.description || withoutCallTranscript(data.prepFindings || ""),
         );
         loadedTerms = freshEstimate.terms || loadedTerms;
         loadedDiscount = Number(freshEstimate.discount) || 0;
@@ -1001,7 +1003,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
         }
       } else {
         setEstimate(null);
-        loadedScope = data.description || data.prepFindings || "";
+        loadedScope = data.description || withoutCallTranscript(data.prepFindings || "");
         const fromWork = collectStartingLines(data);
         loadedLines = fromWork.length ? fromWork : [createEmptyLine("labor")];
       }
@@ -1533,7 +1535,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       await updateEstimateV2Opportunity(opportunity.id, { prepChoice });
       if (prepChoice === "schedule_assessment" && visits.length === 0) {
         const customerDescription = String(opportunity.description || "").trim();
-        const officeNotes = String(opportunity.internalNotes || "").trim();
+        // Older AI receptionist notes end with the raw call transcript: left out (it's on the call).
+        // Previous: String(opportunity.internalNotes || "").trim();
+        const officeNotes = withoutCallTranscript(opportunity.internalNotes || "").trim();
         await createEstimateV2SiteAssessment(opportunity.id, {
           status: "scheduled",
           visitType: "initial_assessment",
@@ -2983,7 +2987,11 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
 
                 <div className={cn("space-y-5", !partsView && "mt-5")}>
                   <div className={cn("space-y-1.5", partsView && "hidden")}>
-                    <Label htmlFor="scope">Scope of work</Label>
+                    {/* AI receptionist estimates: the call (conversation, captured details) is one click away. */}
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="scope">Scope of work</Label>
+                      {opportunity?.source === "ai_receptionist" ? <LinkedCallButton opportunityId={opportunity.id} /> : null}
+                    </div>
                     <Textarea
                       id="scope"
                       rows={3}

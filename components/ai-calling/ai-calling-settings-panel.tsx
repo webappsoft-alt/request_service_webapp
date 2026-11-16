@@ -23,7 +23,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { AiCallHistory, CALL_HISTORY_PATH } from "./ai-call-history";
+// Previous: import { AiCallHistory, CALL_HISTORY_PATH } from "./ai-call-history"; (Recent calls card, now its own tab)
 import { AiCallingSwitch } from "./ai-calling-switch";
 import { AiPhoneNumberDisplay } from "./ai-phone-number-display";
 import { AiVoicePicker } from "./ai-voice-picker";
@@ -369,6 +369,8 @@ export function AiCallingSettingsPanel({ adapter, className }: AiCallingSettings
 
         {/* Recent calls, test call, how it works */}
         <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-20">
+          {/* Settings tab = configuration only; calls are on the Call history tab (AiReceptionistTabs).
+          Previous "Recent calls" card:
           <Card className={cardClass}>
             <CardHeader className="border-b border-border-soft">
               <CardTitle className="flex items-center gap-2">
@@ -384,6 +386,7 @@ export function AiCallingSettingsPanel({ adapter, className }: AiCallingSettings
               </Button>
             </CardContent>
           </Card>
+          */}
 
           <Card className={cardClass}>
             <CardContent className="flex flex-col gap-3 pt-5">

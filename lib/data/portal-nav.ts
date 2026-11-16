@@ -104,7 +104,17 @@ export const portalNavGroups: PortalNavGroup[] = [
     items: [
       { href: "/pro/dashboard/settings", label: "Business Profile", icon: Store, description: "Your public profile and business details" },
       { href: "/pro/dashboard/subscription", label: "Subscription", icon: Sparkles, description: "Your plan and billing" },
-      { href: "/pro/dashboard/ai-receptionist", label: "AI Receptionist", icon: Bot, description: "AI that answers calls and books visits" },
+      // Client: sub-items in the sidebar, like Estimate (was a single link + in-page tabs).
+      {
+        href: "/pro/dashboard/ai-receptionist",
+        label: "AI Receptionist",
+        icon: Bot,
+        description: "AI that answers calls and books visits",
+        children: [
+          { href: "/pro/dashboard/ai-receptionist", label: "Settings" },
+          { href: "/pro/dashboard/ai-receptionist/calls", label: "Call history" },
+        ],
+      },
       { href: "/pro/dashboard/portfolio", label: "Portfolio", icon: Images, description: "Photos of your past work" },
       { href: "/pro/dashboard/service-areas", label: "Service areas", icon: MapPin, description: "Where you take work" },
       { href: "/pro/dashboard/services", label: "Fixed services", icon: Wrench, description: "Fixed-price services customers can book" },

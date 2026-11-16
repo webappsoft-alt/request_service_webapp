@@ -36,7 +36,8 @@ export const TECH_PAGE_SIZE = 10;
 export const TECH_SECTION_TYPES = {
   jobs: ["JOB_ASSIGNED", "JOB_UPDATED"],
   estimates: ["ESTIMATE_ASSIGNED", "ESTIMATE_UPDATED"],
-  schedule: ["SCHEDULE_UPDATED"],
+  // Previous: schedule: ["SCHEDULE_UPDATED"] — + daily briefing items and check-in reminders (same as the server).
+  schedule: ["SCHEDULE_UPDATED", "DAILY_BRIEFING", "ATTENDANCE_REMINDER"],
   payments: ["TECHNICIAN_PAYMENT"],
 } as const;
 export type TechSection = keyof typeof TECH_SECTION_TYPES;

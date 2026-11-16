@@ -83,6 +83,8 @@ export const providerApi = {
   profile: "provider/profile",
   /** PUT `{ workingHours: [...] }` */
   officeHours: "provider/settings/office-hours",
+  /** GET / PATCH Daily alerts settings + today's preview (daily alerts engine). */
+  dailyAlerts: "provider/daily-alerts",
   /** POST `{ phone }` — text a code to the number to verify / switch to */
   phoneSendOtp: "provider/phone/send-otp",
   /** POST `{ phone, code }` — verify and save it as the account's phone */

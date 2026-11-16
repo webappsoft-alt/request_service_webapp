@@ -48,17 +48,101 @@ const HOW_IT_WORKS = [
   { icon: PhoneForwarded, text: "If they ask for a person, the call transfers to your forwarding number." },
 ];
 
+/** Card shell for the loading state (same border / radius as the real cards). */
+function SkeletonCard({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={cn("rounded-xl border border-border-soft bg-card shadow-xs", className)}>{children}</div>;
+}
+
+/**
+ * Loading state shaped like the page: status bar (icon, name, toggle), Phone line card (AI number
+ * box + forwarding field), Voice & greeting card (voice tiles + greeting box), and the right
+ * column (test call, how it works). Previous: four plain grey blocks.
+ */
 function PanelSkeleton() {
   return (
-    <div className="flex flex-col gap-4">
-      <Skeleton className="h-24 w-full rounded-xl" />
+    <div className="flex flex-col gap-4" role="status" aria-label="Loading AI receptionist settings">
+      <SkeletonCard className="flex items-center justify-between gap-4 px-5 py-4">
+        <div className="flex items-center gap-3">
+          <Skeleton className="size-12 rounded-xl" />
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-3.5 w-64" />
+          </div>
+        </div>
+        <Skeleton className="h-10 w-28 rounded-lg" />
+      </SkeletonCard>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex flex-col gap-4">
-          <Skeleton className="h-64 w-full rounded-xl" />
-          <Skeleton className="h-80 w-full rounded-xl" />
+          <SkeletonCard>
+            <div className="space-y-2 border-b border-border-soft px-5 py-4">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-3.5 w-72" />
+            </div>
+            <div className="space-y-4 p-5">
+              <div className="space-y-3 rounded-xl border border-border-soft p-4">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-3 w-28" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-8 w-64" />
+                  <Skeleton className="h-9 w-20 rounded-md" />
+                </div>
+                <Skeleton className="h-3 w-3/4" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-3.5 w-32" />
+                <Skeleton className="h-11 w-full rounded-md" />
+                <Skeleton className="h-3 w-2/3" />
+              </div>
+            </div>
+          </SkeletonCard>
+          <SkeletonCard>
+            <div className="space-y-2 border-b border-border-soft px-5 py-4">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="h-3.5 w-80" />
+            </div>
+            <div className="space-y-4 p-5">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {Array.from({ length: 8 }, (_, i) => (
+                  <Skeleton key={i} className="h-14 rounded-lg" />
+                ))}
+              </div>
+              <Skeleton className="h-28 w-full rounded-md" />
+            </div>
+          </SkeletonCard>
         </div>
-        <Skeleton className="h-96 w-full rounded-xl" />
+        <div className="flex flex-col gap-4">
+          <SkeletonCard className="space-y-3 p-5">
+            <div className="flex items-start gap-3">
+              <Skeleton className="size-9 rounded-lg" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-4/5" />
+              </div>
+            </div>
+            <Skeleton className="h-9 w-full rounded-md" />
+          </SkeletonCard>
+          <SkeletonCard>
+            <div className="border-b border-border-soft px-5 py-4">
+              <Skeleton className="h-4 w-28" />
+            </div>
+            <div className="space-y-4 p-5">
+              {Array.from({ length: 4 }, (_, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <Skeleton className="size-8 shrink-0 rounded-full" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-3.5 w-full" />
+                    <Skeleton className="h-3.5 w-2/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SkeletonCard>
+        </div>
       </div>
+      <span className="sr-only">Loading…</span>
     </div>
   );
 }

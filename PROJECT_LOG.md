@@ -67,6 +67,13 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-16
 
+- **Technician sidebar: an estimate assigned with a booked visit also bumps the Schedule badge live** (same rule as the
+  server). File: `store/technicianSlice.ts`.
+
+- **AI Receptionist settings: real loading skeleton** — client. Shaped like the page (status bar, Phone line card with
+  the AI number box and forwarding field, Voice & greeting card, test-call and How-it-works cards) instead of four
+  plain blocks. File: `components/ai-calling/ai-calling-settings-panel.tsx` (`PanelSkeleton`).
+
 - **Fix: app crashed on load ("Cannot access default export before initialization", store/index.ts)** — the new
   `aiCallsSlice` imported `components/ai-calling/call-logs.ts`, which imported `apiFuntions` (that imports the store):
   a circular init. `call-logs.ts` now uses the lazy `sliceHttp` helpers like every other slice (same requests).

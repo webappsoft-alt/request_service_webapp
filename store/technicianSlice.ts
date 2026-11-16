@@ -334,6 +334,9 @@ const technicianSlice = createSlice({
       for (const [section, types] of Object.entries(TECH_SECTION_TYPES)) {
         if ((types as readonly string[]).includes(item.type)) state.badges[section as TechSection] += 1;
       }
+      // An estimate assigned with a booked visit is schedule news too (same rule as the server).
+      const visitAt = (item.data as Record<string, unknown> | undefined)?.visitAt;
+      if (item.type === "ESTIMATE_ASSIGNED" && visitAt) state.badges.schedule += 1;
     },
     /** Socket `technician:refresh` — bump versions so mounted views refetch. */
     techRefreshRequested(state, action: PayloadAction<string[] | undefined>) {

@@ -207,7 +207,8 @@ export const EVENT_LABELS: Record<string, string> = {
   lead_updated: "Existing lead updated",
   estimate_drafted: "Draft estimate created",
   estimate_updated: "Draft estimate updated",
-  assessment_booked: "On-site assessment booked",
+  // Previous: "On-site assessment booked" — it's the draft estimate's site visit, not a booked job.
+  assessment_booked: "Site visit scheduled for the estimate",
   transfer: "Transferred to a person",
   ended_by_ai: "AI ended the call",
   silence_check: "Caller went quiet, AI checked in",

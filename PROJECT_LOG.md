@@ -67,6 +67,12 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-16
 
+- **AI call detail: the visit is shown as the draft estimate's site visit, not "Booked."** — client. The card now reads
+  "Draft estimate EST-… / Site visit scheduled" (live visit status: scheduled, rescheduled, in progress, done,
+  cancelled, no-show), the time + estimator, and "add prices and send the estimate after the visit"; chip "Scheduled a
+  site visit", activity "Site visit scheduled for the estimate". File: `components/ai-calling/ai-call-log-detail.tsx`,
+  `call-logs.ts`.
+
 - **Technician sidebar: an estimate assigned with a booked visit also bumps the Schedule badge live** (same rule as the
   server). File: `store/technicianSlice.ts`.
 

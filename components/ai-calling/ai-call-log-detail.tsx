@@ -96,7 +96,7 @@ function skillChips(call: AiCallLog) {
     has("coverage_check") ? "Checked the service area" : "",
     call.intake?.address ? "Confirmed the address" : "",
     call.intake?.issue ? "Captured the scope" : "",
-    has("assessment_booked") ? "Booked a visit" : "",
+    has("assessment_booked") ? "Scheduled a site visit" : "",
     has("estimate_drafted", "estimate_updated") ? "Drafted an estimate" : "",
     has("lead_created", "lead_updated") ? "Saved a lead" : "",
     has("transfer") ? "Transferred to your team" : "",
@@ -201,6 +201,25 @@ function CapturedPanel({
   );
 }
 
+/** The estimate's site visit status (CrmSiteAssessment.status) as the card shows it. */
+const VISIT_STATE: Record<string, { label: string; tone: string }> = {
+  scheduled: { label: "Site visit scheduled", tone: "text-primary" },
+  rescheduled: { label: "Site visit rescheduled", tone: "text-primary" },
+  in_progress: {
+    label: "Site visit in progress",
+    tone: "text-amber-700 dark:text-amber-400",
+  },
+  completed: {
+    label: "Site visit done",
+    tone: "text-emerald-700 dark:text-emerald-400",
+  },
+  cancelled: { label: "Site visit cancelled", tone: "text-destructive" },
+  no_show: {
+    label: "Customer was not there (no-show)",
+    tone: "text-destructive",
+  },
+};
+
 function BookingCard({
   call,
   overview,
@@ -210,30 +229,42 @@ function BookingCard({
 }) {
   const booking = overview.booking;
   if (!booking) return null;
+  // The call created a draft estimate; the visit is its on-site assessment (not a booked job).
+  // Status is the visit's own (scheduled / completed / cancelled …), read live from the visit.
+  // Previous: an amber "Booked." card.
+  const visitState = VISIT_STATE[booking.status] || {
+    label: `Site visit ${String(booking.status || "scheduled").replace(/_/g, " ")}`,
+    tone: "text-primary",
+  };
   return (
-    <section className="flex items-start gap-3 rounded-xl border border-amber-300/70 bg-gradient-to-br from-amber-50 to-orange-50 p-4 dark:border-amber-500/30 dark:from-amber-950/30 dark:to-orange-950/20">
+    <section className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/[0.04] p-4 dark:bg-primary/10">
       <span
-        className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white shadow-sm"
+        className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"
         aria-hidden="true"
       >
-        <Check className="size-5" />
+        <FileText className="size-5" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold text-foreground">Booked.</p>
-        <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+        <p className="text-[10.5px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+          {call.estimateNumber
+            ? `Draft estimate ${call.estimateNumber}`
+            : "Draft estimate"}
+        </p>
+        <p className={cn("text-sm font-bold", visitState.tone)}>
+          {visitState.label}
+        </p>
+        <p className="mt-0.5 text-sm font-medium text-foreground">
           {booking.label ||
             (booking.scheduledAt
               ? formatCallTime(booking.scheduledAt)
               : "On-site assessment")}
-          {booking.estimator ? ` with ${booking.estimator}` : ""}
+          {booking.estimator ? ` · ${booking.estimator}` : ""}
         </p>
         <p className="mt-0.5 text-xs text-muted-foreground">
           On-site assessment
-          {booking.visitNumber ? ` ${booking.visitNumber}` : ""}
-          {call.estimateNumber
-            ? ` · draft estimate ${call.estimateNumber}`
-            : ""}
-          . Booked by the AI receptionist, no one at the shop touched the phone.
+          {booking.visitNumber ? ` ${booking.visitNumber}` : ""} for this
+          estimate, scheduled by the AI receptionist. Add prices and send the
+          estimate after the visit.
         </p>
         {call.opportunityId ? (
           <Link

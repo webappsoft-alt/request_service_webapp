@@ -1,18 +1,57 @@
 "use client";
 
-import { useCallback, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { AlertCircle, ArrowUpRight, BadgeCheck, Check, Clock3, ExternalLink, FileText, FolderOpen, Hash, ImageIcon, Loader2, Mail, MapPin, PenLine, Phone, UserRound } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowUpRight,
+  BadgeCheck,
+  Check,
+  Clock3,
+  ExternalLink,
+  FileText,
+  FolderOpen,
+  Hash,
+  ImageIcon,
+  Loader2,
+  Mail,
+  MapPin,
+  PenLine,
+  Phone,
+  UserRound,
+} from "lucide-react";
 import { toast } from "sonner";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
+import {
+  CallLogCard,
+  withoutCallTranscript,
+} from "@/components/ai-calling/linked-call-button";
 import { EstimatePdfDocument } from "@/components/estimate/estimate-pdf";
 import { invoiceBoardColumns } from "@/components/portal/invoice-columns";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
-import { EventCalendar, EventCalendarSkeleton, eventTimes, type CalendarMove } from "@/components/portal/event-calendar";
-import { lineTotal, type JobCostLine } from "@/components/portal/use-job-costing";
-import type { EstimateApproval, EstimateShareSnapshot } from "@/components/portal/use-estimate-share";
+import {
+  EventCalendar,
+  EventCalendarSkeleton,
+  eventTimes,
+  type CalendarMove,
+} from "@/components/portal/event-calendar";
+import {
+  lineTotal,
+  type JobCostLine,
+} from "@/components/portal/use-job-costing";
+import type {
+  EstimateApproval,
+  EstimateShareSnapshot,
+} from "@/components/portal/use-estimate-share";
 import type { RouteLocationMapInnerProps } from "@/components/portal/route-location-map-inner";
 import { usePortalCrew } from "@/components/portal/use-portal-crew";
 import { JobRequestsTab } from "@/components/portal/job-requests-tab";
@@ -20,9 +59,22 @@ import { JobChangeOrdersPanel } from "@/components/portal/job-change-orders-pane
 import { listContractorReviewRequests } from "@/lib/api/contractor-portal-client";
 import { useAppSelector } from "@/store/hooks";
 import { Button } from "@/components/ui/button";
-import { getInvoice, getJob, getRequest, listRecordSchedule, updateSchedule } from "@/lib/api/crm-client";
-import type { EstimateV2Opportunity, OpportunityAttachment } from "@/lib/api/estimate-v2-client";
-import { estimateStatusLabel, opportunityStatusLabel, opportunityStatusTone } from "@/lib/data/estimate-v2-status";
+import {
+  getInvoice,
+  getJob,
+  getRequest,
+  listRecordSchedule,
+  updateSchedule,
+} from "@/lib/api/crm-client";
+import type {
+  EstimateV2Opportunity,
+  OpportunityAttachment,
+} from "@/lib/api/estimate-v2-client";
+import {
+  estimateStatusLabel,
+  opportunityStatusLabel,
+  opportunityStatusTone,
+} from "@/lib/data/estimate-v2-status";
 import {
   jobStatusLabel,
   jobStatusTone,
@@ -30,17 +82,31 @@ import {
   type PortalCalendarEvent,
 } from "@/lib/data/portal";
 import { formatDateTime, formatDate, formatMoney } from "@/lib/format";
-import { stageDateRange, stageDisplayStatus, stageProgress, stageStatusLabel, stageStatusTone } from "@/lib/project-stages";
+import {
+  stageDateRange,
+  stageDisplayStatus,
+  stageProgress,
+  stageStatusLabel,
+  stageStatusTone,
+} from "@/lib/project-stages";
 import type { Estimate, Invoice, Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /** The route map (business → job site), the same one as the "View on map" dialog, inline. */
-const RouteMap = dynamic(() => import("@/components/portal/route-location-map-inner").then((mod) => mod.RouteLocationMapInner), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-72 items-center justify-center rounded-xl bg-slate-50 text-sm text-slate-500 dark:bg-muted/40">Loading map…</div>
-  ),
-});
+const RouteMap = dynamic(
+  () =>
+    import("@/components/portal/route-location-map-inner").then(
+      (mod) => mod.RouteLocationMapInner,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-72 items-center justify-center rounded-xl bg-slate-50 text-sm text-slate-500 dark:bg-muted/40">
+        Loading map…
+      </div>
+    ),
+  },
+);
 
 /** The sidebar sections that render here, in the centre (no page change). */
 export const PROJECT_PANEL_VIEWS = [
@@ -67,19 +133,43 @@ const PANEL_CARD =
   "rounded-2xl border border-[#94a3b8] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-border dark:bg-card";
 
 /** Same eyebrow as the estimate page's SectionLabel. */
-function PanelLabel({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
+function PanelLabel({
+  children,
+  aside,
+}: {
+  children: ReactNode;
+  aside?: ReactNode;
+}) {
   return (
     <div className="flex min-h-8 items-center justify-between gap-2">
-      <h2 className="text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase">{children}</h2>
+      <h2 className="text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase">
+        {children}
+      </h2>
       {/* Text asides are muted; buttons keep their own colours. */}
       {aside ? (
-        typeof aside === "string" ? <span className="text-[11px] font-medium text-slate-400 tabular-nums">{aside}</span> : aside
+        typeof aside === "string" ? (
+          <span className="text-[11px] font-medium text-slate-400 tabular-nums">
+            {aside}
+          </span>
+        ) : (
+          aside
+        )
       ) : null}
     </div>
   );
 }
 
-function Panel({ label, aside, children, className }: { label: ReactNode; aside?: ReactNode; children: ReactNode; className?: string }) {
+function Panel({
+  label,
+  aside,
+  children,
+  className,
+}: {
+  label: ReactNode;
+  aside?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <section className={cn(PANEL_CARD, className)}>
       <PanelLabel aside={aside}>{label}</PanelLabel>
@@ -88,10 +178,20 @@ function Panel({ label, aside, children, className }: { label: ReactNode; aside?
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" }) {
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "good" | "bad";
+}) {
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-border dark:bg-muted/40">
-      <p className="text-[10px] font-semibold tracking-[0.12em] text-slate-500 uppercase">{label}</p>
+      <p className="text-[10px] font-semibold tracking-[0.12em] text-slate-500 uppercase">
+        {label}
+      </p>
       <p
         className={cn(
           "mt-1 text-[15px] font-semibold tracking-tight text-slate-900 tabular-nums dark:text-foreground",
@@ -114,7 +214,15 @@ function Muted({ children }: { children: ReactNode }) {
  * clickable and keep moving: the arrow nudges up-right and a faint underline breathes on a loop; on
  * hover the underline is full. Keyframes: `.rs-banner-link` / `.rs-banner-link-arrow` in globals.css.
  */
-function BannerLink({ href, children, title }: { href: string; children: ReactNode; title?: string }) {
+function BannerLink({
+  href,
+  children,
+  title,
+}: {
+  href: string;
+  children: ReactNode;
+  title?: string;
+}) {
   return (
     <Link
       href={href}
@@ -159,17 +267,23 @@ export function ApprovalStatus({
   if (!statusText && !accepted) return null;
   // Client: every status gets a tinted bar like the green one; only the colour changes.
   const leadStatus = estimate?.status ? "" : String(opportunity?.status || "");
-  const tone: "success" | "info" | "warning" | "danger" | "neutral" | "progress" = accepted || leadStatus === "won"
-    ? "success"
-    : status === "sent" || leadStatus === "estimate_sent"
-      ? "info"
-      : status === "changes_requested"
-        ? "warning"
-        : status === "rejected" || status === "expired" || leadStatus === "lost"
-          ? "danger"
-          : leadStatus === "assessment_scheduled" || leadStatus === "assessment_completed" || leadStatus === "new"
-            ? "progress"
-            : "neutral";
+  const tone:
+    "success" | "info" | "warning" | "danger" | "neutral" | "progress" =
+    accepted || leadStatus === "won"
+      ? "success"
+      : status === "sent" || leadStatus === "estimate_sent"
+        ? "info"
+        : status === "changes_requested"
+          ? "warning"
+          : status === "rejected" ||
+              status === "expired" ||
+              leadStatus === "lost"
+            ? "danger"
+            : leadStatus === "assessment_scheduled" ||
+                leadStatus === "assessment_completed" ||
+                leadStatus === "new"
+              ? "progress"
+              : "neutral";
   const note = accepted
     ? "Signed estimates are locked: they can't be edited or sent again."
     : status === "sent"
@@ -193,9 +307,15 @@ export function ApprovalStatus({
                       : leadStatus === "won"
                         ? "The customer accepted."
                         : "No estimate yet.";
-  const StatusIcon = accepted ? BadgeCheck : tone === "warning" || tone === "danger" ? AlertCircle : Clock3;
+  const StatusIcon = accepted
+    ? BadgeCheck
+    : tone === "warning" || tone === "danger"
+      ? AlertCircle
+      : Clock3;
   // Client: job, customer and company names open their pages.
-  const customerHref = estimate?.customerId ? `/pro/dashboard/customers/${estimate.customerId}` : "";
+  const customerHref = estimate?.customerId
+    ? `/pro/dashboard/customers/${estimate.customerId}`
+    : "";
   const companyHref = "/pro/dashboard/settings";
   const customerName = (name: string) =>
     customerHref ? (
@@ -211,11 +331,16 @@ export function ApprovalStatus({
         "flex flex-wrap items-start gap-x-6 gap-y-2 rounded-2xl border px-4 py-3 text-sm",
         tone === "success" &&
           "border-emerald-200 bg-emerald-50/70 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100",
-        tone === "info" && "border-sky-200 bg-sky-50/70 text-sky-950 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100",
-        tone === "warning" && "border-amber-200 bg-amber-50/70 text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100",
-        tone === "danger" && "border-rose-200 bg-rose-50/70 text-rose-950 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-100",
-        tone === "progress" && "border-indigo-200 bg-indigo-50/70 text-indigo-950 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-100",
-        tone === "neutral" && "border-slate-300 bg-slate-100/70 text-slate-900 dark:border-border dark:bg-muted/40 dark:text-foreground",
+        tone === "info" &&
+          "border-sky-200 bg-sky-50/70 text-sky-950 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100",
+        tone === "warning" &&
+          "border-amber-200 bg-amber-50/70 text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100",
+        tone === "danger" &&
+          "border-rose-200 bg-rose-50/70 text-rose-950 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-100",
+        tone === "progress" &&
+          "border-indigo-200 bg-indigo-50/70 text-indigo-950 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-100",
+        tone === "neutral" &&
+          "border-slate-300 bg-slate-100/70 text-slate-900 dark:border-border dark:bg-muted/40 dark:text-foreground",
       )}
     >
       <p className="flex flex-wrap items-center gap-1.5 font-semibold">
@@ -235,7 +360,10 @@ export function ApprovalStatus({
             // Client: the job number opens the job.
             <span className="inline-flex items-center gap-1">
               Converted to job
-              <BannerLink href={`/pro/dashboard/jobs/${estimate.jobId}`} title="Open the job">
+              <BannerLink
+                href={`/pro/dashboard/jobs/${estimate.jobId}`}
+                title="Open the job"
+              >
                 {jobNumber || "Open job"}
               </BannerLink>
             </span>
@@ -249,8 +377,16 @@ export function ApprovalStatus({
         )}
         {accepted ? (
           <span className="font-normal">
-            · accepted by {customer?.signedBy ? customerName(customer.signedBy) : "the customer"}
-            {customer?.signedAt ? <span className="opacity-70"> · {formatDate(customer.signedAt)}</span> : null}
+            · accepted by{" "}
+            {customer?.signedBy
+              ? customerName(customer.signedBy)
+              : "the customer"}
+            {customer?.signedAt ? (
+              <span className="opacity-70">
+                {" "}
+                · {formatDate(customer.signedAt)}
+              </span>
+            ) : null}
           </span>
         ) : null}
       </p>
@@ -258,7 +394,11 @@ export function ApprovalStatus({
         <p className="flex items-center gap-1.5">
           <PenLine className="size-3.5 opacity-70" />
           Customer: {customerName(customer.signedBy)}
-          {customer.signedAt ? <span className="opacity-70">· {formatDate(customer.signedAt)}</span> : null}
+          {customer.signedAt ? (
+            <span className="opacity-70">
+              · {formatDate(customer.signedAt)}
+            </span>
+          ) : null}
         </p>
       ) : null}
       {company?.signedBy ? (
@@ -268,10 +408,16 @@ export function ApprovalStatus({
           <BannerLink href={companyHref} title="Open your business profile">
             {company.signedBy}
           </BannerLink>
-          {company.signedAt ? <span className="opacity-70">· {formatDate(company.signedAt)}</span> : null}
+          {company.signedAt ? (
+            <span className="opacity-70">· {formatDate(company.signedAt)}</span>
+          ) : null}
         </p>
       ) : null}
-      {actions ? <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {actions ? (
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {actions}
+        </div>
+      ) : null}
       {note ? <p className="w-full text-xs opacity-80">{note}</p> : null}
     </div>
   );
@@ -322,7 +468,9 @@ export function useProjectData({
     let cancelled = false;
     void getJob(jobId).then(
       (value) => !cancelled && setJob({ key: jobKey, value }),
-      () => !cancelled && setJob((current) => ({ key: jobKey, value: current?.value ?? null })),
+      () =>
+        !cancelled &&
+        setJob((current) => ({ key: jobKey, value: current?.value ?? null })),
     );
     return () => {
       cancelled = true;
@@ -330,18 +478,35 @@ export function useProjectData({
   }, [jobId, jobKey, job?.key]);
 
   // Requests from the job's crew (all + waiting for review). The socket bumps `version` so it stays live.
-  const requestsVersion = useAppSelector((state) => state.contractorReviews.version);
-  const [requests, setRequests] = useState<Keyed<{ total: number; pending: number }> | null>(null);
+  const requestsVersion = useAppSelector(
+    (state) => state.contractorReviews.version,
+  );
+  const [requests, setRequests] = useState<Keyed<{
+    total: number;
+    pending: number;
+  }> | null>(null);
   const requestsKey = jobId ? `${jobId}#${requestsVersion}#${jobNonce}` : "";
   useEffect(() => {
     if (!jobId || requests?.key === requestsKey) return;
     let cancelled = false;
     void Promise.all([
       listContractorReviewRequests({ jobId, status: "all", page: 1, limit: 1 }),
-      listContractorReviewRequests({ jobId, status: "pending_pro_approval", page: 1, limit: 1 }),
+      listContractorReviewRequests({
+        jobId,
+        status: "pending_pro_approval",
+        page: 1,
+        limit: 1,
+      }),
     ]).then(
-      ([all, pending]) => !cancelled && setRequests({ key: requestsKey, value: { total: all.total, pending: pending.total } }),
-      () => !cancelled && setRequests({ key: requestsKey, value: { total: 0, pending: 0 } }),
+      ([all, pending]) =>
+        !cancelled &&
+        setRequests({
+          key: requestsKey,
+          value: { total: all.total, pending: pending.total },
+        }),
+      () =>
+        !cancelled &&
+        setRequests({ key: requestsKey, value: { total: 0, pending: 0 } }),
     );
     return () => {
       cancelled = true;
@@ -353,7 +518,9 @@ export function useProjectData({
     if (!requestId || photos?.key === requestId) return;
     let cancelled = false;
     void getRequest(requestId).then(
-      (request) => !cancelled && setPhotos({ key: requestId, value: request?.photoUrls || [] }),
+      (request) =>
+        !cancelled &&
+        setPhotos({ key: requestId, value: request?.photoUrls || [] }),
       () => !cancelled && setPhotos({ key: requestId, value: [] }),
     );
     return () => {
@@ -362,16 +529,24 @@ export function useProjectData({
   }, [requestId, photos?.key]);
 
   const [nonce, setNonce] = useState(0);
-  const recordIds = [requestId, estimateId, jobId].filter((id): id is string => Boolean(id));
+  const recordIds = [requestId, estimateId, jobId].filter((id): id is string =>
+    Boolean(id),
+  );
   const scheduleKey = `${recordIds.join("|")}#${nonce}`;
   const [rows, setRows] = useState<Keyed<PortalCalendarEvent[]> | null>(null);
   useEffect(() => {
     if (!recordIds.length || rows?.key === scheduleKey) return;
     let cancelled = false;
-    void Promise.all(recordIds.map((id) => listRecordSchedule(id).catch(() => [] as PortalCalendarEvent[]))).then((lists) => {
+    void Promise.all(
+      recordIds.map((id) =>
+        listRecordSchedule(id).catch(() => [] as PortalCalendarEvent[]),
+      ),
+    ).then((lists) => {
       if (cancelled) return;
       const seen = new Set<string>();
-      const merged = lists.flat().filter((row) => (seen.has(row.id) ? false : (seen.add(row.id), true)));
+      const merged = lists
+        .flat()
+        .filter((row) => (seen.has(row.id) ? false : (seen.add(row.id), true)));
       setRows({ key: scheduleKey, value: merged });
     });
     return () => {
@@ -381,11 +556,16 @@ export function useProjectData({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleKey, rows?.key]);
 
-  const setSchedule = useCallback<Dispatch<SetStateAction<PortalCalendarEvent[]>>>(
+  const setSchedule = useCallback<
+    Dispatch<SetStateAction<PortalCalendarEvent[]>>
+  >(
     (next) =>
       setRows((current) => {
         const value = current?.value || [];
-        return { key: current?.key || scheduleKey, value: typeof next === "function" ? next(value) : next };
+        return {
+          key: current?.key || scheduleKey,
+          value: typeof next === "function" ? next(value) : next,
+        };
       }),
     [scheduleKey],
   );
@@ -407,7 +587,12 @@ export function useProjectData({
   };
 }
 
-type FileRow = { key: string; url: string; name: string; by: "Customer" | "Company" | "Site visit" | "Job" };
+type FileRow = {
+  key: string;
+  url: string;
+  name: string;
+  by: "Customer" | "Company" | "Site visit" | "Job";
+};
 
 /** Every file on the project, labelled by who added it (also counted for the sidebar). */
 export function projectFiles({
@@ -429,24 +614,42 @@ export function projectFiles({
     const clean = String(url || "").trim();
     if (!clean || seen.has(clean)) return;
     seen.add(clean);
-    rows.push({ key: `${by}-${rows.length}`, url: clean, name: fileName(clean, name), by });
+    rows.push({
+      key: `${by}-${rows.length}`,
+      url: clean,
+      name: fileName(clean, name),
+      by,
+    });
   };
-  customerPhotos.forEach((url, i) => add(url, `Request photo ${i + 1}`, "Customer"));
-  companyFiles.forEach((file, i) => add(file.url, file.name || `File ${i + 1}`, "Company"));
+  customerPhotos.forEach((url, i) =>
+    add(url, `Request photo ${i + 1}`, "Customer"),
+  );
+  companyFiles.forEach((file, i) =>
+    add(file.url, file.name || `File ${i + 1}`, "Company"),
+  );
   (estimate?.attachments || []).forEach((item, i) =>
-    typeof item === "string" ? add(item, `Attachment ${i + 1}`, "Company") : add(item.attachment, item.name || `Attachment ${i + 1}`, "Company"),
+    typeof item === "string"
+      ? add(item, `Attachment ${i + 1}`, "Company")
+      : add(item.attachment, item.name || `Attachment ${i + 1}`, "Company"),
   );
   (opportunity.siteAssessments || []).forEach((visit) =>
-    (visit.photos || []).forEach((photo, i) => add(photo.url, photo.caption || `Visit photo ${i + 1}`, "Site visit")),
+    (visit.photos || []).forEach((photo, i) =>
+      add(photo.url, photo.caption || `Visit photo ${i + 1}`, "Site visit"),
+    ),
   );
-  (job?.attachments || []).forEach((url, i) => add(url, `Job file ${i + 1}`, "Job"));
+  (job?.attachments || []).forEach((url, i) =>
+    add(url, `Job file ${i + 1}`, "Job"),
+  );
   return rows;
 }
 
 const BY_TONE: Record<FileRow["by"], string> = {
-  Customer: "bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/30",
-  Company: "bg-slate-100 text-slate-700 ring-slate-200 dark:bg-muted dark:text-foreground dark:ring-border",
-  "Site visit": "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-500/10 dark:text-violet-300 dark:ring-violet-500/30",
+  Customer:
+    "bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/30",
+  Company:
+    "bg-slate-100 text-slate-700 ring-slate-200 dark:bg-muted dark:text-foreground dark:ring-border",
+  "Site visit":
+    "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-500/10 dark:text-violet-300 dark:ring-violet-500/30",
   Job: "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30",
 };
 
@@ -458,12 +661,17 @@ const BY_LABEL: Record<FileRow["by"], string> = {
 };
 
 function isImage(url: string) {
-  return /^data:image\//i.test(url) || /\.(png|jpe?g|gif|webp|avif|heic|svg)(\?|$)/i.test(url);
+  return (
+    /^data:image\//i.test(url) ||
+    /\.(png|jpe?g|gif|webp|avif|heic|svg)(\?|$)/i.test(url)
+  );
 }
 
 function fileName(url: string, fallback: string) {
   try {
-    const last = decodeURIComponent(new URL(url, "https://x").pathname.split("/").pop() || "");
+    const last = decodeURIComponent(
+      new URL(url, "https://x").pathname.split("/").pop() || "",
+    );
     return last && !/^data:/i.test(url) ? last : fallback;
   } catch {
     return fallback;
@@ -502,7 +710,10 @@ export function ProjectPanel({
   onLinesChange: (lines: JobCostLine[]) => void;
   locked: boolean;
   /** The customer document built from the sheet (null without line items). */
-  preview: { snapshot: EstimateShareSnapshot; approval?: EstimateApproval } | null;
+  preview: {
+    snapshot: EstimateShareSnapshot;
+    approval?: EstimateApproval;
+  } | null;
   linkedInvoice: Invoice | null;
   /** Files the company added under Existing information. */
   companyFiles: OpportunityAttachment[];
@@ -520,7 +731,8 @@ export function ProjectPanel({
   canSend: boolean;
 }) {
   const { job } = data;
-  const needsJob = view === "progress" || view === "change-orders" || view === "requests";
+  const needsJob =
+    view === "progress" || view === "change-orders" || view === "requests";
   if (needsJob && data.jobLoading) {
     return (
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -530,7 +742,13 @@ export function ProjectPanel({
   }
   switch (view) {
     case "customer":
-      return <CustomerPanel opportunity={opportunity} onShowMap={onShowMap} mapProps={mapProps} />;
+      return (
+        <CustomerPanel
+          opportunity={opportunity}
+          onShowMap={onShowMap}
+          mapProps={mapProps}
+        />
+      );
     case "request":
       return (
         <RequestPanel
@@ -541,13 +759,36 @@ export function ProjectPanel({
         />
       );
     case "preview":
-      return <PreviewPanel estimate={estimate} preview={preview} onSend={onSend} canSend={canSend} onOpenEstimate={onOpenEstimate} printButton={printButton} />;
+      return (
+        <PreviewPanel
+          estimate={estimate}
+          preview={preview}
+          onSend={onSend}
+          canSend={canSend}
+          onOpenEstimate={onOpenEstimate}
+          printButton={printButton}
+        />
+      );
     case "selections":
-      return <SelectionsPanel lines={lines} onLinesChange={onLinesChange} locked={locked} />;
+      return (
+        <SelectionsPanel
+          lines={lines}
+          onLinesChange={onLinesChange}
+          locked={locked}
+        />
+      );
     case "budget":
       return <BudgetPanel lines={lines} job={job} />;
     case "progress":
-      return <ProgressPanel job={job} estimate={estimate} pendingRequests={data.jobRequests.pending} onView={onView} estimateTechnician={estimateTechnician} />;
+      return (
+        <ProgressPanel
+          job={job}
+          estimate={estimate}
+          pendingRequests={data.jobRequests.pending}
+          onView={onView}
+          estimateTechnician={estimateTechnician}
+        />
+      );
     case "requests":
       return job ? (
         <section className={PANEL_CARD}>
@@ -562,7 +803,10 @@ export function ProjectPanel({
             // Any decision changes the sidebar's "N new" count. An approved change order already
             // reloads through onChangeOrderCreated, so only the other decisions reload here.
             onDecided={(request) => {
-              if (!(request.type === "change_order" && request.status !== "rejected")) data.reloadJob();
+              if (!(
+                request.type === "change_order" && request.status !== "rejected"
+              ))
+                data.reloadJob();
             }}
           />
         </section>
@@ -575,10 +819,14 @@ export function ProjectPanel({
         <section className={PANEL_CARD}>
           {/* Client: keep Change orders and Change requests apart. */}
           <p className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-border dark:bg-muted/40 dark:text-muted-foreground">
-            Scope changes are the extra work added to this job (change orders). Requests sent by your technicians and contractors are
-            under{" "}
+            Scope changes are the extra work added to this job (change orders).
+            Requests sent by your technicians and contractors are under{" "}
             {onView ? (
-              <button type="button" className="font-semibold text-primary hover:underline" onClick={() => onView("requests")}>
+              <button
+                type="button"
+                className="font-semibold text-primary hover:underline"
+                onClick={() => onView("requests")}
+              >
                 Change requests
               </button>
             ) : (
@@ -588,9 +836,15 @@ export function ProjectPanel({
           </p>
           <JobChangeOrdersPanel
             job={job}
-            originalAmount={(job.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0)}
+            originalAmount={(job.items || []).reduce(
+              (sum, item) => sum + (Number(item.total) || 0),
+              0,
+            )}
             invoiceId={linkedInvoice?.id || job.invoiceId}
-            locked={Boolean(linkedInvoice || job.invoiceId) || ["completed", "invoiced", "paid"].includes(job.status)}
+            locked={
+              Boolean(linkedInvoice || job.invoiceId) ||
+              ["completed", "invoiced", "paid"].includes(job.status)
+            }
             onJobUpdated={(next) => data.replaceJob(next)}
           />
         </section>
@@ -598,9 +852,23 @@ export function ProjectPanel({
     case "schedule":
       return <SchedulePanel data={data} />;
     case "invoices":
-      return <InvoicesPanel invoice={linkedInvoice} job={job} estimate={estimate} opportunity={opportunity} />;
+      return (
+        <InvoicesPanel
+          invoice={linkedInvoice}
+          job={job}
+          estimate={estimate}
+          opportunity={opportunity}
+        />
+      );
     case "files":
-      return <FilesPanel data={data} opportunity={opportunity} estimate={estimate} companyFiles={companyFiles} />;
+      return (
+        <FilesPanel
+          data={data}
+          opportunity={opportunity}
+          estimate={estimate}
+          companyFiles={companyFiles}
+        />
+      );
   }
 }
 
@@ -610,9 +878,24 @@ export function ProjectPanel({
 
 function customerOf(opportunity: EstimateV2Opportunity) {
   const c = opportunity.customerId;
-  if (!c || typeof c === "string") return { id: typeof c === "string" ? c : "", name: "Customer", email: "", phone: "" };
-  const name = String(c.companyName || "").trim() || [c.firstName, c.lastName].filter(Boolean).join(" ").trim() || c.email || "Customer";
-  return { id: String(c.id || c._id || ""), name, email: String(c.email || "").trim(), phone: String(c.phone || "").trim() };
+  if (!c || typeof c === "string")
+    return {
+      id: typeof c === "string" ? c : "",
+      name: "Customer",
+      email: "",
+      phone: "",
+    };
+  const name =
+    String(c.companyName || "").trim() ||
+    [c.firstName, c.lastName].filter(Boolean).join(" ").trim() ||
+    c.email ||
+    "Customer";
+  return {
+    id: String(c.id || c._id || ""),
+    name,
+    email: String(c.email || "").trim(),
+    phone: String(c.phone || "").trim(),
+  };
 }
 
 function CustomerPanel({
@@ -626,17 +909,24 @@ function CustomerPanel({
 }) {
   const customer = customerOf(opportunity);
   const p = opportunity.propertyAddress || {};
-  const address = [p.address || p.street, p.city, p.state, p.zip].filter(Boolean).join(", ");
+  const address = [p.address || p.street, p.city, p.state, p.zip]
+    .filter(Boolean)
+    .join(", ");
   return (
     <Panel label="Customer & property">
-      <p className="text-[15px] font-semibold tracking-tight text-slate-900 dark:text-foreground">{customer.name}</p>
+      <p className="text-[15px] font-semibold tracking-tight text-slate-900 dark:text-foreground">
+        {customer.name}
+      </p>
       <dl className="mt-3 grid gap-2.5 text-sm sm:grid-cols-2">
         {customer.email ? (
           <div className="flex items-center gap-2 text-slate-700 dark:text-foreground">
             <Mail className="size-4 shrink-0 text-slate-400" />
             <dt className="sr-only">Email</dt>
             <dd className="min-w-0 truncate">
-              <a href={`mailto:${customer.email}`} className="hover:text-primary hover:underline">
+              <a
+                href={`mailto:${customer.email}`}
+                className="hover:text-primary hover:underline"
+              >
                 {customer.email}
               </a>
             </dd>
@@ -647,7 +937,10 @@ function CustomerPanel({
             <Phone className="size-4 shrink-0 text-slate-400" />
             <dt className="sr-only">Phone</dt>
             <dd>
-              <a href={`tel:${customer.phone}`} className="hover:text-primary hover:underline">
+              <a
+                href={`tel:${customer.phone}`}
+                className="hover:text-primary hover:underline"
+              >
                 {customer.phone}
               </a>
             </dd>
@@ -674,14 +967,17 @@ function CustomerPanel({
         <div className="mt-4 border-t border-slate-100 pt-3 dark:border-border-soft">
           <Button size="sm" variant="outline" className="h-8 gap-1.5" asChild>
             <Link href={`/pro/dashboard/customers/${customer.id}`}>
-              <ExternalLink className="size-3.5 text-primary" /> Customer profile
+              <ExternalLink className="size-3.5 text-primary" /> Customer
+              profile
             </Link>
           </Button>
         </div>
       ) : null}
       {address ? (
         <div className="mt-4">
-          <p className="mb-2 text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase">Route to the job site</p>
+          <p className="mb-2 text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase">
+            Route to the job site
+          </p>
           <RouteMap {...mapProps} />
         </div>
       ) : null}
@@ -701,39 +997,72 @@ const SOURCE_LABEL: Record<string, string> = {
 
 function sourceLabel(source?: string) {
   if (!source) return "";
-  return SOURCE_LABEL[source] || source.replace(/[_-]+/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+  return (
+    SOURCE_LABEL[source] ||
+    source.replace(/[_-]+/g, " ").replace(/^\w/, (c) => c.toUpperCase())
+  );
 }
 
 /** One labelled fact in the request's detail grid. */
-// Kept for the commented-out grids (Job tab, old Work request). 
+// Kept for the commented-out grids (Job tab, old Work request).
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-function Fact({ icon: Icon, label, children }: { icon: typeof Hash; label: string; children: ReactNode }) {
+function Fact({
+  icon: Icon,
+  label,
+  children,
+}: {
+  icon: typeof Hash;
+  label: string;
+  children: ReactNode;
+}) {
   return (
     <div className="flex h-full min-w-0 gap-2.5 bg-white px-4 py-3 dark:bg-card">
       <Icon className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
       <div className="min-w-0">
-        <dt className="text-[10px] font-semibold tracking-[0.12em] text-slate-500 uppercase">{label}</dt>
-        <dd className="mt-0.5 text-sm font-medium break-words text-slate-900 dark:text-foreground">{children}</dd>
+        <dt className="text-[10px] font-semibold tracking-[0.12em] text-slate-500 uppercase">
+          {label}
+        </dt>
+        <dd className="mt-0.5 text-sm font-medium break-words text-slate-900 dark:text-foreground">
+          {children}
+        </dd>
       </div>
     </div>
   );
 }
 
 /** One label / value line in the Work request side column. */
-function DetailRow({ label, children }: { label: string; children: ReactNode }) {
+function DetailRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-2 text-sm">
-      <dt className="shrink-0 text-slate-500 dark:text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 text-right font-medium break-words text-slate-900 dark:text-foreground">{children}</dd>
+      <dt className="shrink-0 text-slate-500 dark:text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="min-w-0 text-right font-medium break-words text-slate-900 dark:text-foreground">
+        {children}
+      </dd>
     </div>
   );
 }
 
 /** Small uppercase heading used inside the Work request card. */
-function RequestHeading({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
+function RequestHeading({
+  children,
+  aside,
+}: {
+  children: ReactNode;
+  aside?: ReactNode;
+}) {
   return (
     <div className="mb-2 flex items-center justify-between gap-2">
-      <h3 className="text-xs font-bold tracking-[0.08em] text-slate-900 uppercase dark:text-foreground">{children}</h3>
+      <h3 className="text-xs font-bold tracking-[0.08em] text-slate-900 uppercase dark:text-foreground">
+        {children}
+      </h3>
       {aside ? <span className="text-xs text-slate-500">{aside}</span> : null}
     </div>
   );
@@ -752,15 +1081,27 @@ function RequestPanel({
   /** Open the Photos & files tab (every file on the project). */
   onOpenFiles?: () => void;
 }) {
-  const answers = (opportunity.quoteAnswers || []).filter((answer) => answer.label && answer.value);
+  const answers = (opportunity.quoteAnswers || []).filter(
+    (answer) => answer.label && answer.value,
+  );
   const customer = customerOf(opportunity);
   const p = opportunity.propertyAddress || {};
-  const address = [p.address || p.street, p.city, p.state, p.zip].filter(Boolean).join(", ");
+  const address = [p.address || p.street, p.city, p.state, p.zip]
+    .filter(Boolean)
+    .join(", ");
   const attachments = [
     ...photos.map((url) => ({ url, name: "" })),
-    ...(opportunity.customerAttachments || []).map((file) => ({ url: file.url, name: file.name || "" })),
-  ].filter((file, index, all) => file.url && all.findIndex((other) => other.url === file.url) === index);
-  const isImage = (url: string) => /\.(png|jpe?g|gif|webp|avif|heic)(\?|$)/i.test(url) || url.includes("/image");
+    ...(opportunity.customerAttachments || []).map((file) => ({
+      url: file.url,
+      name: file.name || "",
+    })),
+  ].filter(
+    (file, index, all) =>
+      file.url && all.findIndex((other) => other.url === file.url) === index,
+  );
+  const isImage = (url: string) =>
+    /\.(png|jpe?g|gif|webp|avif|heic)(\?|$)/i.test(url) ||
+    url.includes("/image");
   const initials =
     customer.name
       .split(/\s+/)
@@ -768,6 +1109,21 @@ function RequestPanel({
       .slice(0, 2)
       .map((part) => part[0]?.toUpperCase())
       .join("") || "C";
+  // AI receptionist notes: never the transcript (the call log has the conversation).
+  const notes = (
+    opportunity.source === "ai_receptionist"
+      ? withoutCallTranscript(opportunity.internalNotes || "")
+      : opportunity.internalNotes || ""
+  ).trim();
+  const notesBox = notes ? (
+    <p className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-slate-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-foreground">
+      {notes}
+    </p>
+  ) : (
+    <p className="rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-500 dark:border-border">
+      No internal notes.
+    </p>
+  );
 
   return (
     <div className="space-y-3">
@@ -777,21 +1133,35 @@ function RequestPanel({
           <div className="min-w-0">
             <p className="flex flex-wrap items-center gap-2 text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase">
               Work request
-              <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-normal normal-case", opportunityStatusTone(opportunity.status))}>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-normal normal-case",
+                  opportunityStatusTone(opportunity.status),
+                )}
+              >
                 {opportunityStatusLabel(opportunity.status)}
               </span>
             </p>
-            <h2 className="mt-1 text-lg font-semibold tracking-tight text-slate-900 dark:text-foreground">{opportunity.title}</h2>
+            <h2 className="mt-1 text-lg font-semibold tracking-tight text-slate-900 dark:text-foreground">
+              {opportunity.title}
+            </h2>
             {opportunity.categoryName ? (
               <p className="mt-0.5 text-sm text-slate-500 dark:text-muted-foreground">
                 {opportunity.categoryName}
-                {opportunity.subcategoryName ? ` › ${opportunity.subcategoryName}` : ""}
+                {opportunity.subcategoryName
+                  ? ` › ${opportunity.subcategoryName}`
+                  : ""}
               </p>
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             {opportunity.requestId ? (
-              <Button size="sm" variant="outline" className="h-9 gap-1.5" asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 gap-1.5"
+                asChild
+              >
                 <Link href={`/pro/dashboard/requests/${opportunity.requestId}`}>
                   <ExternalLink className="size-3.5" /> Open lead
                 </Link>
@@ -819,12 +1189,23 @@ function RequestPanel({
 
             {answers.length ? (
               <div>
-                <RequestHeading aside={`${answers.length} question${answers.length === 1 ? "" : "s"}`}>Quote questions</RequestHeading>
+                <RequestHeading
+                  aside={`${answers.length} question${answers.length === 1 ? "" : "s"}`}
+                >
+                  Quote questions
+                </RequestHeading>
                 <dl className="divide-y divide-slate-200 rounded-xl border border-slate-300 dark:divide-border-soft dark:border-border">
                   {answers.map((answer, i) => (
-                    <div key={answer.id || i} className="grid gap-1 px-4 py-2.5 text-sm sm:grid-cols-2 sm:gap-4">
-                      <dt className="text-slate-500 dark:text-muted-foreground">{answer.label}</dt>
-                      <dd className="font-medium text-slate-900 dark:text-foreground">{answer.value}</dd>
+                    <div
+                      key={answer.id || i}
+                      className="grid gap-1 px-4 py-2.5 text-sm sm:grid-cols-2 sm:gap-4"
+                    >
+                      <dt className="text-slate-500 dark:text-muted-foreground">
+                        {answer.label}
+                      </dt>
+                      <dd className="font-medium text-slate-900 dark:text-foreground">
+                        {answer.value}
+                      </dd>
                     </div>
                   ))}
                 </dl>
@@ -835,7 +1216,11 @@ function RequestPanel({
               <RequestHeading
                 aside={
                   onOpenFiles ? (
-                    <button type="button" className="font-semibold text-primary hover:underline" onClick={onOpenFiles}>
+                    <button
+                      type="button"
+                      className="font-semibold text-primary hover:underline"
+                      onClick={onOpenFiles}
+                    >
                       All project photos &amp; files →
                     </button>
                   ) : attachments.length ? (
@@ -857,32 +1242,49 @@ function RequestPanel({
                       >
                         {isImage(file.url) ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={file.url} alt={file.name || "Customer photo"} className="aspect-[4/3] w-full object-cover" />
+                          <img
+                            src={file.url}
+                            alt={file.name || "Customer photo"}
+                            className="aspect-[4/3] w-full object-cover"
+                          />
                         ) : (
                           <span className="flex aspect-[4/3] items-center justify-center bg-slate-50 dark:bg-muted/40">
                             <FileText className="size-6 text-slate-400" />
                           </span>
                         )}
-                        {file.name ? <span className="block truncate px-2 py-1.5 text-xs text-slate-600 dark:text-muted-foreground">{file.name}</span> : null}
+                        {file.name ? (
+                          <span className="block truncate px-2 py-1.5 text-xs text-slate-600 dark:text-muted-foreground">
+                            {file.name}
+                          </span>
+                        ) : null}
                       </a>
                     </li>
                   ))}
                 </ul>
               ) : (
                 <p className="rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-500 dark:border-border">
-                  The customer didn&apos;t send any photos or files with this request.
+                  The customer didn&apos;t send any photos or files with this
+                  request.
                 </p>
               )}
             </div>
 
             <div>
-              <RequestHeading aside="Not shown to the customer">Internal notes</RequestHeading>
-              {opportunity.internalNotes?.trim() ? (
-                <p className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-slate-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-foreground">
-                  {opportunity.internalNotes}
-                </p>
+              <RequestHeading aside="Not shown to the customer">
+                Internal notes
+              </RequestHeading>
+              {/* Client: an AI receptionist estimate shows a "View call log" card (opens the call's
+                  detail page) instead of the raw call notes + transcript. Other estimates, or an AI
+                  one whose call isn't found, keep the notes box below.
+              Previous (all estimates):
+              {opportunity.internalNotes?.trim() ? (<p className="rounded-xl border border-amber-200 …">{opportunity.internalNotes}</p>) : (<p …>No internal notes.</p>)} */}
+              {opportunity.source === "ai_receptionist" && opportunity.id ? (
+                <CallLogCard
+                  opportunityId={opportunity.id}
+                  fallback={notesBox}
+                />
               ) : (
-                <p className="rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-500 dark:border-border">No internal notes.</p>
+                notesBox
               )}
             </div>
           </div>
@@ -893,10 +1295,18 @@ function RequestPanel({
               <RequestHeading>Details</RequestHeading>
               <dl className="divide-y divide-slate-200 dark:divide-border-soft">
                 <DetailRow label="Reference">{opportunity.number}</DetailRow>
-                <DetailRow label="Received">{opportunity.createdAt ? formatDate(opportunity.createdAt) : "—"}</DetailRow>
-                <DetailRow label="Source">{sourceLabel(opportunity.source) || "—"}</DetailRow>
+                <DetailRow label="Received">
+                  {opportunity.createdAt
+                    ? formatDate(opportunity.createdAt)
+                    : "—"}
+                </DetailRow>
+                <DetailRow label="Source">
+                  {sourceLabel(opportunity.source) || "—"}
+                </DetailRow>
                 {opportunity.subcategoryName || opportunity.categoryName ? (
-                  <DetailRow label="Service">{opportunity.subcategoryName || opportunity.categoryName}</DetailRow>
+                  <DetailRow label="Service">
+                    {opportunity.subcategoryName || opportunity.categoryName}
+                  </DetailRow>
                 ) : null}
               </dl>
             </div>
@@ -908,14 +1318,22 @@ function RequestPanel({
                   {initials}
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-foreground">{customer.name}</p>
+                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-foreground">
+                    {customer.name}
+                  </p>
                   {customer.phone ? (
-                    <a href={`tel:${customer.phone}`} className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-primary dark:text-muted-foreground">
+                    <a
+                      href={`tel:${customer.phone}`}
+                      className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-primary dark:text-muted-foreground"
+                    >
                       <Phone className="size-3" aria-hidden /> {customer.phone}
                     </a>
                   ) : null}
                   {customer.email ? (
-                    <a href={`mailto:${customer.email}`} className="flex items-center gap-1.5 truncate text-xs text-slate-600 hover:text-primary dark:text-muted-foreground">
+                    <a
+                      href={`mailto:${customer.email}`}
+                      className="flex items-center gap-1.5 truncate text-xs text-slate-600 hover:text-primary dark:text-muted-foreground"
+                    >
                       <Mail className="size-3" aria-hidden /> {customer.email}
                     </a>
                   ) : null}
@@ -926,11 +1344,20 @@ function RequestPanel({
             <div>
               <RequestHeading>Service address</RequestHeading>
               <p className="flex gap-2 text-sm text-slate-800 dark:text-foreground">
-                <MapPin className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
+                <MapPin
+                  className="mt-0.5 size-4 shrink-0 text-slate-400"
+                  aria-hidden
+                />
                 {address || "No address yet"}
               </p>
               {address ? (
-                <Button type="button" size="sm" variant="outline" className="mt-2 h-8 w-full gap-1.5" onClick={onShowMap}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 h-8 w-full gap-1.5"
+                  onClick={onShowMap}
+                >
                   <MapPin className="size-3.5" /> View on map
                 </Button>
               ) : null}
@@ -957,7 +1384,10 @@ function PreviewPanel({
   printButton,
 }: {
   estimate: Estimate | null;
-  preview: { snapshot: EstimateShareSnapshot; approval?: EstimateApproval } | null;
+  preview: {
+    snapshot: EstimateShareSnapshot;
+    approval?: EstimateApproval;
+  } | null;
   onSend: () => void;
   canSend: boolean;
   onOpenEstimate: () => void;
@@ -968,7 +1398,11 @@ function PreviewPanel({
       <Panel label="Preview">
         <Muted>
           Add line items to preview the estimate.{" "}
-          <button type="button" className="font-medium text-primary underline" onClick={onOpenEstimate}>
+          <button
+            type="button"
+            className="font-medium text-primary underline"
+            onClick={onOpenEstimate}
+          >
             Go to the estimate
           </button>
         </Muted>
@@ -992,7 +1426,10 @@ function PreviewPanel({
       >
         <div className="overflow-x-auto rounded-xl bg-slate-100 p-3 dark:bg-muted/40">
           <div className="mx-auto w-full max-w-204 min-w-160 bg-white shadow-sm">
-            <EstimatePdfDocument snapshot={preview.snapshot} approval={preview.approval} />
+            <EstimatePdfDocument
+              snapshot={preview.snapshot}
+              approval={preview.approval}
+            />
           </div>
         </div>
       </Panel>
@@ -1009,44 +1446,73 @@ function SelectionsPanel({
   onLinesChange: (lines: JobCostLine[]) => void;
   locked: boolean;
 }) {
-  const filled = lines.filter((line) => line.description.trim() || Number(line.unitPrice) > 0);
+  const filled = lines.filter(
+    (line) => line.description.trim() || Number(line.unitPrice) > 0,
+  );
   const optional = filled.filter((line) => line.optional);
   const byGroup = new Map<string, JobCostLine[]>();
   for (const line of optional) {
     const key = line.optionGroup?.trim() || "Other options";
     byGroup.set(key, [...(byGroup.get(key) || []), line]);
   }
-  const included = filled.filter((line) => !line.optional).reduce((sum, line) => sum + lineTotal(line), 0);
-  const optionalTotal = optional.reduce((sum, line) => sum + lineTotal(line), 0);
+  const included = filled
+    .filter((line) => !line.optional)
+    .reduce((sum, line) => sum + lineTotal(line), 0);
+  const optionalTotal = optional.reduce(
+    (sum, line) => sum + lineTotal(line),
+    0,
+  );
 
   const include = (id: string) => {
     if (locked) return;
-    onLinesChange(lines.map((line) => (line.id === id ? { ...line, optional: false, optionGroup: "" } : line)));
+    onLinesChange(
+      lines.map((line) =>
+        line.id === id ? { ...line, optional: false, optionGroup: "" } : line,
+      ),
+    );
   };
 
   return (
     <Panel label="Selections" aside={`${optional.length} optional`}>
       <div className="grid gap-2 sm:grid-cols-2">
         <Stat label="Included in the total" value={formatMoney(included)} />
-        <Stat label="Optional (not in the total)" value={formatMoney(optionalTotal)} />
+        <Stat
+          label="Optional (not in the total)"
+          value={formatMoney(optionalTotal)}
+        />
       </div>
       <div className="mt-4 space-y-4">
         {[...byGroup.entries()].map(([group, rows]) => (
           <div key={group}>
-            <p className="text-xs font-medium text-slate-500">Option for: {group}</p>
+            <p className="text-xs font-medium text-slate-500">
+              Option for: {group}
+            </p>
             <ul className="mt-1.5 divide-y divide-slate-200 rounded-xl border border-slate-300 dark:divide-border-soft dark:border-border">
               {rows.map((line) => (
-                <li key={line.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
+                <li
+                  key={line.id}
+                  className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5"
+                >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-900 dark:text-foreground">{line.description || "Option"}</p>
+                    <p className="truncate text-sm font-medium text-slate-900 dark:text-foreground">
+                      {line.description || "Option"}
+                    </p>
                     <p className="text-xs text-slate-500 tabular-nums">
-                      {line.quantity} {line.unit} × {formatMoney(line.unitPrice)}
+                      {line.quantity} {line.unit} ×{" "}
+                      {formatMoney(line.unitPrice)}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold tabular-nums">{formatMoney(lineTotal(line))}</span>
+                    <span className="text-sm font-semibold tabular-nums">
+                      {formatMoney(lineTotal(line))}
+                    </span>
                     {locked ? null : (
-                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => include(line.id)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => include(line.id)}
+                      >
                         Include in total
                       </Button>
                     )}
@@ -1057,24 +1523,57 @@ function SelectionsPanel({
           </div>
         ))}
       </div>
-      {locked ? <p className="mt-3 text-xs text-slate-500">This estimate is signed, so its selections are locked.</p> : null}
+      {locked ? (
+        <p className="mt-3 text-xs text-slate-500">
+          This estimate is signed, so its selections are locked.
+        </p>
+      ) : null}
     </Panel>
   );
 }
 
-function BudgetPanel({ lines, job }: { lines: JobCostLine[]; job: Job | null }) {
-  const included = lines.filter((line) => !line.optional && (line.description.trim() || Number(line.unitPrice) > 0));
-  const hasCost = (line: JobCostLine) => line.unitCost != null && Number.isFinite(Number(line.unitCost));
+function BudgetPanel({
+  lines,
+  job,
+}: {
+  lines: JobCostLine[];
+  job: Job | null;
+}) {
+  const included = lines.filter(
+    (line) =>
+      !line.optional && (line.description.trim() || Number(line.unitPrice) > 0),
+  );
+  const hasCost = (line: JobCostLine) =>
+    line.unitCost != null && Number.isFinite(Number(line.unitCost));
   const withCost = included.filter(hasCost);
   const price = included.reduce((sum, line) => sum + lineTotal(line), 0);
-  const pricedWithCost = withCost.reduce((sum, line) => sum + lineTotal(line), 0);
-  const cost = withCost.reduce((sum, line) => sum + Math.round(Number(line.quantity) * Number(line.unitCost) * 100) / 100, 0);
+  const pricedWithCost = withCost.reduce(
+    (sum, line) => sum + lineTotal(line),
+    0,
+  );
+  const cost = withCost.reduce(
+    (sum, line) =>
+      sum +
+      Math.round(Number(line.quantity) * Number(line.unitCost) * 100) / 100,
+    0,
+  );
   const profit = pricedWithCost - cost;
-  const margin = pricedWithCost > 0 ? Math.round((profit / pricedWithCost) * 1000) / 10 : null;
-  const approvedChanges = (job?.changeOrders || []).filter((order) => order.status === "approved");
-  const changeTotal = approvedChanges.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
+  const margin =
+    pricedWithCost > 0
+      ? Math.round((profit / pricedWithCost) * 1000) / 10
+      : null;
+  const approvedChanges = (job?.changeOrders || []).filter(
+    (order) => order.status === "approved",
+  );
+  const changeTotal = approvedChanges.reduce(
+    (sum, order) => sum + (Number(order.total) || 0),
+    0,
+  );
 
-  const bySection = new Map<string, { price: number; cost: number; costed: number }>();
+  const bySection = new Map<
+    string,
+    { price: number; cost: number; costed: number }
+  >();
   for (const line of included) {
     const key = line.section?.trim() || "General";
     const row = bySection.get(key) || { price: 0, cost: 0, costed: 0 };
@@ -1090,13 +1589,21 @@ function BudgetPanel({ lines, job }: { lines: JobCostLine[]; job: Job | null }) 
     <Panel label="Budget" aside="Internal · never shown to the customer">
       <div className="grid gap-2 sm:grid-cols-4">
         <Stat label="Price" value={formatMoney(price)} />
-        <Stat label="Your cost" value={withCost.length ? formatMoney(cost) : "—"} />
-        <Stat label="Profit" value={withCost.length ? formatMoney(profit) : "—"} tone={withCost.length ? (profit >= 0 ? "good" : "bad") : undefined} />
+        <Stat
+          label="Your cost"
+          value={withCost.length ? formatMoney(cost) : "—"}
+        />
+        <Stat
+          label="Profit"
+          value={withCost.length ? formatMoney(profit) : "—"}
+          tone={withCost.length ? (profit >= 0 ? "good" : "bad") : undefined}
+        />
         <Stat label="Margin" value={margin != null ? `${margin}%` : "—"} />
       </div>
       {withCost.length < included.length ? (
         <p className="mt-2 text-xs text-slate-500">
-          {included.length - withCost.length} of {included.length} lines have no cost yet. Add a cost on the estimate to see their profit.
+          {included.length - withCost.length} of {included.length} lines have no
+          cost yet. Add a cost on the estimate to see their profit.
         </p>
       ) : null}
       <div className="mt-4 overflow-hidden rounded-xl border border-slate-300 dark:border-border">
@@ -1112,10 +1619,18 @@ function BudgetPanel({ lines, job }: { lines: JobCostLine[]; job: Job | null }) 
           <tbody className="divide-y divide-slate-200 dark:divide-border-soft">
             {[...bySection.entries()].map(([section, row]) => (
               <tr key={section}>
-                <td className="px-3 py-2 font-medium text-slate-900 dark:text-foreground">{section}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{formatMoney(row.price)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{row.costed ? formatMoney(row.cost) : "—"}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{row.costed ? formatMoney(row.costed - row.cost) : "—"}</td>
+                <td className="px-3 py-2 font-medium text-slate-900 dark:text-foreground">
+                  {section}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {formatMoney(row.price)}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {row.costed ? formatMoney(row.cost) : "—"}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {row.costed ? formatMoney(row.costed - row.cost) : "—"}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1123,8 +1638,14 @@ function BudgetPanel({ lines, job }: { lines: JobCostLine[]; job: Job | null }) 
       </div>
       {approvedChanges.length ? (
         <p className="mt-3 text-sm text-slate-700 dark:text-foreground">
-          Approved change orders add <span className="font-semibold tabular-nums">{formatMoney(changeTotal)}</span> · project price{" "}
-          <span className="font-semibold tabular-nums">{formatMoney(price + changeTotal)}</span>
+          Approved change orders add{" "}
+          <span className="font-semibold tabular-nums">
+            {formatMoney(changeTotal)}
+          </span>{" "}
+          · project price{" "}
+          <span className="font-semibold tabular-nums">
+            {formatMoney(price + changeTotal)}
+          </span>
         </p>
       ) : null}
     </Panel>
@@ -1134,7 +1655,16 @@ function BudgetPanel({ lines, job }: { lines: JobCostLine[]; job: Job | null }) 
 const JOB_STEPS: { label: string; statuses: string[] }[] = [
   { label: "Booked", statuses: ["unscheduled"] },
   { label: "Scheduled", statuses: ["scheduled", "dispatched", "en_route"] },
-  { label: "In progress", statuses: ["on_site", "in_progress", "on_hold", "waiting_parts", "needs_return"] },
+  {
+    label: "In progress",
+    statuses: [
+      "on_site",
+      "in_progress",
+      "on_hold",
+      "waiting_parts",
+      "needs_return",
+    ],
+  },
   { label: "Completed", statuses: ["completed"] },
   { label: "Invoiced", statuses: ["invoiced", "paid"] },
 ];
@@ -1162,12 +1692,23 @@ function ProgressPanel({
     );
   }
   const cancelled = job.status === "cancelled";
-  const stepIndex = Math.max(0, JOB_STEPS.findIndex((step) => step.statuses.includes(job.status)));
+  const stepIndex = Math.max(
+    0,
+    JOB_STEPS.findIndex((step) => step.statuses.includes(job.status)),
+  );
   const stages = estimate?.stages || [];
   // Crew names: the team list first, then the name saved on the job (team list not loaded yet),
   // then the technician assigned on this estimate (job made before a technician was copied over).
-  const technicianIds = [...new Set([...(job.assignedEmployeeIds || []), job.assignedEmployeeId].filter(Boolean) as string[])];
-  const crewNames = technicianIds.map((id) => employeeLabel(id)).filter(Boolean);
+  const technicianIds = [
+    ...new Set(
+      [...(job.assignedEmployeeIds || []), job.assignedEmployeeId].filter(
+        Boolean,
+      ) as string[],
+    ),
+  ];
+  const crewNames = technicianIds
+    .map((id) => employeeLabel(id))
+    .filter(Boolean);
   const technicians = crewNames.length
     ? crewNames
     : technicianIds.length && job.assignedTo
@@ -1177,12 +1718,29 @@ function ProgressPanel({
         : technicianIds.length
           ? [job.assignedTo || "Assigned technician"]
           : [];
-  const contractors = (job.crewContractors || []).map((row) => row.name).filter(Boolean);
-  const baseValue = (job.items || []).filter((item) => item.source !== "change_order").reduce((sum, item) => sum + (Number(item.total) || 0), 0);
-  const approved = (job.changeOrders || []).filter((order) => order.status === "approved");
-  const extras = approved.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
+  const contractors = (job.crewContractors || [])
+    .map((row) => row.name)
+    .filter(Boolean);
+  const baseValue = (job.items || [])
+    .filter((item) => item.source !== "change_order")
+    .reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+  const approved = (job.changeOrders || []).filter(
+    (order) => order.status === "approved",
+  );
+  const extras = approved.reduce(
+    (sum, order) => sum + (Number(order.total) || 0),
+    0,
+  );
   const a = job.address;
-  const address = a ? [a.address || a.street, a.city, [a.state, a.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "";
+  const address = a
+    ? [
+        a.address || a.street,
+        a.city,
+        [a.state, a.zip].filter(Boolean).join(" "),
+      ]
+        .filter(Boolean)
+        .join(", ")
+    : "";
 
   return (
     <div className="space-y-3">
@@ -1190,12 +1748,25 @@ function ProgressPanel({
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-border-soft">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase">Job</p>
+            <p className="text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase">
+              Job
+            </p>
             <p className="mt-1 flex flex-wrap items-center gap-2 text-lg font-semibold tracking-tight text-slate-900 dark:text-foreground">
               {job.number}
-              <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", jobStatusTone(job.status))}>{jobStatusLabel(job.status)}</span>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                  jobStatusTone(job.status),
+                )}
+              >
+                {jobStatusLabel(job.status)}
+              </span>
             </p>
-            {job.title ? <p className="mt-0.5 text-sm text-slate-600 dark:text-muted-foreground">{job.title}</p> : null}
+            {job.title ? (
+              <p className="mt-0.5 text-sm text-slate-600 dark:text-muted-foreground">
+                {job.title}
+              </p>
+            ) : null}
           </div>
           <Button size="sm" className="h-9 gap-1.5" asChild>
             <Link href={`/pro/dashboard/jobs/${job.id}`}>
@@ -1216,19 +1787,31 @@ function ProgressPanel({
                 const done = index < stepIndex;
                 const current = index === stepIndex;
                 return (
-                  <li key={step.label} className="relative flex flex-1 flex-col items-center text-center">
+                  <li
+                    key={step.label}
+                    className="relative flex flex-1 flex-col items-center text-center"
+                  >
                     {index > 0 ? (
                       <span
                         aria-hidden
-                        className={cn("absolute top-3.5 right-1/2 h-0.5 w-full", index <= stepIndex ? "bg-primary" : "bg-slate-200 dark:bg-muted")}
+                        className={cn(
+                          "absolute top-3.5 right-1/2 h-0.5 w-full",
+                          index <= stepIndex
+                            ? "bg-primary"
+                            : "bg-slate-200 dark:bg-muted",
+                        )}
                       />
                     ) : null}
                     <span
                       className={cn(
                         "relative z-[1] flex size-7 items-center justify-center rounded-full border-2 text-[11px] font-semibold",
-                        done && "border-primary bg-primary text-primary-foreground",
-                        current && "border-primary bg-white text-primary ring-4 ring-primary/15 dark:bg-card",
-                        !done && !current && "border-slate-300 bg-white text-slate-400 dark:border-border dark:bg-card",
+                        done &&
+                          "border-primary bg-primary text-primary-foreground",
+                        current &&
+                          "border-primary bg-white text-primary ring-4 ring-primary/15 dark:bg-card",
+                        !done &&
+                          !current &&
+                          "border-slate-300 bg-white text-slate-400 dark:border-border dark:bg-card",
                       )}
                     >
                       {done ? <Check className="size-3.5" /> : index + 1}
@@ -1236,7 +1819,11 @@ function ProgressPanel({
                     <span
                       className={cn(
                         "mt-1.5 text-[11px] sm:text-xs",
-                        current ? "font-semibold text-slate-900 dark:text-foreground" : done ? "text-slate-700 dark:text-foreground" : "text-slate-400",
+                        current
+                          ? "font-semibold text-slate-900 dark:text-foreground"
+                          : done
+                            ? "text-slate-700 dark:text-foreground"
+                            : "text-slate-400",
                       )}
                     >
                       {step.label}
@@ -1260,8 +1847,14 @@ function ProgressPanel({
               {
                 id: "scheduled",
                 header: "Start date",
-                exportValue: (row) => (row.scheduledAt ? formatDateTime(row.scheduledAt) : "Not scheduled yet"),
-                cell: (row) => (row.scheduledAt ? formatDateTime(row.scheduledAt) : "Not scheduled yet"),
+                exportValue: (row) =>
+                  row.scheduledAt
+                    ? formatDateTime(row.scheduledAt)
+                    : "Not scheduled yet",
+                cell: (row) =>
+                  row.scheduledAt
+                    ? formatDateTime(row.scheduledAt)
+                    : "Not scheduled yet",
               },
               {
                 id: "due",
@@ -1278,7 +1871,9 @@ function ProgressPanel({
                     <>
                       {technicians.join(", ")}
                       {contractors.length ? (
-                        <span className="block text-xs text-slate-500">Contractors: {contractors.join(", ")}</span>
+                        <span className="block text-xs text-slate-500">
+                          Contractors: {contractors.join(", ")}
+                        </span>
                       ) : null}
                     </>
                   ) : (
@@ -1294,7 +1889,9 @@ function ProgressPanel({
                     {formatMoney(baseValue + extras)}
                     {approved.length ? (
                       <span className="block text-xs text-slate-500">
-                        incl. {approved.length} approved change order{approved.length === 1 ? "" : "s"} ({formatMoney(extras)})
+                        incl. {approved.length} approved change order
+                        {approved.length === 1 ? "" : "s"} (
+                        {formatMoney(extras)})
                       </span>
                     ) : null}
                   </span>
@@ -1303,10 +1900,16 @@ function ProgressPanel({
               {
                 id: "invoice",
                 header: "Invoice status",
-                exportValue: (row) => (row.invoiceId ? "Invoiced" : "Created when the work is complete"),
+                exportValue: (row) =>
+                  row.invoiceId
+                    ? "Invoiced"
+                    : "Created when the work is complete",
                 cell: (row) =>
                   row.invoiceId ? (
-                    <Link href={`/pro/dashboard/invoices/${row.invoiceId}`} className="font-medium text-primary hover:underline">
+                    <Link
+                      href={`/pro/dashboard/invoices/${row.invoiceId}`}
+                      className="font-medium text-primary hover:underline"
+                    >
                       Open invoice
                     </Link>
                   ) : (
@@ -1369,10 +1972,16 @@ function ProgressPanel({
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
           <p className="flex items-center gap-2 font-medium">
             <AlertCircle className="size-4" />
-            {pendingRequests} change request{pendingRequests === 1 ? "" : "s"} from the crew waiting for your review
+            {pendingRequests} change request{pendingRequests === 1 ? "" : "s"}{" "}
+            from the crew waiting for your review
           </p>
           {onView ? (
-            <Button size="sm" variant="outline" className="h-8 border-amber-400 bg-white" onClick={() => onView("requests")}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-amber-400 bg-white"
+              onClick={() => onView("requests")}
+            >
               Review
             </Button>
           ) : null}
@@ -1385,11 +1994,23 @@ function ProgressPanel({
             {stages.map((stage) => {
               const status = stageDisplayStatus(stage);
               return (
-                <li key={stage.id} className="flex items-center justify-between gap-3 py-2 text-sm first:pt-0 last:pb-0">
-                  <span className="min-w-0 truncate font-medium">{stage.name}</span>
+                <li
+                  key={stage.id}
+                  className="flex items-center justify-between gap-3 py-2 text-sm first:pt-0 last:pb-0"
+                >
+                  <span className="min-w-0 truncate font-medium">
+                    {stage.name}
+                  </span>
                   <span className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
                     {stageDateRange(stage)}
-                    <span className={cn("rounded-full px-2 py-0.5 font-semibold", stageStatusTone(status))}>{stageStatusLabel(status)}</span>
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 font-semibold",
+                        stageStatusTone(status),
+                      )}
+                    >
+                      {stageStatusLabel(status)}
+                    </span>
                   </span>
                 </li>
               );
@@ -1403,8 +2024,12 @@ function ProgressPanel({
             {job.activities.slice(0, 5).map((item) => (
               <li key={item.id} className="relative pb-3 last:pb-0">
                 <span className="absolute top-1.5 -left-[1.3rem] size-2 rounded-full border-2 border-primary bg-white" />
-                <p className="text-sm font-medium text-slate-900 dark:text-foreground">{item.title}</p>
-                <p className="mt-0.5 text-[11px] text-slate-400">{formatDateTime(item.createdAt)}</p>
+                <p className="text-sm font-medium text-slate-900 dark:text-foreground">
+                  {item.title}
+                </p>
+                <p className="mt-0.5 text-[11px] text-slate-400">
+                  {formatDateTime(item.createdAt)}
+                </p>
               </li>
             ))}
           </ol>
@@ -1422,18 +2047,30 @@ function ChangeOrdersPanel({ job }: { job: Job | null }) {
     <Panel label="Change orders" aside={String(orders.length)}>
       <ul className="divide-y divide-slate-200 dark:divide-border-soft">
         {orders.map((order) => (
-          <li key={order.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+          <li
+            key={order.id}
+            className="flex flex-wrap items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+          >
             <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-900 dark:text-foreground">
-                {order.number} {order.title ? <span className="font-normal">· {order.title}</span> : null}
+                {order.number}{" "}
+                {order.title ? (
+                  <span className="font-normal">· {order.title}</span>
+                ) : null}
               </p>
-              {order.description ? <p className="line-clamp-1 text-xs text-slate-500">{order.description}</p> : null}
+              {order.description ? (
+                <p className="line-clamp-1 text-xs text-slate-500">
+                  {order.description}
+                </p>
+              ) : null}
             </div>
             <div className="flex items-center gap-3 text-sm">
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold capitalize dark:bg-muted">
                 {order.status.replace(/_/g, " ")}
               </span>
-              <span className="font-semibold tabular-nums">{formatMoney(Number(order.total) || 0)}</span>
+              <span className="font-semibold tabular-nums">
+                {formatMoney(Number(order.total) || 0)}
+              </span>
             </div>
           </li>
         ))}
@@ -1450,8 +2087,12 @@ function SchedulePanel({ data }: { data: ProjectData }) {
 
   async function moveEvent(event: PortalCalendarEvent, move: CalendarMove) {
     const before = eventTimes(event);
-    const sameTimes = move.startMinutes === before.start && move.endMinutes === before.end;
-    const timeWindow = (sameTimes && event.timeWindow) || windowFromMinutes(move.startMinutes, move.endMinutes) || event.timeWindow;
+    const sameTimes =
+      move.startMinutes === before.start && move.endMinutes === before.end;
+    const timeWindow =
+      (sameTimes && event.timeWindow) ||
+      windowFromMinutes(move.startMinutes, move.endMinutes) ||
+      event.timeWindow;
     setSchedule((rows) =>
       rows.map((row) =>
         row.id === event.id
@@ -1474,16 +2115,24 @@ function SchedulePanel({ data }: { data: ProjectData }) {
         endMinutes: move.endMinutes,
         timeWindow,
       });
-      if (saved) setSchedule((rows) => rows.map((row) => (row.id === event.id ? { ...row, ...saved } : row)));
+      if (saved)
+        setSchedule((rows) =>
+          rows.map((row) => (row.id === event.id ? { ...row, ...saved } : row)),
+        );
       toast.success(`${event.title} moved to ${formatDate(move.date)}.`);
     } catch (error) {
-      toast.error(extractErrorMessage(error) || "Could not move it on the schedule.");
+      toast.error(
+        extractErrorMessage(error) || "Could not move it on the schedule.",
+      );
       reloadSchedule();
     }
   }
 
   return (
-    <Panel label="Schedule" aside={schedule.length ? `${schedule.length} on the calendar` : undefined}>
+    <Panel
+      label="Schedule"
+      aside={schedule.length ? `${schedule.length} on the calendar` : undefined}
+    >
       {data.scheduleLoading ? (
         <EventCalendarSkeleton />
       ) : (
@@ -1526,36 +2175,70 @@ function InvoicesPanel({
   estimate: Estimate | null;
   opportunity: EstimateV2Opportunity;
 }) {
-  const changeIds = (job?.changeOrders || []).map((order) => order.billingInvoiceId).filter((id): id is string => Boolean(id));
+  const changeIds = (job?.changeOrders || [])
+    .map((order) => order.billingInvoiceId)
+    .filter((id): id is string => Boolean(id));
   const changeKey = changeIds.join(",");
-  const [changeInvoices, setChangeInvoices] = useState<{ key: string; rows: Invoice[] } | null>(null);
+  const [changeInvoices, setChangeInvoices] = useState<{
+    key: string;
+    rows: Invoice[];
+  } | null>(null);
   useEffect(() => {
     if (!changeKey) return;
     let cancelled = false;
-    void Promise.all(changeKey.split(",").map((id) => getInvoice(id).catch(() => null))).then((rows) => {
-      if (!cancelled) setChangeInvoices({ key: changeKey, rows: rows.filter((row): row is Invoice => Boolean(row)) });
+    void Promise.all(
+      changeKey.split(",").map((id) => getInvoice(id).catch(() => null)),
+    ).then((rows) => {
+      if (!cancelled)
+        setChangeInvoices({
+          key: changeKey,
+          rows: rows.filter((row): row is Invoice => Boolean(row)),
+        });
     });
     return () => {
       cancelled = true;
     };
   }, [changeKey]);
-  const loadingChanges = Boolean(changeKey) && changeInvoices?.key !== changeKey;
+  const loadingChanges =
+    Boolean(changeKey) && changeInvoices?.key !== changeKey;
   const rows = [
     ...(invoice ? [invoice] : []),
-    ...(changeKey && changeInvoices?.key === changeKey ? changeInvoices.rows : []),
-  ].filter((row, index, all) => all.findIndex((other) => other.id === row.id) === index);
+    ...(changeKey && changeInvoices?.key === changeKey
+      ? changeInvoices.rows
+      : []),
+  ].filter(
+    (row, index, all) =>
+      all.findIndex((other) => other.id === row.id) === index,
+  );
 
   const customer = customerOf(opportunity);
   const total = rows.reduce((sum, row) => sum + (Number(row.total) || 0), 0);
-  const paid = rows.reduce((sum, row) => sum + (Number(row.amountPaid) || 0), 0);
-  const balance = rows.reduce((sum, row) => sum + (Number(row.balanceDue) || 0), 0);
+  const paid = rows.reduce(
+    (sum, row) => sum + (Number(row.amountPaid) || 0),
+    0,
+  );
+  const balance = rows.reduce(
+    (sum, row) => sum + (Number(row.balanceDue) || 0),
+    0,
+  );
 
   return (
-    <Panel label="Invoices" aside={`${rows.length} invoice${rows.length === 1 ? "" : "s"}`}>
+    <Panel
+      label="Invoices"
+      aside={`${rows.length} invoice${rows.length === 1 ? "" : "s"}`}
+    >
       <div className="grid gap-2 sm:grid-cols-3">
         <Stat label="Invoiced" value={formatMoney(total)} />
-        <Stat label="Paid" value={formatMoney(paid)} tone={paid ? "good" : undefined} />
-        <Stat label="Balance due" value={formatMoney(balance)} tone={balance > 0 ? "bad" : undefined} />
+        <Stat
+          label="Paid"
+          value={formatMoney(paid)}
+          tone={paid ? "good" : undefined}
+        />
+        <Stat
+          label="Balance due"
+          value={formatMoney(balance)}
+          tone={balance > 0 ? "bad" : undefined}
+        />
       </div>
       <div className="mt-4">
         <PortalDataTable
@@ -1576,8 +2259,22 @@ function InvoicesPanel({
           })}
           actions={(row) => [
             { label: "View", href: `/pro/dashboard/invoices/${row.id}` },
-            ...(row.balanceDue > 0 ? [{ label: "Record a payment", href: `/pro/dashboard/invoices/${row.id}` }] : []),
-            ...(row.jobId ? [{ label: "Open job", href: `/pro/dashboard/jobs/${row.jobId}` }] : []),
+            ...(row.balanceDue > 0
+              ? [
+                  {
+                    label: "Record a payment",
+                    href: `/pro/dashboard/invoices/${row.id}`,
+                  },
+                ]
+              : []),
+            ...(row.jobId
+              ? [
+                  {
+                    label: "Open job",
+                    href: `/pro/dashboard/jobs/${row.jobId}`,
+                  },
+                ]
+              : []),
           ]}
         />
       </div>
@@ -1596,31 +2293,55 @@ function FilesPanel({
   estimate: Estimate | null;
   companyFiles: OpportunityAttachment[];
 }) {
-  const rows = projectFiles({ customerPhotos: data.customerPhotos, companyFiles, estimate, opportunity, job: data.job });
-  const counts = rows.reduce<Partial<Record<FileRow["by"], number>>>((acc, row) => ({ ...acc, [row.by]: (acc[row.by] || 0) + 1 }), {});
-  const present = (Object.keys(BY_LABEL) as FileRow["by"][]).filter((by) => counts[by]);
+  const rows = projectFiles({
+    customerPhotos: data.customerPhotos,
+    companyFiles,
+    estimate,
+    opportunity,
+    job: data.job,
+  });
+  const counts = rows.reduce<Partial<Record<FileRow["by"], number>>>(
+    (acc, row) => ({ ...acc, [row.by]: (acc[row.by] || 0) + 1 }),
+    {},
+  );
+  const present = (Object.keys(BY_LABEL) as FileRow["by"][]).filter(
+    (by) => counts[by],
+  );
 
   return (
-    <Panel label="Photos & files" aside={rows.length ? String(rows.length) : undefined}>
+    <Panel
+      label="Photos & files"
+      aside={rows.length ? String(rows.length) : undefined}
+    >
       <div className="flex flex-wrap items-center gap-2 text-xs">
         {present.map((by) => (
-          <span key={by} className={cn("rounded-full px-2 py-0.5 font-semibold ring-1 ring-inset", BY_TONE[by])}>
+          <span
+            key={by}
+            className={cn(
+              "rounded-full px-2 py-0.5 font-semibold ring-1 ring-inset",
+              BY_TONE[by],
+            )}
+          >
             {BY_LABEL[by]} · {counts[by]}
           </span>
         ))}
         {data.customerPhotosLoading ? (
           <span className="flex items-center gap-1 text-slate-500">
-            <Loader2 className="size-3 animate-spin" /> Loading the customer&apos;s photos…
+            <Loader2 className="size-3 animate-spin" /> Loading the
+            customer&apos;s photos…
           </span>
         ) : null}
       </div>
       {!rows.length && !data.customerPhotosLoading ? (
         <div className="mt-1 rounded-xl border border-dashed border-slate-300 px-5 py-8 text-center dark:border-border">
           <FolderOpen className="mx-auto size-8 text-slate-300" aria-hidden />
-          <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-foreground">No photos or files yet</p>
+          <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-foreground">
+            No photos or files yet
+          </p>
           <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-slate-500">
-            Everything on this project shows here: photos the customer sent with the request, files you add under
-            Existing information, site-visit photos and job photos.
+            Everything on this project shows here: photos the customer sent with
+            the request, files you add under Existing information, site-visit
+            photos and job photos.
           </p>
         </div>
       ) : null}
@@ -1636,17 +2357,31 @@ function FilesPanel({
               <div className="flex aspect-4/3 items-center justify-center bg-slate-100 dark:bg-muted">
                 {isImage(row.url) ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={row.url} alt={row.name} className="size-full object-cover" loading="lazy" />
+                  <img
+                    src={row.url}
+                    alt={row.name}
+                    className="size-full object-cover"
+                    loading="lazy"
+                  />
                 ) : (
                   <FileText className="size-8 text-slate-400" />
                 )}
               </div>
               <div className="flex items-center justify-between gap-2 px-2.5 py-2">
                 <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium">
-                  {isImage(row.url) ? <ImageIcon className="size-3 shrink-0 text-slate-400" /> : null}
+                  {isImage(row.url) ? (
+                    <ImageIcon className="size-3 shrink-0 text-slate-400" />
+                  ) : null}
                   <span className="truncate">{row.name}</span>
                 </span>
-                <span className={cn("shrink-0 rounded-full px-1.5 py-px text-[10px] font-semibold ring-1 ring-inset", BY_TONE[row.by])}>{row.by}</span>
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full px-1.5 py-px text-[10px] font-semibold ring-1 ring-inset",
+                    BY_TONE[row.by],
+                  )}
+                >
+                  {row.by}
+                </span>
               </div>
             </a>
           </li>

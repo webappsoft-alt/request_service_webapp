@@ -65,6 +65,24 @@ Modules, layout, notification channels and API conventions: see
 
 Newest first. Format: **what** — why · files.
 
+### 2026-11-16
+
+- **Schedule month cards show a time** — client. Cards without a booked time showed "DAY". Now: estimates, invoices,
+  payments and tasks show their record's time of day (estimate date / site visit, invoice due-or-issued, payment
+  paid, task due; local time; date-only values show none). Invoices / payments keep "Due: …" on the right and the
+  time goes next to the date. Anything else without a time shows "All day" (was "Day"). Booked items keep
+  their range. New optional `atTime` on `PortalCalendarEvent`. Files: `lib/data/portal.ts`, `lib/api/crm-client.ts`,
+  `components/portal/views/schedule-view.tsx`, `components/portal/event-calendar.tsx` (old label kept as a comment).
+  Backend: the Schedule API is faster (see backend log).
+
+- **Pro Co-pilot launcher is draggable (like the customer RS AI launcher)** — client. It was fixed bottom-right
+  and could cover page content (e.g. the estimate's Labour / Material / Equipment buttons). Now drag it anywhere:
+  it snaps to the nearest side (left / right) at the height it was dropped and remembers the spot
+  (localStorage `rs-pro-copilot-launcher-dock`, per browser; falls back to bottom-right if storage is blocked).
+  A drag never opens the panel; a click still does, and Ctrl+J is unchanged. Same logic as
+  `components/bot-ai/BotWidget.tsx`. The old fixed button is kept as a comment.
+  Files: `components/pro-assistant/pro-assistant-launcher.tsx` (new), `components/pro-assistant/pro-assistant.tsx`.
+
 ### 2026-11-13
 
 - **Estimate page loading skeleton: sidebar border matches the loaded page** — client. The left menu skeleton used

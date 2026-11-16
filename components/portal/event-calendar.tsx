@@ -273,12 +273,39 @@ function isAllDay(event: PortalCalendarEvent) {
   return event.timeWindow === "all_day" || eventTimes(event).end <= DAY_START;
 }
 
-/** Card time text: the exact range when the item has one, else its window ("Day", "AM"...). */
+/**
+ * Time of day of the card's record (`atTime`: issued / paid / due…), in local time. "" when there
+ * is none or it is a date-only value (stored as midnight UTC, which has no time of day).
+ */
+function recordClock(event: PortalCalendarEvent) {
+  const at = event.atTime;
+  if (!at || !/Td{2}:d{2}/.test(at)) return "";
+  const date = new Date(at);
+  if (Number.isNaN(date.getTime())) return "";
+  if (!date.getUTCHours() && !date.getUTCMinutes() && !date.getUTCSeconds() && !date.getUTCMilliseconds()) return "";
+  return formatClock(date.getHours() * 60 + date.getMinutes());
+}
+
+/**
+ * Card time text: the exact range when the item has one, else its record's time of day (estimate,
+ * invoice, payment, task…), else its window ("All day", "AM", "PM").
+ */
+function eventTimeLabel(event: PortalCalendarEvent) {
+  if (!hasExactTime(event)) {
+    const clock = recordClock(event);
+    if (clock) return clock;
+    return event.timeWindow === "all_day" ? "All day" : windowShort(event.timeWindow);
+  }
+  const times = eventTimes(event);
+  return `${formatClock(times.start)} – ${formatClock(times.end)}`;
+}
+/* Previous:
 function eventTimeLabel(event: PortalCalendarEvent) {
   if (!hasExactTime(event)) return windowShort(event.timeWindow);
   const times = eventTimes(event);
   return `${formatClock(times.start)} – ${formatClock(times.end)}`;
 }
+*/
 
 /** Chronological order within a day: all-day / window-only items first, then by start time. */
 function eventTimeSortKey(event: PortalCalendarEvent) {
@@ -1886,6 +1913,8 @@ function CalendarChip({
               {isMultiDay && endDate
                 ? `${formatDate(event.date)} – ${formatDate(endDate)}`
                 : formatDate(event.date)}
+              {/* Invoices / payments show "Due: …" on the right, so their time goes here. */}
+              {isDueEvent && recordClock(event) ? ` · ${recordClock(event)}` : null}
             </span>
           ) : <span />}
           <span className="min-w-0 truncate">

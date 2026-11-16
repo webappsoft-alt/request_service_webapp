@@ -11,6 +11,7 @@ import { selectAuthToken, selectAuthUser } from "@/store/authSlice";
 import { EstimateDraftCard } from "./estimate-draft-card";
 import { ProAssistantHistory } from "./history-panel";
 import { ProAssistantInput } from "./pro-assistant-input";
+import { ProAssistantLauncher } from "./pro-assistant-launcher";
 import { getAssistantConversation, isSafePortalHref, type PaMessage, type PaReply } from "./pro-assistant-api";
 import { useProAssistantSocket } from "./use-pro-assistant-socket";
 
@@ -248,7 +249,9 @@ export function ProAssistant() {
 
   return createPortal(
     <>
-      {/* Launcher */}
+      {/* Launcher — draggable like the customer RS AI launcher; snaps to the nearest side and remembers it. */}
+      <ProAssistantLauncher open={open} onOpen={openPanel} />
+      {/* Previous (fixed bottom-right, not movable):
       <button
         type="button"
         onClick={openPanel}
@@ -269,6 +272,7 @@ export function ProAssistant() {
           <span className="hidden text-[11px] font-medium text-primary-foreground/80 sm:block">Ask · navigate · estimate</span>
         </span>
       </button>
+      */}
 
       {open && expanded ? (
         <button

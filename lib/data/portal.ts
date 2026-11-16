@@ -330,6 +330,11 @@ export type PortalCalendarEvent = {
   stageId?: string;
   /** Status of the linked job itself (e.g. "in_progress", "completed"), shown as a badge on job cards. */
   recordStatus?: string;
+  /**
+   * Timestamp the card's date comes from (invoice issued / due, payment paid, estimate date…), so a
+   * card without a booked time still shows the time of day (month view).
+   */
+  atTime?: string;
 };
 
 const MULTI_SCHEDULE_KINDS = new Set<PortalEventKind>(["estimate", "visit"]);

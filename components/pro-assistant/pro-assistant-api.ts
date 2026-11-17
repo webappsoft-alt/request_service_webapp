@@ -12,6 +12,8 @@ export const PRO_ASSISTANT_API = {
   estimates: "provider/assistant/estimates",
   conversations: "provider/assistant/conversations",
   conversation: (id: string) => `provider/assistant/conversations/${id}`,
+  confirm: (id: string) => `provider/assistant/actions/${id}/confirm`,
+  cancel: (id: string) => `provider/assistant/actions/${id}/cancel`,
 } as const;
 
 export type PaRecord = { id: string; title: string; subtitle: string; href: string };
@@ -46,10 +48,26 @@ export type PaEstimateDraft = {
   notes: string;
 };
 
+export type PaConfirmStatus = "pending" | "running" | "done" | "failed" | "cancelled";
+
 export type PaAction =
-  | { type: "navigate"; href: string; label: string }
+  | { type: "navigate"; href: string; label: string; /** Show a button instead of opening at once. */ manual?: boolean }
   | { type: "choices"; entity: string; items: PaRecord[] }
-  | { type: "estimate_draft"; draft: PaEstimateDraft };
+  | { type: "estimate_draft"; draft: PaEstimateDraft }
+  /** Live list from the CRM (overdue invoices, new leads, today's schedule…). */
+  | { type: "list"; title: string; total: number; amountDue?: number | null; items: PaRecord[]; href: string }
+  /** Facts card (timesheet summary, live status, business snapshot, suggestion). */
+  | { type: "info"; title: string; rows: Array<[string, string]>; href?: string; hrefLabel?: string; autoOpen?: boolean }
+  /** A change prepared by the co-pilot, run only when the Pro confirms. */
+  | {
+      type: "confirm";
+      actionId: string;
+      title: string;
+      details: Array<[string, string]>;
+      confirmLabel: string;
+      status: PaConfirmStatus;
+      result?: { replyText?: string; href?: string; hrefLabel?: string; error?: string } | null;
+    };
 
 export type PaReply = {
   messageId: string;
@@ -151,4 +169,15 @@ export async function createAssistantEstimate(body: {
 /** Only portal pages may be opened from an assistant reply. */
 export function isSafePortalHref(href: unknown): href is string {
   return typeof href === "string" && /^\/pro\/dashboard(?:\/[A-Za-z0-9/_-]*)?(?:\?[^\s]*)?$/.test(href);
+}
+
+/** Run a prepared co-pilot action (the server runs its stored arguments, once). */
+export async function confirmAssistantAction(id: string) {
+  return unwrap<{ replyText: string; href?: string; hrefLabel?: string; status: string }>(
+    await postData(PRO_ASSISTANT_API.confirm(id), {}, { silent: true }),
+  );
+}
+
+export async function cancelAssistantAction(id: string) {
+  return unwrap<{ status: string }>(await postData(PRO_ASSISTANT_API.cancel(id), {}, { silent: true }));
 }

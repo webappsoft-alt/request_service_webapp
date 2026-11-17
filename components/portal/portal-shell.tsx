@@ -45,6 +45,7 @@ import { SidebarCollapseToggle } from "@/components/layout/sidebar-collapse-togg
 import { useAppSelector } from "@/store/hooks";
 import { selectAuthUser } from "@/store/authSlice";
 import { ProAssistant } from "@/components/pro-assistant/pro-assistant";
+// import { ProAssistantHeaderButton } from "@/components/pro-assistant/pro-assistant-launcher"; — replaced by the right-edge tab
 import { selectPendingReviewTotal } from "@/store/contractorReviewsSlice";
 import {
   bumpPortalInboxCount,
@@ -537,6 +538,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
 
             <GlobalSearch className="ml-auto hidden w-[22rem] lg:block xl:w-[26rem]" />
             <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
+              {/* Previous: <ProAssistantHeaderButton className="mr-0.5" /> — the co-pilot opens from the right-edge tab now. */}
               <ThemeToggle />
               <PortalNotifications />
               <UserAccountMenu
@@ -556,6 +558,8 @@ export function PortalShell({ children }: { children: ReactNode }) {
         <main
           key={pathname}
           id="main-content"
+          // (The bottom clearance pb-24 for the floating co-pilot launcher was removed: the co-pilot
+          // now opens from the top bar.)
           className="page-enter px-3 py-3 sm:px-4"
         >
           <div className="mx-auto w-full">

@@ -7,8 +7,16 @@ import {
   type CSSProperties,
   type PointerEvent,
 } from "react";
+import { usePathname } from "next/navigation";
 import { Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/**
+ * Full-height chat pages keep their message box at the bottom: the launcher sits above it there
+ * (never on the Send button). Pixels from the bottom of the window.
+ */
+const CHAT_PAGE = /^\/pro\/dashboard\/(?:messages|team-chat)(?:\/|$)/;
+const CHAT_PAGE_MIN_BOTTOM = 96;
 
 // Same drag behaviour as the customer RS AI launcher (components/bot-ai/BotWidget.tsx):
 // drag it anywhere, it snaps to the nearest side at the height it was dropped and remembers the spot.
@@ -68,6 +76,8 @@ export function ProAssistantLauncher({
   open: boolean;
   onOpen: () => void;
 }) {
+  const pathname = usePathname();
+  const minBottom = CHAT_PAGE.test(pathname || "") ? CHAT_PAGE_MIN_BOTTOM : EDGE;
   const [dock, setDock] = useState<Dock>(DEFAULT_DOCK);
   const [dragPoint, setDragPoint] = useState<{ x: number; y: number } | null>(
     null,
@@ -171,9 +181,8 @@ export function ProAssistantLauncher({
     ? { left: dragPoint.x, top: dragPoint.y }
     : {
         [dock.side]: EDGE,
-        bottom: viewportHeight
-          ? clampBottom(dock.bottom, viewportHeight)
-          : EDGE,
+        // Previous: viewportHeight ? clampBottom(dock.bottom, viewportHeight) : EDGE
+        bottom: Math.max(minBottom, viewportHeight ? clampBottom(dock.bottom, viewportHeight) : EDGE),
       };
 
   return (
@@ -193,8 +202,11 @@ export function ProAssistantLauncher({
       aria-haspopup="dialog"
       title="Pro co-pilot (Ctrl+J) — drag to move"
       className={cn(
-        "group fixed z-40 flex h-12 max-w-[calc(100vw-2.5rem)] touch-none items-center gap-2 rounded-full bg-linear-to-br from-primary via-primary to-primary/80 py-1 text-primary-foreground shadow-lg ring-1 shadow-primary/30 ring-white/15 select-none transition-[transform,box-shadow,opacity] duration-300 hover:-translate-y-0.5 hover:shadow-xl print:hidden motion-reduce:hover:translate-y-0",
-        left ? "flex-row-reverse pr-1 pl-4" : "flex-row pr-4 pl-1",
+        // Compact when idle: a round icon button; the label slides out on hover / keyboard focus,
+        // so it covers as little of the page (form buttons, pagination) as possible.
+        // Previous: always the full pill — "… gap-2 … py-1 …" + left ? "flex-row-reverse pr-1 pl-4" : "flex-row pr-4 pl-1".
+        "group fixed z-40 flex h-12 max-w-[calc(100vw-2.5rem)] touch-none items-center gap-0 rounded-full bg-linear-to-br from-primary via-primary to-primary/80 p-1 text-primary-foreground shadow-lg ring-1 shadow-primary/30 ring-white/15 select-none transition-[transform,box-shadow,opacity,padding,gap] duration-300 hover:-translate-y-0.5 hover:gap-2 hover:shadow-xl focus-visible:gap-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none print:hidden motion-reduce:hover:translate-y-0",
+        left ? "flex-row-reverse hover:pl-4 focus-visible:pl-4" : "flex-row hover:pr-4 focus-visible:pr-4",
         dragging
           ? "scale-105 cursor-grabbing shadow-2xl"
           : "cursor-pointer active:scale-95",
@@ -213,7 +225,8 @@ export function ProAssistantLauncher({
       </span>
       <span
         className={cn(
-          "flex min-w-0 flex-col leading-tight",
+          // Hidden (zero width) until hover / focus; still read by screen readers via aria-label.
+          "flex max-w-0 min-w-0 flex-col overflow-hidden leading-tight opacity-0 transition-[max-width,opacity] duration-300 group-hover:max-w-44 group-hover:opacity-100 group-focus-visible:max-w-44 group-focus-visible:opacity-100",
           left ? "text-right" : "text-left",
         )}
       >
@@ -224,6 +237,65 @@ export function ProAssistantLauncher({
           Ask · navigate · estimate
         </span>
       </span>
+    </button>
+  );
+}
+
+/** Window event that opens / closes the co-pilot (header button → ProAssistant). */
+export const PRO_ASSISTANT_TOGGLE_EVENT = "rs-pro-assistant:toggle";
+
+/**
+ * Co-pilot button in the portal's top bar (next to notifications). Replaces the floating launcher:
+ * nothing floats over the page, so it never covers form buttons, tables or pagination.
+ */
+export function ProAssistantHeaderButton({ className }: { className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new Event(PRO_ASSISTANT_TOGGLE_EVENT))}
+      aria-label="Open Pro co-pilot"
+      aria-haspopup="dialog"
+      title="Pro co-pilot (Ctrl+J)"
+      className={cn(
+        "group inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-linear-to-br from-primary via-primary to-primary/85 pr-1 pl-1 text-primary-foreground shadow-sm ring-1 shadow-primary/20 ring-white/10 transition hover:shadow-md hover:brightness-110 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:pr-3",
+        className,
+      )}
+    >
+      <span className="relative flex size-6 items-center justify-center rounded-full bg-white/15">
+        <Wand2 className="size-3.5" aria-hidden />
+        <span aria-hidden className="absolute -top-0.5 -right-0.5 size-2 rounded-full border border-primary bg-emerald-400" />
+      </span>
+      <span className="hidden text-xs font-semibold whitespace-nowrap sm:inline">Co-pilot</span>
+      <kbd className="hidden rounded bg-white/15 px-1 py-px font-sans text-[10px] font-medium text-primary-foreground/85 xl:inline">
+        Ctrl J
+      </kbd>
+    </button>
+  );
+}
+
+/**
+ * Slim vertical "Co-pilot" tab on the right edge of the screen, at mid height (client's choice).
+ * It sits beside the page, not over its bottom, so form buttons, tables and pagination are never
+ * covered; it hides while the panel is open. Ctrl/⌘ + J still toggles the co-pilot.
+ */
+export function ProAssistantEdgeTab({ open, onOpen }: { open: boolean; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Open Pro co-pilot"
+      aria-haspopup="dialog"
+      title="Pro co-pilot (Ctrl+J)"
+      className={cn(
+        "group fixed top-1/2 right-0 z-30 flex -translate-y-1/2 flex-col items-center gap-2 rounded-l-xl bg-linear-to-b from-primary to-primary/85 px-1.5 py-3 text-primary-foreground shadow-lg ring-1 shadow-primary/25 ring-white/10 transition-[padding,opacity,transform] duration-300 hover:pr-2.5 hover:pl-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none print:hidden",
+        open && "pointer-events-none translate-x-full opacity-0",
+      )}
+    >
+      <span className="relative flex size-6 items-center justify-center rounded-full bg-white/15">
+        <Wand2 className="size-3.5" aria-hidden />
+        <span aria-hidden className="absolute -top-0.5 -left-0.5 size-2 rounded-full border border-primary bg-emerald-400" />
+      </span>
+      <span className="text-[11px] font-semibold tracking-wide [writing-mode:vertical-rl] rotate-180">Co-pilot</span>
     </button>
   );
 }

@@ -30,9 +30,13 @@ export function ProAssistantInput({
   onSend,
   disabled,
   autoFocus,
+  onListenStart,
 }: {
-  onSend: (text: string) => void;
+  /** `voice`: the text came from the microphone (the reply is read aloud). */
+  onSend: (text: string, meta?: { voice: boolean }) => void;
   disabled?: boolean;
+  /** Called when the mic starts (e.g. to stop reading a reply aloud). */
+  onListenStart?: () => void;
   autoFocus?: boolean;
 }) {
   const [value, setValue] = useState("");
@@ -95,13 +99,14 @@ export function ProAssistantInput({
       setListening(false);
       const heard = valueRef.current.trim();
       if (heard && !disabledRef.current) {
-        onSendRef.current(heard);
+        onSendRef.current(heard, { voice: true });
         setValue("");
         valueRef.current = "";
       }
     };
     recognition.onerror = () => setListening(false);
     recognitionRef.current = recognition;
+    onListenStart?.();
     setListening(true);
     recognition.start();
   }

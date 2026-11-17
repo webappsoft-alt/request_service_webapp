@@ -4,24 +4,64 @@ import "./pro-assistant.css";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, ChevronRight, History, Loader2, Maximize2, Minimize2, RotateCcw, Wand2, X } from "lucide-react";
+import { ArrowUpRight, ChevronRight, History, Loader2, Maximize2, Minimize2, Minus, RotateCcw, Volume2, VolumeX, Wand2, X } from "lucide-react";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
+import { ConfirmCard, InfoCard, ListCard } from "./action-cards";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store/hooks";
 import { selectAuthToken, selectAuthUser } from "@/store/authSlice";
 import { EstimateDraftCard } from "./estimate-draft-card";
 import { ProAssistantHistory } from "./history-panel";
 import { ProAssistantInput } from "./pro-assistant-input";
-import { ProAssistantLauncher } from "./pro-assistant-launcher";
-import { getAssistantConversation, isSafePortalHref, type PaMessage, type PaReply } from "./pro-assistant-api";
+import { PRO_ASSISTANT_TOGGLE_EVENT } from "./pro-assistant-launcher";
+// import { ProAssistantEdgeTab } from "./pro-assistant-launcher"; — right-edge tab, replaced by the bubble
+import { ProAssistantBubble } from "./pro-assistant-bubble";
+// import { ProAssistantLauncher } from "./pro-assistant-launcher"; — floating launcher, replaced by the header button
+import {
+  cancelAssistantAction,
+  confirmAssistantAction,
+  getAssistantConversation,
+  isSafePortalHref,
+  type PaAction,
+  type PaMessage,
+  type PaReply,
+} from "./pro-assistant-api";
 import { useProAssistantSocket } from "./use-pro-assistant-socket";
 
 /**
  * Pro operations co-pilot (Pro portal only). Separate from the customer bot: its own socket
- * namespace, API, components and styles. Opens pages, opens records, drafts estimates.
- * Ctrl/⌘ + J toggles it.
+ * namespace, API, components and styles. Operations manager: answers from live CRM data, opens
+ * pages and records, drafts estimates, and prepares changes (assign, schedule, invoice, send…) that
+ * run only after the Pro confirms — by button or by voice ("yes" / "cancel"). Replies can be read
+ * aloud (speaker button; always after a voice command). Ctrl/⌘ + J toggles it.
  */
 
-const STARTERS = ["Show employee time tracking", "Open estimates", "Open invoice INV-…", "Fix kitchen pipe leak, replace valve, total $150"];
+// Previous: ["Show employee time tracking", "Open estimates", "Open invoice INV-…", "Fix kitchen pipe leak, replace valve, total $150"]
+const STARTERS = ["How's business today?", "Show overdue invoices", "Who should take my next job?", "Create an estimate for a bathroom leak"];
+const VOICE_KEY = "rs-pro-assistant:speak";
+const YES = /^(?:yes|yeah|yep|yup|sure|ok(?:ay)?|confirm(?:ed)?|do it|go ahead|go for it|send it|please do|approved?|correct)\b/i;
+const NO = /^(?:no|nope|cancel|stop|don'?t|never mind|nevermind|abort)\b/i;
+
+/** Read a reply aloud (browser speech synthesis). */
+function speak(text: string) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window) || !text.trim()) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text.replace(/[“”]/g, '"').slice(0, 600));
+    utterance.lang = "en-US";
+    utterance.rate = 1.05;
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    /* speech unavailable */
+  }
+}
+function stopSpeaking() {
+  try {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+  } catch {
+    /* ignore */
+  }
+}
 const STORAGE_PREFIX = "rs-pro-assistant:v1:";
 
 const noopSubscribe = () => () => {};
@@ -31,7 +71,8 @@ function welcome(): PaMessage {
   return {
     id: "welcome",
     role: "assistant",
-    text: "Hi! I'm your Pro co-pilot. Tell me where to go, which record to open, or paste a scope of work and I'll draft the estimate.",
+    // Previous: "Hi! I'm your Pro co-pilot. Tell me where to go, which record to open, or paste a scope of work and I'll draft the estimate."
+    text: "Hi! I'm your operations co-pilot. Ask about your numbers, team and schedule, or tell me what to do — I'll draft estimates and invoices, assign the right technician and schedule visits. I always ask before changing anything.",
     suggestions: STARTERS,
     at: Date.now(),
   };
@@ -104,6 +145,23 @@ export function ProAssistant() {
     }
   });
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Read replies aloud (remembered on this device). Voice commands are always answered aloud.
+  const [speakOn, setSpeakOn] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem(VOICE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(VOICE_KEY, speakOn ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+    if (!speakOn) stopSpeaking();
+  }, [speakOn]);
   const [loadingConversation, setLoadingConversation] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const pendingIdRef = useRef<string | null>(null);
@@ -143,10 +201,21 @@ export function ProAssistant() {
     setOpen(true);
   }, []);
   const closePanel = useCallback(() => {
+    // (Speech keeps going so a spoken answer finishes while the page opens.)
     setOpen(false);
     setExpanded(false);
     setHistoryOpen(false);
   }, []);
+
+  // The header's Co-pilot button toggles the panel.
+  useEffect(() => {
+    const onToggle = () => {
+      if (open) closePanel();
+      else openPanel();
+    };
+    window.addEventListener(PRO_ASSISTANT_TOGGLE_EVENT, onToggle);
+    return () => window.removeEventListener(PRO_ASSISTANT_TOGGLE_EVENT, onToggle);
+  }, [open, openPanel, closePanel]);
 
   // Ctrl/⌘ + J toggles; Esc closes (or restores when expanded).
   useEffect(() => {
@@ -200,10 +269,55 @@ export function ProAssistant() {
     }
   }, []);
 
+  /** Update one message's Confirm card in the chat. */
+  const patchConfirm = useCallback((messageId: string, patch: Partial<Extract<PaAction, { type: "confirm" }>>) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId && m.action?.type === "confirm" ? { ...m, action: { ...m.action, ...patch } } : m)),
+    );
+  }, []);
+
+  /** Confirm a prepared change (button or "yes"). The server runs what it stored, once. */
+  const runConfirm = useCallback(
+    async (messageId: string, actionId: string, aloud: boolean) => {
+      patchConfirm(messageId, { status: "running", result: null });
+      try {
+        const result = await confirmAssistantAction(actionId);
+        patchConfirm(messageId, { status: "done", result });
+        if (aloud || speakOn) speak(result.replyText || "Done.");
+      } catch (error) {
+        const message = extractErrorMessage(error) || "That didn't work. Please try again.";
+        patchConfirm(messageId, { status: "pending", result: { error: message } });
+        if (aloud || speakOn) speak(message);
+      }
+    },
+    [patchConfirm, speakOn],
+  );
+  const runCancel = useCallback(
+    (messageId: string, actionId: string, aloud: boolean) => {
+      patchConfirm(messageId, { status: "cancelled" });
+      void cancelAssistantAction(actionId).catch(() => {});
+      if (aloud || speakOn) speak("Cancelled.");
+    },
+    [patchConfirm, speakOn],
+  );
+
   const ask = useCallback(
-    async (text: string) => {
+    async (text: string, meta?: { voice: boolean }) => {
       const clean = text.trim();
       if (!clean || busy) return;
+      const aloud = Boolean(meta?.voice) || speakOn;
+      // "Yes" / "cancel" answers the Confirm card that is waiting (voice-friendly).
+      const waiting = [...messages].reverse().find((m) => m.role === "assistant" && !m.pending);
+      if (waiting?.action?.type === "confirm" && waiting.action.status === "pending" && clean.split(/\s+/).length <= 5) {
+        if (YES.test(clean)) {
+          setMessages((prev) => [...prev, { id: `u-${newId()}`, role: "user", text: clean, at: Date.now() }]);
+          return runConfirm(waiting.id, waiting.action.actionId, aloud);
+        }
+        if (NO.test(clean)) {
+          setMessages((prev) => [...prev, { id: `u-${newId()}`, role: "user", text: clean, at: Date.now() }]);
+          return runCancel(waiting.id, waiting.action.actionId, aloud);
+        }
+      }
       const id = newId();
       pendingIdRef.current = id;
       const history = messages
@@ -226,7 +340,10 @@ export function ProAssistant() {
               : m,
           ),
         );
-        if (reply.action?.type === "navigate") go(reply.action.href);
+        if (aloud) speak(reply.replyText);
+        // Previous: if (reply.action?.type === "navigate") go(reply.action.href);
+        if (reply.action?.type === "navigate" && !reply.action.manual) go(reply.action.href);
+        if (reply.action?.type === "info" && reply.action.autoOpen && reply.action.href) go(reply.action.href);
       } catch (error) {
         setMessages((prev) =>
           prev.map((m) =>
@@ -240,7 +357,7 @@ export function ProAssistant() {
         setBusy(false);
       }
     },
-    [busy, conversationId, go, messages, send],
+    [busy, conversationId, go, messages, send, speakOn, runConfirm, runCancel],
   );
 
   if (!mounted || !isPro) return null;
@@ -250,7 +367,14 @@ export function ProAssistant() {
   return createPortal(
     <>
       {/* Launcher — draggable like the customer RS AI launcher; snaps to the nearest side and remembers it. */}
-      <ProAssistantLauncher open={open} onOpen={openPanel} />
+      {/* Previous: floating, draggable launcher over the page (covered form buttons / pagination).
+          The co-pilot now opens from the Co-pilot button in the top bar (portal-shell.tsx).
+      <ProAssistantLauncher open={open} onOpen={openPanel} /> */}
+      {/* Previous entry point: slim tab on the right edge.
+      <ProAssistantEdgeTab open={open} onOpen={openPanel} /> */}
+      {/* Entry point: draggable floating bubble with smart collision (moves up off buttons /
+          pagination, hides behind dialogs, remembers where the Pro put it). */}
+      <ProAssistantBubble open={open} onOpen={openPanel} />
       {/* Previous (fixed bottom-right, not movable):
       <button
         type="button"
@@ -300,10 +424,17 @@ export function ProAssistant() {
               <p className="truncate text-sm leading-tight font-semibold">Pro Co-pilot</p>
               <p className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
                 <span className="size-1.5 rounded-full bg-emerald-500" />
-                Online · your operations assistant
+                Online · operations manager
               </p>
             </div>
             <div className="flex items-center gap-0.5">
+              <HeaderButton
+                label={speakOn ? "Stop reading replies aloud" : "Read replies aloud"}
+                onClick={() => setSpeakOn((v) => !v)}
+                active={speakOn}
+              >
+                {speakOn ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+              </HeaderButton>
               <HeaderButton label="New conversation" onClick={startNew}>
                 <RotateCcw className="size-4" />
               </HeaderButton>
@@ -317,6 +448,10 @@ export function ProAssistant() {
                 className="hidden sm:flex"
               >
                 {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+              </HeaderButton>
+              {/* Minimize: hide to the launcher; the chat, size and any open history stay as they are. */}
+              <HeaderButton label="Minimize" onClick={() => setOpen(false)}>
+                <Minus className="size-4" />
               </HeaderButton>
               <HeaderButton label="Close" onClick={closePanel}>
                 <X className="size-4" />
@@ -404,6 +539,17 @@ export function ProAssistant() {
                         </div>
                       ) : null}
 
+                      {m.action?.type === "list" ? <ListCard action={m.action} onOpen={go} /> : null}
+                      {m.action?.type === "info" ? <InfoCard action={m.action} onOpen={go} /> : null}
+                      {m.action?.type === "confirm" ? (
+                        <ConfirmCard
+                          action={m.action}
+                          onOpen={go}
+                          onConfirm={() => m.action?.type === "confirm" && void runConfirm(m.id, m.action.actionId, false)}
+                          onCancel={() => m.action?.type === "confirm" && runCancel(m.id, m.action.actionId, false)}
+                        />
+                      ) : null}
+
                       {m.action?.type === "estimate_draft" ? (
                         <EstimateDraftCard
                           draft={m.action.draft}
@@ -443,7 +589,7 @@ export function ProAssistant() {
           </div>
 
           <div className={cn(expanded && "sm:px-[max(0px,calc((100%-48rem)/2))]")}>
-            <ProAssistantInput onSend={(text) => void ask(text)} disabled={busy} autoFocus={open} />
+            <ProAssistantInput onSend={(text, meta) => void ask(text, meta)} onListenStart={stopSpeaking} disabled={busy} autoFocus={open} />
           </div>
           </div>
         </section>

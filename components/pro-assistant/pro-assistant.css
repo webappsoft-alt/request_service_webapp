@@ -12,6 +12,8 @@
 @keyframes pa-in {
   from {
     opacity: 0;
+    /* Bottom-right again (floating bubble). Earlier variants: translateY(-10px) (top bar),
+       translateX(16px) (right-edge tab). */
     transform: translateY(12px) scale(0.97);
   }
   to {
@@ -22,6 +24,11 @@
 @media (min-width: 640px) {
   .pa-panel {
     --pa-w: 27rem;
+    /* Bottom-right corner (opened from the floating bubble) — same as the first version.
+       Earlier variants: under the top bar (--pa-h: min(44rem, calc(100dvh - 4.5rem));
+       --pa-bottom: max(1rem, calc(100dvh - 3.5rem - var(--pa-h)))) and beside the right-edge tab
+       (--pa-h: min(44rem, calc(100dvh - 5rem)); --pa-right: 1rem;
+       --pa-bottom: max(1rem, calc((100dvh - 3rem - var(--pa-h)) / 2))). */
     --pa-h: min(44rem, calc(100dvh - 2.5rem));
     --pa-right: 1.25rem;
     --pa-bottom: 1.25rem;
@@ -30,7 +37,7 @@
     height: var(--pa-h);
     right: var(--pa-right);
     bottom: var(--pa-bottom);
-    transform-origin: bottom right;
+    transform-origin: bottom right; /* (top right / center right for the top bar / edge tab) */
     transition:
       width 420ms cubic-bezier(0.16, 1, 0.3, 1),
       height 420ms cubic-bezier(0.16, 1, 0.3, 1),

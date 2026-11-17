@@ -37,7 +37,7 @@ export const CONTRACTOR_PAGE_SIZE = 10;
 
 /** Sections with their own sidebar badge, and the notification types that raise each. */
 export const CONTRACTOR_SECTION_TYPES: Record<ContractorSection, readonly string[]> = {
-  jobs: ["CONTRACTOR_JOB_ASSIGNED", "CONTRACTOR_JOB_UPDATED", "CONTRACTOR_WORK_REJECTED"],
+  jobs: ["CONTRACTOR_JOB_ASSIGNED", "CONTRACTOR_JOB_UPDATED", "CONTRACTOR_WORK_REJECTED", "TASK_ASSIGNED"],
   changeRequests: ["CONTRACTOR_CHANGE_REVIEWED"],
   payouts: ["CONTRACTOR_WORK_APPROVED", "CONTRACTOR_PAYMENT"],
 };

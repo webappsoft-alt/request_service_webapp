@@ -67,6 +67,8 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-17
 
+- **Sidebar badges count the new `TASK_ASSIGNED` notification:** technician Schedule (`store/technicianSlice.ts`), contractor Jobs (`store/contractorPortalSlice.ts`) — same as the backend sections.
+
 - **Sidebar: "Daily alerts" item renamed "Daily Alerts setting"** (user request), tooltip now "Settings for the morning briefing, customer reminders and missed check-ins". Old values kept in a comment. File: `lib/data/portal-nav.ts`.
 
 - **Reverted the dashboard panel rename:** back to "Important actions" (user: only the sidebar item is named "Daily alerts"; the dashboard panel keeps its name). The remove-on-open behaviour stays. File: `components/portal/dashboard-action-center.tsx`.

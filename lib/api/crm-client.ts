@@ -3662,6 +3662,14 @@ function mapDashboardActionCenter(raw: unknown) {
   };
 }
 
+/** Daily alerts feed: mark items as seen so they leave the dashboard until their status changes. */
+export async function markDashboardActionsSeen(body: {
+  items?: Array<{ id: string; status?: string }>;
+  records?: Array<{ kind: "request" | "estimate" | "job" | "invoice"; id: string }>;
+}) {
+  await postData(providerCrmApi.dashboardActionsSeen, body, { silent: true });
+}
+
 export async function getProviderDashboard(query: ProviderDashboardQuery = {}) {
   const response = await getData(
     providerCrmApi.dashboard,

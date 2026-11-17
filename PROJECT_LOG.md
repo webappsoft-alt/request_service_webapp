@@ -65,6 +65,14 @@ Modules, layout, notification channels and API conventions: see
 
 Newest first. Format: **what** — why · files.
 
+### 2026-11-17
+
+- **Sidebar: "Daily alerts" item renamed "Daily Alerts setting"** (user request), tooltip now "Settings for the morning briefing, customer reminders and missed check-ins". Old values kept in a comment. File: `lib/data/portal-nav.ts`.
+
+- **Reverted the dashboard panel rename:** back to "Important actions" (user: only the sidebar item is named "Daily alerts"; the dashboard panel keeps its name). The remove-on-open behaviour stays. File: `components/portal/dashboard-action-center.tsx`.
+
+- **Dashboard: "Important actions" panel renamed "Daily alerts"; opened items disappear at once.** Clicking View removes the item from the feed (`dismissDashboardActions` in `store/dashboardSlice.ts`, adjusts urgent/pending counts) and records it via `markDashboardActionsSeen` (`lib/api/crm-client.ts`, route `providerCrmApi.dashboardActionsSeen`). New `components/portal/dashboard-seen-tracker.tsx` (mounted in `crm-data-provider.tsx`, providers only) does the same when a lead / estimate / job / invoice page is opened from any table or link, and drops a lead when a `LEAD_STATUS_UPDATED` event says it was viewed. The sidebar item was already "Daily alerts". Files: `components/portal/dashboard-action-center.tsx`, `dashboard-seen-tracker.tsx` (new), `crm-data-provider.tsx`, `store/dashboardSlice.ts`, `lib/api/crm-client.ts`, `components/api/ApiRoutesFile.ts`.
+
 ### 2026-11-16
 
 - **Fix: People → Reminders page restored; new page moved to `/pro/dashboard/alerts` ("Daily alerts")** — the new daily-alerts page had been written to the existing `/pro/dashboard/reminders` route and replaced the customer follow-up Reminders page. `app/(portal)/pro/dashboard/reminders/page.tsx` restored as it was (`RemindersView` in `PortalSuspense`, metadata "Reminders" / "Follow-ups tied to customer accounts.", confirmed from the last build); the new page now lives at `app/(portal)/pro/dashboard/alerts/page.tsx`, sidebar Office → "Daily alerts" (renamed from "Reminders & alerts" so it isn't confused with Reminders; email footers say "Office → Daily alerts"). Files: both page files, `lib/data/portal-nav.ts`, `components/portal/views/reminders-alerts-view.tsx`; backend `daily-alerts/{briefing,attendance}.js` (footer text).

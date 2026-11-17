@@ -263,6 +263,21 @@ const dashboardSlice = createSlice({
       state.error = null;
       state.fetchedAt = null;
     },
+    /** Daily alerts feed: drop opened items right away (the server hides them on the next load). */
+    dismissDashboardActions(state, action: PayloadAction<{ ids?: string[]; prefixes?: string[] }>) {
+      const center = state.data?.actionCenter;
+      if (!center) return;
+      const { ids = [], prefixes = [] } = action.payload;
+      const matches = (id: string) => ids.includes(id) || prefixes.some((prefix) => id.startsWith(prefix));
+      const removed = center.importantActions.filter((item) => matches(item.id));
+      if (!removed.length) return;
+      center.importantActions = center.importantActions.filter((item) => !matches(item.id));
+      center.importantActionsTotal = Math.max(0, center.importantActionsTotal - removed.length);
+      center.importantActionsHigh = Math.max(
+        0,
+        center.importantActionsHigh - removed.filter((item) => item.priority === "high").length,
+      );
+    },
     setDashboardData(state, action: PayloadAction<ProviderDashboardData | null>) {
       state.data = action.payload;
       state.fetchedAt = action.payload ? Date.now() : null;
@@ -288,7 +303,7 @@ const dashboardSlice = createSlice({
   },
 });
 
-export const { clearDashboard, setDashboardData } = dashboardSlice.actions;
+export const { clearDashboard, setDashboardData, dismissDashboardActions } = dashboardSlice.actions;
 
 export function selectDashboardData(state: { dashboard: DashboardState }) {
   return state.dashboard.data;

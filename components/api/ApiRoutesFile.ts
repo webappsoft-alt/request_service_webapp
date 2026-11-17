@@ -281,6 +281,8 @@ export const providerCrmApi = {
   premiumResume: "provider/premium/resume",
   /** GET Main / Sales / Service dashboard aggregates */
   dashboard: "provider/dashboard",
+  /** POST mark Daily alerts (action center) items seen — { items: [{id,status}] } | { records: [{kind,id}] } */
+  dashboardActionsSeen: "provider/dashboard/actions/seen",
   /** GET pipeline board (leads → estimates → booked → in-progress → invoices) */
   pipeline: "provider/pipeline",
   /** GET next cards of one pipeline column ("See more") — query: loaded, limit */

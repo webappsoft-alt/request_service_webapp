@@ -30,6 +30,7 @@ import {
 } from "@/store/requestsSlice";
 import { getAuthToken, getAuthUser } from "@/components/api/apiFuntions";
 import { applyPortalInboxCounts } from "@/components/portal/portal-inbox-counts-store";
+import { DashboardSeenTracker } from "@/components/portal/dashboard-seen-tracker";
 import {
   ackProviderInboxBadges,
   onSocketEvent,
@@ -680,6 +681,7 @@ export function CrmDataProvider({ children }: PropsWithChildren) {
 
   return (
     <CrmApiDataContext.Provider value={value}>
+      <DashboardSeenTracker enabled={enabled} />
       {children}
     </CrmApiDataContext.Provider>
   );

@@ -15,6 +15,9 @@ import {
   Receipt,
 } from "lucide-react";
 import { formatMoney } from "@/lib/format";
+import { markDashboardActionsSeen } from "@/lib/api/crm-client";
+import { dismissDashboardActions } from "@/store/dashboardSlice";
+import { useAppDispatch } from "@/store/hooks";
 import { cn } from "@/lib/utils";
 import type {
   DashboardActionCenter,
@@ -86,11 +89,18 @@ function ActionCard({ item }: { item: DashboardActionItem }) {
   const urgent = priority === "high";
   const heading = item.title || item.reference || item.actionLabel;
   const detail = subline(item);
+  const dispatch = useAppDispatch();
+  // Opened = handled: leaves the Daily alerts feed now; the server keeps it out until its status changes.
+  const markSeen = () => {
+    dispatch(dismissDashboardActions({ ids: [item.id] }));
+    void markDashboardActionsSeen({ items: [{ id: item.id, status: item.status }] }).catch(() => {});
+  };
 
   return (
     <li>
       <Link
         href={item.href}
+        onClick={markSeen}
         className={cn(
           "group relative flex items-center gap-3 overflow-hidden rounded-lg border bg-card py-2.5 pr-3 pl-4 transition-all",
           "hover:-translate-y-px hover:shadow-[0_6px_16px_-10px_rgba(15,23,42,0.35)]",

@@ -116,7 +116,7 @@ export const portalNavGroups: PortalNavGroup[] = [
           { href: "/pro/dashboard/ai-receptionist/calls", label: "Call history" },
         ],
       },
-      { href: "/pro/dashboard/alerts", label: "Daily alerts", icon: BellRing, description: "Morning briefing, customer reminders, missed check-ins" },
+      { href: "/pro/dashboard/alerts", label: "Daily Alerts setting", icon: BellRing, description: "Settings for the morning briefing, customer reminders and missed check-ins" }, // was: label "Daily alerts", description "Morning briefing, customer reminders, missed check-ins"
       { href: "/pro/dashboard/portfolio", label: "Portfolio", icon: Images, description: "Photos of your past work" },
       { href: "/pro/dashboard/service-areas", label: "Service areas", icon: MapPin, description: "Where you take work" },
       { href: "/pro/dashboard/services", label: "Fixed services", icon: Wrench, description: "Fixed-price services customers can book" },

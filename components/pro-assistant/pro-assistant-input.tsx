@@ -45,6 +45,8 @@ export function ProAssistantInput({
   const ref = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const baseRef = useRef("");
+  // The text in the box came from the mic → send it as voice (the reply is read aloud).
+  const voiceRef = useRef(false);
   // Latest text + send handler for the speech "end" callback (voice auto-send).
   const valueRef = useRef("");
   const onSendRef = useRef(onSend);
@@ -70,7 +72,9 @@ export function ProAssistantInput({
     const text = value.trim();
     if (!text || disabled) return;
     recognitionRef.current?.stop();
-    onSend(text);
+    // onSend(text);
+    onSend(text, voiceRef.current ? { voice: true } : undefined);
+    voiceRef.current = false;
     setValue("");
   }
 
@@ -84,7 +88,9 @@ export function ProAssistantInput({
     const recognition = new Ctor();
     recognition.lang = "en-US";
     recognition.interimResults = true;
-    recognition.continuous = false;
+    // recognition.continuous = false;
+    // Keep listening through short pauses; the words show live in the box as they are heard.
+    recognition.continuous = true;
     baseRef.current = value ? `${value.trim()} ` : "";
     recognition.onresult = (event) => {
       const transcript = Array.from(event.results)
@@ -92,9 +98,11 @@ export function ProAssistantInput({
         .join("");
       const next = `${baseRef.current}${transcript}`.slice(0, MAX_LENGTH);
       valueRef.current = next;
+      voiceRef.current = true;
       setValue(next);
     };
     // Client: when speech stops, send what was heard right away (no Send click needed).
+    /* Previous: auto-sent as soon as speech stopped (the Pro could not review the words).
     recognition.onend = () => {
       setListening(false);
       const heard = valueRef.current.trim();
@@ -102,6 +110,15 @@ export function ProAssistantInput({
         onSendRef.current(heard, { voice: true });
         setValue("");
         valueRef.current = "";
+      }
+    }; */
+    // Now: the transcript stays in the box to check / edit, then Enter or Send.
+    recognition.onend = () => {
+      setListening(false);
+      const el = ref.current;
+      if (el && valueRef.current) {
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
       }
     };
     recognition.onerror = () => setListening(false);
@@ -124,6 +141,7 @@ export function ProAssistantInput({
           rows={1}
           value={value}
           maxLength={MAX_LENGTH}
+          readOnly={listening}
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -131,7 +149,7 @@ export function ProAssistantInput({
               submit();
             }
           }}
-          placeholder={listening ? "Listening…" : "Ask, open a page, find a record, or paste a scope of work…"}
+          placeholder={listening ? "Listening… start speaking" : "Ask, open a page, find a record, or paste a scope of work…"}
           aria-label="Message the Pro assistant"
           className="max-h-40 min-h-9 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground"
         />
@@ -159,9 +177,19 @@ export function ProAssistantInput({
           <ArrowUp className="size-4" />
         </button>
       </div>
+      {listening ? (
+        <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[10.5px] font-medium text-rose-600" aria-live="polite">
+          <span className="relative flex size-2">
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-rose-400 opacity-75" />
+            <span className="relative inline-flex size-2 rounded-full bg-rose-500" />
+          </span>
+          Listening — your words appear above. Tap the mic to stop, then send.
+        </p>
+      ) : (
       <p className="mt-1.5 text-center text-[10.5px] text-muted-foreground">
         Pro co-pilot · only your business data · review estimates before sending
       </p>
+      )}
     </div>
   );
 }

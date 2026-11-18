@@ -33,12 +33,15 @@ import { useProAssistantSocket } from "./use-pro-assistant-socket";
  * namespace, API, components and styles. Operations manager: answers from live CRM data, opens
  * pages and records, drafts estimates, and prepares changes (assign, schedule, invoice, send…) that
  * run only after the Pro confirms — by button or by voice ("yes" / "cancel"). Replies can be read
- * aloud (speaker button; always after a voice command). Ctrl/⌘ + J toggles it.
+ * aloud only when the Pro used the mic (speaker button mutes that). Ctrl/⌘ + J toggles it.
  */
 
 // Previous: ["Show employee time tracking", "Open estimates", "Open invoice INV-…", "Fix kitchen pipe leak, replace valve, total $150"]
 const STARTERS = ["How's business today?", "Show overdue invoices", "Who should take my next job?", "Create an estimate for a bathroom leak"];
+// Previous key ("read every reply aloud"); kept so the old setting is not reused with a new meaning.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const VOICE_KEY = "rs-pro-assistant:speak";
+const VOICE_REPLIES_KEY = "rs-pro-assistant:voice-replies";
 const YES = /^(?:yes|yeah|yep|yup|sure|ok(?:ay)?|confirm(?:ed)?|do it|go ahead|go for it|send it|please do|approved?|correct)\b/i;
 const NO = /^(?:no|nope|cancel|stop|don'?t|never mind|nevermind|abort)\b/i;
 
@@ -145,7 +148,7 @@ export function ProAssistant() {
     }
   });
   const [historyOpen, setHistoryOpen] = useState(false);
-  // Read replies aloud (remembered on this device). Voice commands are always answered aloud.
+  /* Previous: "Read replies aloud" — when on, typed messages were spoken too.
   const [speakOn, setSpeakOn] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -153,10 +156,21 @@ export function ProAssistant() {
     } catch {
       return false;
     }
+  }); */
+  // Now: typed message → text reply only; mic message → spoken reply + text. The speaker button
+  // only mutes / unmutes those voice replies (on by default, remembered on this device).
+  const [speakOn, setSpeakOn] = useState(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      return localStorage.getItem(VOICE_REPLIES_KEY) !== "0";
+    } catch {
+      return true;
+    }
   });
   useEffect(() => {
     try {
-      localStorage.setItem(VOICE_KEY, speakOn ? "1" : "0");
+      // localStorage.setItem(VOICE_KEY, speakOn ? "1" : "0");
+      localStorage.setItem(VOICE_REPLIES_KEY, speakOn ? "1" : "0");
     } catch {
       /* ignore */
     }
@@ -283,29 +297,34 @@ export function ProAssistant() {
       try {
         const result = await confirmAssistantAction(actionId);
         patchConfirm(messageId, { status: "done", result });
-        if (aloud || speakOn) speak(result.replyText || "Done.");
+        // if (aloud || speakOn) speak(result.replyText || "Done.");
+        if (aloud) speak(result.replyText || "Done.");
       } catch (error) {
         const message = extractErrorMessage(error) || "That didn't work. Please try again.";
         patchConfirm(messageId, { status: "pending", result: { error: message } });
-        if (aloud || speakOn) speak(message);
+        // if (aloud || speakOn) speak(message);
+        if (aloud) speak(message);
       }
     },
-    [patchConfirm, speakOn],
+    [patchConfirm],
   );
   const runCancel = useCallback(
     (messageId: string, actionId: string, aloud: boolean) => {
       patchConfirm(messageId, { status: "cancelled" });
       void cancelAssistantAction(actionId).catch(() => {});
-      if (aloud || speakOn) speak("Cancelled.");
+      // if (aloud || speakOn) speak("Cancelled.");
+      if (aloud) speak("Cancelled.");
     },
-    [patchConfirm, speakOn],
+    [patchConfirm],
   );
 
   const ask = useCallback(
     async (text: string, meta?: { voice: boolean }) => {
       const clean = text.trim();
       if (!clean || busy) return;
-      const aloud = Boolean(meta?.voice) || speakOn;
+      // const aloud = Boolean(meta?.voice) || speakOn;
+      // Spoken reply only when the Pro used the mic (and voice replies aren't muted).
+      const aloud = Boolean(meta?.voice) && speakOn;
       // "Yes" / "cancel" answers the Confirm card that is waiting (voice-friendly).
       const waiting = [...messages].reverse().find((m) => m.role === "assistant" && !m.pending);
       if (waiting?.action?.type === "confirm" && waiting.action.status === "pending" && clean.split(/\s+/).length <= 5) {
@@ -429,7 +448,8 @@ export function ProAssistant() {
             </div>
             <div className="flex items-center gap-0.5">
               <HeaderButton
-                label={speakOn ? "Stop reading replies aloud" : "Read replies aloud"}
+                // label={speakOn ? "Stop reading replies aloud" : "Read replies aloud"}
+                label={speakOn ? "Mute voice replies (mic messages)" : "Unmute voice replies (mic messages)"}
                 onClick={() => setSpeakOn((v) => !v)}
                 active={speakOn}
               >

@@ -92,7 +92,7 @@ export function UserAccountMenu({
   const avatarButton = (
     <Avatar size="sm" className="size-8">
       {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
-      <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+      <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
         {initialsFor(user)}
       </AvatarFallback>
     </Avatar>

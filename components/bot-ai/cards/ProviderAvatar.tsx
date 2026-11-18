@@ -37,7 +37,8 @@ export function ProviderAvatar({ name, src, className }: { name: string; src: st
     <span
       aria-hidden
       className={cn(
-        "flex size-9 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-primary to-primary/70 text-xs font-bold tracking-wide text-primary-foreground shadow-sm",
+        // Solid brand colour (was "bg-linear-to-br from-primary to-primary/70").
+        "flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold tracking-wide text-primary-foreground shadow-sm",
         className,
       )}
     >

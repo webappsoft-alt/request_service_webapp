@@ -83,16 +83,13 @@ export function getInitials(name?: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-const AVATAR_COLORS = [
-  "bg-blue-600 text-white",
-  "bg-emerald-600 text-white",
-  "bg-violet-600 text-white",
-  "bg-amber-600 text-white",
-  "bg-rose-600 text-white",
-  "bg-cyan-600 text-white",
-  "bg-indigo-600 text-white",
-  "bg-teal-600 text-white",
-];
+/**
+ * Initials avatars use ONE solid brand colour everywhere (client: clean SaaS look, no
+ * random multi-colours). Previous palette, picked by a hash of the name:
+ * bg-blue-600 / bg-emerald-600 / bg-violet-600 / bg-amber-600 / bg-rose-600 / bg-cyan-600 /
+ * bg-indigo-600 / bg-teal-600 (all text-white).
+ */
+const AVATAR_COLORS = ["bg-primary text-primary-foreground"];
 
 export function getAvatarColor(name?: string): string {
   if (!name) return AVATAR_COLORS[0];

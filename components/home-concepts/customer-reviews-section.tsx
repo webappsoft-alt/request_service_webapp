@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, BadgeCheck, Quote, Star } from "lucide-react";
 import { Container, Section } from "@/components/layout/container";
 import { cn } from "@/lib/utils";
+import { UserAvatar } from "@/components/shared/user-avatar";
 import { ReviewsCarousel } from "./reviews-carousel";
 
 type Review = {
@@ -11,6 +12,8 @@ type Review = {
   rating: number;
   quote: string;
   audience: "homeowner" | "pro";
+  /** Reviewer's profile picture, when they have one (otherwise initials). */
+  avatar?: string | null;
 };
 
 /**
@@ -118,14 +121,10 @@ function Stars({ value, className }: { value: number; className?: string }) {
   );
 }
 
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+// Replaced by avatarInitials() in components/shared/user-avatar.tsx:
+// function initials(name: string) {
+//   return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+// }
 
 function ReviewCard({ review }: { review: Review }) {
   const pro = review.audience === "pro";
@@ -141,17 +140,13 @@ function ReviewCard({ review }: { review: Review }) {
         {review.quote}
       </blockquote>
       <figcaption className="relative flex items-center gap-3 border-t border-slate-100 pt-5 dark:border-border">
-        <span
-          className={cn(
-            "flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white shadow-sm ring-2 ring-white dark:ring-card",
-            pro
-              ? "bg-linear-to-br from-emerald-500 to-teal-600"
-              : "bg-linear-to-br from-sky-500 to-primary",
-          )}
-          aria-hidden="true"
-        >
-          {initials(review.name)}
-        </span>
+        {/* Photo, or initials on the one brand colour. Previous: gradient initials, green for pros
+            ("from-emerald-500 to-teal-600") and blue for homeowners ("from-sky-500 to-primary"). */}
+        <UserAvatar
+          name={review.name}
+          src={review.avatar}
+          className="size-10 text-xs shadow-sm ring-2 ring-white dark:ring-card"
+        />
         <span className="min-w-0 flex-1 leading-tight">
           <span className="flex items-center gap-1 text-sm font-semibold text-slate-900 dark:text-foreground">
             <span className="truncate">{review.name}</span>

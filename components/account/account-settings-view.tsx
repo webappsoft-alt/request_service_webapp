@@ -448,7 +448,7 @@ export function AccountSettingsView({
                   {displayAvatar ? (
                     <AvatarImage src={displayAvatar} alt={displayName} />
                   ) : null}
-                  <AvatarFallback className="bg-primary/10 text-2xl font-semibold text-primary">
+                  <AvatarFallback className="bg-primary text-2xl font-semibold text-primary-foreground">
                     {initialsFor(user)}
                   </AvatarFallback>
                 </Avatar>

@@ -111,9 +111,8 @@ function CommentNode({
         <div
           className={cn(
             "flex shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-            item.isAdminReply
-              ? "bg-primary text-primary-foreground"
-              : "bg-primary/10 text-primary",
+            // One solid brand colour for every initials avatar (was bg-primary/10 text-primary for readers).
+            "bg-primary text-primary-foreground",
             depth > 0 ? "size-8" : "size-10",
           )}
           aria-hidden="true"
@@ -670,7 +669,7 @@ export function BlogComments({
 
         <div className="flex gap-3 sm:gap-4">
           <div
-            className="hidden size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary sm:flex"
+            className="hidden size-10 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground sm:flex"
             aria-hidden="true"
           >
             {composerName ? getInitials(composerName) : <User className="size-4" />}

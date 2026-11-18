@@ -420,7 +420,7 @@ export function SettingsView() {
               {displayAvatar ? (
                 <AvatarImage src={displayAvatar} alt={displayName} />
               ) : null}
-              <AvatarFallback className="bg-primary/10 text-lg font-semibold text-primary">
+              <AvatarFallback className="bg-primary text-lg font-semibold text-primary-foreground">
                 {initialsFor(user)}
               </AvatarFallback>
             </Avatar>

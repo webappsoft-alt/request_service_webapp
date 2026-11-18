@@ -222,7 +222,7 @@ export function BusinessProfileDetailView() {
               <div className="flex flex-wrap items-center gap-4">
                 <Avatar className="size-16 border border-border-soft">
                   {avatar ? <AvatarImage src={avatar} alt={displayName} /> : null}
-                  <AvatarFallback className="bg-secondary text-lg font-semibold text-foreground">
+                  <AvatarFallback className="bg-primary text-lg font-semibold text-primary-foreground">
                     {initials}
                   </AvatarFallback>
                 </Avatar>

@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+// import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft,
+  // ArrowLeft, (back button moved to the header arrow)
   FilePlus2,
   MapPin,
   User,
@@ -87,6 +87,8 @@ export function NewEstimateView() {
   return (
     <PortalPage
       eyebrow="Estimates"
+      backHref={requestId ? `/pro/dashboard/requests/${requestId}` : "/pro/dashboard/new-estimate"}
+      backLabel={requestId ? "Back to lead" : "All estimates"}
       title="Create New Estimate"
       description={
         request
@@ -95,6 +97,7 @@ export function NewEstimateView() {
       }
       actions={
         <div className="flex flex-wrap items-center gap-2">
+          {/* Client: back buttons → icon-only back arrow in the header (backHref).
           {requestId ? (
             <Button asChild variant="outline" size="sm">
               <Link href={`/pro/dashboard/requests/${requestId}`}>
@@ -110,6 +113,7 @@ export function NewEstimateView() {
               </Link>
             </Button>
           )}
+          */}
           <Button
             size="sm"
             className="gap-1.5 bg-[#003F7D] text-white hover:bg-[#003264]"

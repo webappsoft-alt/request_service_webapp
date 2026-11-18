@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, type ComponentType, type ReactNode } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
+  ArrowLeft,
   Bell,
   Briefcase,
   CalendarDays,
@@ -92,8 +94,13 @@ export function RecordWorkspace({
   metaBar,
   notice,
   trackOpen = true,
+  backHref,
+  backLabel = "Back",
   children,
 }: {
+  /** Icon-only back arrow before the title (replaces verbose "Back to …" buttons). */
+  backHref?: string;
+  backLabel?: string;
   href: string;
   label: string;
   kind: string;
@@ -141,6 +148,16 @@ export function RecordWorkspace({
     <div className="bg-card">
       <div className="flex flex-col gap-2 border-b border-border-soft px-4 py-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {backHref ? (
+            <Link
+              href={backHref}
+              aria-label={backLabel}
+              title={backLabel}
+              className="flex size-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:border-border dark:text-muted-foreground print:hidden"
+            >
+              <ArrowLeft className="size-4" />
+            </Link>
+          ) : null}
           <h1 className="truncate text-base font-semibold tracking-tight sm:text-lg">
             {label}
           </h1>

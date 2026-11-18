@@ -119,6 +119,8 @@ export function ContractorJobDetailView({ id }: { id: string }) {
 
   return (
     <PortalPage
+      backHref={contractorPaths.jobs}
+      backLabel="All assigned jobs"
       eyebrow="Contractor / Assigned jobs"
       title={
         <span className="flex flex-wrap items-center gap-2">
@@ -141,9 +143,11 @@ export function ContractorJobDetailView({ id }: { id: string }) {
         </div>
       }
     >
+      {/* Client: text back link → icon-only back arrow in the header (backHref).
       <Link href={contractorPaths.jobs} className="inline-flex items-center gap-1 self-start text-xs font-medium text-slate-600 hover:text-slate-900">
         <ArrowLeft className="size-3.5" /> All assigned jobs
       </Link>
+      */}
 
       <CompletionBanner job={job} onResubmit={() => setCompleteOpen(true)} />
 

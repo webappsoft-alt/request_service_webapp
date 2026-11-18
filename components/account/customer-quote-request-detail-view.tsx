@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
-  ArrowLeft,
+  // ArrowLeft, (back button moved to the header arrow)
   Building2,
   CalendarDays,
   Camera,
@@ -589,17 +589,20 @@ export function CustomerQuoteRequestDetailView() {
   if (!batch) {
     return (
       <PortalPage
+        backHref={customerPaths.estimateRequests}
+        backLabel="Back to requests"
         eyebrow="Estimates"
         title="Request not found"
         description="This quote request may have been removed or the link is invalid."
-        actions={
+        /* Client: "Back to requests" outline button → icon-only back arrow (backHref).
+          actions={
           <Button asChild variant="outline" size="sm">
             <Link href={customerPaths.estimateRequests}>
               <ArrowLeft className="size-3.5" />
               Back to requests
             </Link>
           </Button>
-        }
+        } */
       >
         <div className="rounded-xl border border-input bg-card p-8 text-center">
           <p className="text-base font-medium text-foreground">
@@ -632,6 +635,8 @@ export function CustomerQuoteRequestDetailView() {
   return (
     <>
     <PortalPage
+      backHref={customerPaths.estimateRequests}
+      backLabel="Back to requests"
       eyebrow="Quote Request Details"
       title={batch.serviceName}
       description={
@@ -642,12 +647,14 @@ export function CustomerQuoteRequestDetailView() {
       badge={getOverallStatusBadge(batch)}
       actions={
         <div className="flex flex-wrap items-center gap-2">
+          {/* Client: "Back to requests" → icon-only back arrow in the header (backHref).
           <Button asChild variant="outline" size="sm">
             <Link href={customerPaths.estimateRequests}>
               <ArrowLeft className="size-3.5" />
               Back to requests
             </Link>
           </Button>
+          */}
           <Button asChild size="sm">
             <Link href={customerPaths.estimateRequest}>
               <Sparkles className="size-3.5" />

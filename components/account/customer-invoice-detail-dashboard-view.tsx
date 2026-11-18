@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
-  ArrowLeft,
+  // ArrowLeft, (back button moved to the header arrow)
   Building2,
   CheckCircle2,
   FileText,
@@ -130,17 +130,20 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
   if (!auth.hydrated || loading) {
     return (
       <PortalPage
+        backHref={customerPaths.invoices}
+        backLabel="All invoices"
         eyebrow="Invoices"
         title="Invoice"
         description="Review the invoice sent by your professional."
-        actions={
+        /* Client: "All invoices" outline button → icon-only back arrow (backHref).
+          actions={
           <Button asChild variant="outline" size="sm">
             <Link href={customerPaths.invoices}>
               <ArrowLeft className="size-3.5" />
               All invoices
             </Link>
           </Button>
-        }
+        } */
       >
         <div className="flex min-h-[360px] items-center justify-center">
           <CenteredSpinner label="Loading invoice…" />
@@ -152,17 +155,20 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
   if (error || !invoice) {
     return (
       <PortalPage
+        backHref={customerPaths.invoices}
+        backLabel="All invoices"
         eyebrow="Invoices"
         title="Invoice not found"
         description={error || "This invoice is missing or no longer available."}
-        actions={
+        /* Client: "All invoices" outline button → icon-only back arrow (backHref).
+          actions={
           <Button asChild variant="outline" size="sm">
             <Link href={customerPaths.invoices}>
               <ArrowLeft className="size-3.5" />
               All invoices
             </Link>
           </Button>
-        }
+        } */
       >
         <div className="rounded-xl border border-input bg-card p-8 text-center">
           <AlertCircle className="mx-auto size-8 text-muted-foreground/50" />
@@ -238,6 +244,8 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
     <InvoicePrintDocument data={printData} />
     <div className="print:hidden">
     <PortalPage
+      backHref={customerPaths.invoices}
+      backLabel="All invoices"
       eyebrow="Invoices"
       title={invoice.number}
       description={
@@ -284,12 +292,14 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
       }
       actions={
         <div className="flex flex-wrap items-center gap-2">
+          {/* Client: "All invoices" → icon-only back arrow in the header (backHref).
           <Button asChild variant="outline" size="sm">
             <Link href={customerPaths.invoices}>
               <ArrowLeft className="size-3.5" />
               All invoices
             </Link>
           </Button>
+          */}
           <Button
             variant="outline"
             size="sm"

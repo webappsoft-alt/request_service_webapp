@@ -7,7 +7,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
+  // ArrowLeft, (back button moved to the header arrow)
   CalendarDays,
   Check,
   ChevronLeft,
@@ -401,17 +401,20 @@ export function CustomerOrderDetailView({
   if (!auth.hydrated || loading || (!activeOrder && !error)) {
     return (
       <PortalPage
+        backHref={customerPaths.orders}
+        backLabel="All orders"
         eyebrow="Activity"
         title="Order details"
         description="Review schedule, status, and work progress for your service order."
-        actions={
+        /* Client: "All orders" outline button → icon-only back arrow (backHref).
+          actions={
           <Button asChild variant="outline" size="sm">
             <Link href={customerPaths.orders}>
               <ArrowLeft className="size-3.5" />
               All orders
             </Link>
           </Button>
-        }
+        } */
       >
         <div className="flex min-h-[360px] items-center justify-center">
           <CenteredSpinner label="Loading order details…" />
@@ -423,17 +426,20 @@ export function CustomerOrderDetailView({
   if (error && !activeOrder) {
     return (
       <PortalPage
+        backHref={customerPaths.orders}
+        backLabel="All orders"
         eyebrow="Activity"
         title="Order not found"
         description="Could not locate the requested order."
-        actions={
+        /* Client: "All orders" outline button → icon-only back arrow (backHref).
+          actions={
           <Button asChild variant="outline" size="sm">
             <Link href={customerPaths.orders}>
               <ArrowLeft className="size-3.5" />
               All orders
             </Link>
           </Button>
-        }
+        } */
       >
         <div className="space-y-4 rounded-xl border border-input bg-card px-5 py-12 text-center">
           <p className="text-base font-semibold text-foreground">
@@ -469,6 +475,8 @@ export function CustomerOrderDetailView({
   return (
     <>
       <PortalPage
+        backHref={customerPaths.orders}
+        backLabel="All orders"
         eyebrow="Activity"
         title={
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -480,12 +488,14 @@ export function CustomerOrderDetailView({
         description={`Booked service with ${provider?.companyName || "Service Professional"}. Open any section for schedule, scope, and direct communications.`}
         actions={
           <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap lg:justify-end [&>*]:shrink-0">
+            {/* Client: "All orders" → icon-only back arrow in the header (backHref).
             <Button asChild variant="outline" size="sm">
               <Link href={customerPaths.orders}>
                 <ArrowLeft className="size-3.5" />
                 All orders
               </Link>
             </Button>
+            */}
 
             {activeOrder.estimateId ? (
               <Button asChild variant="outline" size="sm">

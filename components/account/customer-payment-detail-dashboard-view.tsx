@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
-  ArrowLeft,
+  // ArrowLeft, (back button moved to the header arrow)
   Building2,
   CreditCard,
   MessageSquare,
@@ -77,17 +77,20 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
   if (!auth.hydrated || (loading && !payment)) {
     return (
       <PortalPage
+        backHref={customerPaths.payments}
+        backLabel="All payments"
         eyebrow="Payments"
         title="Payment"
         description="Review a payment recorded against your invoice."
-        actions={
+        /* Client: "All payments" outline button → icon-only back arrow (backHref).
+          actions={
           <Button asChild variant="outline" size="sm">
             <Link href={customerPaths.payments}>
               <ArrowLeft className="size-3.5" />
               All payments
             </Link>
           </Button>
-        }
+        } */
       >
         <div className="flex min-h-[360px] items-center justify-center">
           <CenteredSpinner label="Loading payment…" />
@@ -99,17 +102,20 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
   if (error || !payment) {
     return (
       <PortalPage
+        backHref={customerPaths.payments}
+        backLabel="All payments"
         eyebrow="Payments"
         title="Payment not found"
         description={error || "This payment is missing or no longer available."}
-        actions={
+        /* Client: "All payments" outline button → icon-only back arrow (backHref).
+          actions={
           <Button asChild variant="outline" size="sm">
             <Link href={customerPaths.payments}>
               <ArrowLeft className="size-3.5" />
               All payments
             </Link>
           </Button>
-        }
+        } */
       >
         <div className="rounded-xl border border-input bg-card p-8 text-center">
           <AlertCircle className="mx-auto size-8 text-muted-foreground/50" />
@@ -128,6 +134,8 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
 
   return (
     <PortalPage
+      backHref={customerPaths.payments}
+      backLabel="All payments"
       eyebrow="Payments"
       title={paymentNumber(payment.id)}
       description={`Payment from ${companyName}`}
@@ -147,12 +155,14 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
       }
       actions={
         <div className="flex flex-wrap items-center gap-2">
+          {/* Client: "All payments" → icon-only back arrow in the header (backHref).
           <Button asChild variant="outline" size="sm">
             <Link href={customerPaths.payments}>
               <ArrowLeft className="size-3.5" />
               All payments
             </Link>
           </Button>
+          */}
           {payment.invoiceId ? (
             <Button asChild variant="outline" size="sm">
               <Link href={customerPaths.invoice(payment.invoiceId)}>

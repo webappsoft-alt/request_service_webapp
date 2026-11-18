@@ -17,17 +17,20 @@ export function CustomerEstimateDetailDashboardView({
 
   return (
     <PortalPage
+      backHref={customerPaths.estimates}
+      backLabel="All estimates"
       eyebrow="Estimates"
       title="Review estimate"
       description="Review the proposal from the professional, then sign to accept using the existing approval flow."
-      actions={
+      /* Client: "All estimates" outline button → icon-only back arrow (backHref).
+        actions={
         <Button asChild variant="outline" size="sm">
           <Link href={customerPaths.estimates}>
             <ArrowLeft className="size-3.5" />
             All estimates
           </Link>
         </Button>
-      }
+      } */
     >
       {key ? (
         <CustomerEstimatePage

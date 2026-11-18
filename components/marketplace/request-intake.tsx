@@ -30,7 +30,13 @@ import {
 import { getJobRecord } from "@/lib/data/jobs";
 import { isValidZip } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  fetchParentCategories,
+  fetchSubcategories,
+  type PublicCategory,
+} from "@/store/categoriesSlice";
+import { getServiceCategoryBySlug } from "@/lib/data/services";
 import {
   selectAuthUser,
   selectIsAuthenticated,
@@ -79,6 +85,16 @@ function RequestIntakeInner({
       ? (getJobRecord(startingService, startingJobSlug)?.job ?? "")
       : "";
 
+  // Live categories + sub-services from the admin panel (client: no static list). The seeded
+  // list in lib/data/services.ts stays only as a fallback while loading / if the API fails.
+  const dispatch = useAppDispatch();
+  const liveParents = useAppSelector((state) => state.categories.parents);
+  const subsByParent = useAppSelector((state) => state.categories.subcategoriesByParent);
+  const subMetaByParent = useAppSelector((state) => state.categories.subMetaByParent);
+  const loadingMoreSubs = useAppSelector(
+    (state) => state.categories.loadingSubcategories || state.categories.loadingMoreSubcategories,
+  );
+
   const [answers, setAnswers] = useState<IntakeAnswers>(() => {
     const pending = readPendingQuote();
     const pendingZip = String(pending?.zip || "").trim();
@@ -119,10 +135,59 @@ function RequestIntakeInner({
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
-  const steps = useMemo(
-    () => getIntakeSteps(answers.service, startingZip || undefined),
-    [answers.service, startingZip],
+  // Previous: steps = getIntakeSteps(answers.service, startingZip) — static categories only.
+  const liveParent: PublicCategory | undefined = useMemo(
+    () => liveParents.find((item) => item.slug === answers.service),
+    [liveParents, answers.service],
   );
+  const liveSubs = liveParent ? subsByParent[liveParent.id] : undefined;
+  const liveSubsMeta = liveParent ? subMetaByParent[liveParent.id] : undefined;
+
+  useEffect(() => {
+    void dispatch(fetchParentCategories());
+  }, [dispatch]);
+
+  // Picking a main category loads its sub-services (every page, so none are cut off).
+  useEffect(() => {
+    if (!liveParent) return;
+    if (!liveSubsMeta) {
+      void dispatch(fetchSubcategories({ parentId: liveParent.id }));
+    } else if (liveSubsMeta.hasMore && !loadingMoreSubs) {
+      void dispatch(fetchSubcategories({ parentId: liveParent.id, append: true }));
+    }
+  }, [dispatch, liveParent, liveSubsMeta, loadingMoreSubs]);
+
+  const steps = useMemo(() => {
+    const base = getIntakeSteps(answers.service, startingZip || undefined);
+    if (!liveParents.length) return base;
+    const seeded = getServiceCategoryBySlug(answers.service ?? "");
+    const subNames = (liveSubs ?? []).map((item) => item.name).filter(Boolean);
+    const jobOptions = subNames.length
+      ? subNames
+      : liveParent?.commonServices?.length
+        ? liveParent.commonServices
+        : (seeded?.commonServices ?? []);
+    const subsSettled = !liveParent || (liveSubsMeta && !liveSubsMeta.hasMore);
+    return base
+      .map((item) => {
+        if (item.id === "service") {
+          return {
+            ...item,
+            options: liveParents.map((parent) => ({ value: parent.slug, label: parent.name })),
+          };
+        }
+        if (item.id === "job" && liveParent) {
+          return {
+            ...item,
+            title: `What kind of ${liveParent.name.toLowerCase()} work is this?`,
+            options: jobOptions.map((job) => ({ value: job, label: job })),
+          };
+        }
+        return item;
+      })
+      // A category with no sub-services at all skips the "what kind of work" question.
+      .filter((item) => !(item.id === "job" && liveParent && subsSettled && !item.options?.length));
+  }, [answers.service, startingZip, liveParents, liveParent, liveSubs, liveSubsMeta]);
 
   // Logged-in customers: lock contact fields to their account profile.
   useEffect(() => {
@@ -169,6 +234,8 @@ function RequestIntakeInner({
     setAnswers((current) => {
       const next = { ...current, [id]: value };
       if (id === "service" && value !== current.service) next.job = "";
+      // Live category name (admin panel) — used as the request's service name when no job is picked.
+      if (id === "service") next.serviceName = liveParents.find((item) => item.slug === value)?.name || "";
       if (id === "firstName" || id === "lastName") {
         next.name = [next.firstName, next.lastName]
           .map((part) => String(part || "").trim())
@@ -403,7 +470,7 @@ function RequestIntakeInner({
             Question {safeIndex + 1} of {steps.length}
           </span>
           <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
-            {estimate?.category.shortName ?? "Choose a service"}
+            {estimate?.category.shortName ?? liveParent?.name ?? "Choose a service"}
           </span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-muted">

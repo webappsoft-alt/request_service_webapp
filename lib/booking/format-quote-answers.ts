@@ -50,7 +50,10 @@ export function formatIntakeQuote(answers: IntakeAnswers) {
     const rawValue = answers[step.id];
     const raw = typeof rawValue === "string" ? rawValue.trim() : "";
     if (!raw) continue;
-    const value = step.options?.find((option) => option.value === raw)?.label ?? raw;
+    // Live (admin) categories may not be in the seeded options: use the picked name.
+    const value =
+      (step.id === "service" && typeof answers.serviceName === "string" && answers.serviceName) ||
+      (step.options?.find((option) => option.value === raw)?.label ?? raw);
     listed.push({
       id: step.id,
       label: SHORT_LABEL[step.id] ?? step.title,
@@ -68,7 +71,12 @@ export function formatIntakeQuote(answers: IntakeAnswers) {
     answers: listed,
     details: details || "Website quote request.",
     serviceSlug: answers.service ?? "",
-    serviceName: answers.job || getServiceCategoryBySlug(answers.service ?? "")?.name || "Service request",
+    // + live (admin) category name for categories not in the seeded list.
+    serviceName:
+      answers.job ||
+      getServiceCategoryBySlug(answers.service ?? "")?.name ||
+      String(answers.serviceName || "") ||
+      "Service request",
     zip: answers.zip ?? "",
     address: answers.address || answers.street || "",
     street: answers.street || answers.address || "",

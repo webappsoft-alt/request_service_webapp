@@ -1,25 +1,41 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { isProMarketingPath, proPaths } from "@/lib/pro-paths";
 import { cn } from "@/lib/utils";
+
+/**
+ * Where the RS logo goes (client: smart logo routing). Pro side — Pro login / auth (/pro/*) and
+ * Pro marketing (/for-pros/*) — goes to the Pro landing page; everything else to the customer home.
+ */
+export function logoHomeFor(pathname: string | null | undefined): string {
+  const path = String(pathname || "");
+  const onPro = path === "/pro" || path.startsWith("/pro/") || isProMarketingPath(path);
+  return onPro ? proPaths.home : "/";
+}
 
 export function Logo({
   className,
   inverse = false,
   compact = false,
-  href = "/",
+  href,
   tagline,
 }: {
   className?: string;
   inverse?: boolean;
   compact?: boolean;
+  /** Explicit target; when left out it follows the side you're on (see logoHomeFor). Previous default: "/". */
   href?: string;
   /** Short brand slogan shown under the name. */
   tagline?: string;
 }) {
+  const pathname = usePathname();
   return (
     <Link
-      href={href}
+      href={href ?? logoHomeFor(pathname)}
       className={cn("inline-flex items-center gap-2.5", className)}
-      aria-label="Request Service home"
+      aria-label={(href ?? logoHomeFor(pathname)) === "/" ? "Request Service home" : "Request Service for pros home"}
     >
       <span
         className={cn(

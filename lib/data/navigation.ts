@@ -13,6 +13,12 @@ export const primaryNav: NavItem[] = [
     href: "/get-a-quote",
     description: "Answer a few job questions, then see matching local pros.",
   },
+  {
+    // Client: navbar link to the AI redesign info page (the tool itself needs a login).
+    label: "AI Kitchen Redesign",
+    href: "/ai-kitchen-redesign",
+    description: "See your kitchen or bathroom redesigned by AI from one photo.",
+  },
 ];
 
 export const secondaryNav: NavItem[] = [

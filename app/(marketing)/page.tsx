@@ -1,7 +1,8 @@
 import { HomeCategoryFilterProvider } from "@/components/home/home-category-filter";
 import { FeaturedProvidersSection } from "@/components/home/featured-providers-section";
 import { HeroSection } from "@/components/home/hero-section";
-import { RedesignerSection } from "@/components/ai-redesigner/redesigner-section";
+// import { RedesignerSection } from "@/components/ai-redesigner/redesigner-section"; — moved to /ai-kitchen-redesign
+import { CustomerFeatureTabs } from "@/components/home/customer-feature-tabs";
 import { HomeSearchDock } from "@/components/home/home-search-dock";
 import { HomeMotion } from "@/components/home/home-motion";
 import { ServicesSection } from "@/components/home/services-section";
@@ -26,7 +27,9 @@ export const metadata = buildMetadata({
 /**
  * Home page — the client-approved layout (formerly the /home-v3 concept).
  * Flow: hero + search + Browse Services → peace of mind steps timeline → featured pros (two rows,
- * with logos) → hire with confidence → AI designer showcase → customer reviews → FAQ.
+ * with logos) → hire with confidence → customer dashboard showcase → customer reviews → FAQ.
+ * (Was "AI designer showcase": the before/after kitchen section now lives on /ai-kitchen-redesign,
+ * linked from the navbar.)
  */
 export default async function HomePage() {
   // Server-render the first "Browse services" tiles — they are the mobile LCP element.
@@ -53,9 +56,13 @@ export default async function HomePage() {
           <HireWithConfidenceSection />
 
           {/* Below the fold: server HTML stays crawlable, hydration waits until it scrolls near. */}
-          {/* AI Kitchen & Bath Redesigner showcase — renders only once the admin turns it on. */}
+          {/* Client: before/after kitchen section replaced by the animated customer dashboard
+              features (estimates, change orders, invoices, chat, live tracking).
           <DeferredHydration>
             <RedesignerSection variant="showcase" />
+          </DeferredHydration> */}
+          <DeferredHydration>
+            <CustomerFeatureTabs />
           </DeferredHydration>
           <CustomerReviewsSection />
           <DeferredHydration>

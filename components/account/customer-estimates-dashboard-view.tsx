@@ -278,13 +278,11 @@ export function CustomerEstimatesDashboardView({
     }
   }
 
-  function setTab(next: TabId) {
-    if (next === "requests") {
-      router.replace(customerPaths.requests);
-    } else {
-      router.replace(customerPaths.estimates);
-    }
-  }
+  // Used by the removed tab bar (sidebar links switch pages now):
+  // function setTab(next: TabId) {
+  //   if (next === "requests") router.replace(customerPaths.requests);
+  //   else router.replace(customerPaths.estimates);
+  // }
 
   function handleOpenLink(event: React.FormEvent) {
     event.preventDefault();
@@ -305,7 +303,7 @@ export function CustomerEstimatesDashboardView({
 
   return (
     <PortalPage
-      eyebrow="Activity"
+      eyebrow="Projects"
       title={
         isRequests
           ? `Quote requests (${batches.length})`
@@ -325,33 +323,16 @@ export function CustomerEstimatesDashboardView({
         </Button>
       }
     >
-      {/* Provider-style FilterTabs Bar */}
+      {/* Client: no "Quote requests | Estimates" tab bar — Quote Requests and Estimates each have
+          their own sidebar link, so each page shows only its own table.
       <div className="flex flex-wrap gap-x-6 border-b border-input bg-card px-4">
-        <button
-          type="button"
-          onClick={() => setTab("requests")}
-          className={cn(
-            "-mb-px cursor-pointer border-b-2 py-2.5 text-sm font-medium transition-colors",
-            activeTab === "requests"
-              ? "border-primary text-primary font-semibold"
-              : "border-transparent text-muted-foreground hover:text-foreground",
-          )}
-        >
+        <button type="button" onClick={() => setTab("requests")} className={…}>
           Quote requests ({batches.length})
         </button>
-        <button
-          type="button"
-          onClick={() => setTab("estimates")}
-          className={cn(
-            "-mb-px cursor-pointer border-b-2 py-2.5 text-sm font-medium transition-colors",
-            activeTab === "estimates"
-              ? "border-primary text-primary font-semibold"
-              : "border-transparent text-muted-foreground hover:text-foreground",
-          )}
-        >
+        <button type="button" onClick={() => setTab("estimates")} className={…}>
           Estimates ({estimateItems.length})
         </button>
-      </div>
+      </div> */}
 
       {activeTab === "requests" ? (
         <PortalDataTable

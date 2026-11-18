@@ -1,5 +1,6 @@
 "use client";
 
+import { CustomerOrdersTabs } from "@/components/account/customer-orders-tabs";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -168,9 +169,10 @@ export function CustomerOrdersDashboardView() {
 
   return (
     <PortalPage
-      eyebrow="Activity"
+      eyebrow="Projects"
       title="Orders"
       description="Booked fixed services and job requests. Open a row to view status, schedule, and actions."
+      actions={<CustomerOrdersTabs />}
     >
       <PortalDataTable
         filename="customer-orders"

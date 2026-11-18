@@ -1,5 +1,6 @@
 "use client";
 
+import { CustomerOrdersTabs } from "@/components/account/customer-orders-tabs";
 import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Briefcase, Eye, Receipt } from "lucide-react";
@@ -105,9 +106,10 @@ export function CustomerChangeOrdersView() {
   if (!loaded && !items.length) {
     return (
       <PortalPage
-        eyebrow="Activity"
+        eyebrow="Projects"
         title="Change orders"
         description="Additional work requests from your service provider."
+        actions={<CustomerOrdersTabs />}
       >
         <CenteredSpinner label="Loading change orders…" className="min-h-64" />
       </PortalPage>
@@ -116,9 +118,10 @@ export function CustomerChangeOrdersView() {
 
   return (
     <PortalPage
-      eyebrow="Activity"
+      eyebrow="Projects"
       title="Change orders"
       description="Additional work requests from your service provider. Each one is priced, approved, and paid separately from the original job."
+      actions={<CustomerOrdersTabs />}
     >
       {pendingCount > 0 ? (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">

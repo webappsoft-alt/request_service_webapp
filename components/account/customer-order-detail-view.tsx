@@ -1009,6 +1009,17 @@ export function CustomerOrderDetailView({
                             Customer note: {co.customerNote}
                           </p>
                         ) : null}
+                        {/* Pending fixed-service change order: approve from here (was display-only,
+                            so the customer had no way to respond). */}
+                        {co.status === "PENDING" ? (
+                          <div className="mt-3 flex justify-end">
+                            <Button asChild size="sm" className="h-8">
+                              <Link href={customerPaths.changeOrder(activeOrder.id, co.id)}>
+                                Review &amp; approve
+                              </Link>
+                            </Button>
+                          </div>
+                        ) : null}
                       </div>
                     ))}
                   </div>

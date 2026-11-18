@@ -2,23 +2,28 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, ClipboardList, FileText, Inbox, MessageCircle, Plus, Receipt } from "lucide-react";
+import { ArrowRight, CalendarClock, ClipboardList, FileText, Plus, Receipt, Wallet } from "lucide-react";
 import {
   BoardCard,
   dashboardGreeting,
 } from "@/components/portal/dashboard-widgets";
 import {
   ENTER_CLASS,
-  MetricCard,
-  SpendingCard,
-  StatusBreakdownCard,
   enterStyle,
 } from "@/components/account/customer-dashboard-widgets";
-import { useCustomerPendingBadge } from "@/components/account/use-customer-pending-badge";
-import { CustomerActiveProjects } from "@/components/account/customer-active-projects";
+// import { useCustomerPendingBadge } from "@/components/account/use-customer-pending-badge"; — Messages card removed
+import { CustomerActiveProjectCards } from "@/components/account/customer-active-projects";
+import {
+  CompactStat,
+  CustomerEstimatesToReview,
+  EstimateInsight,
+  SpendingInsight,
+  type NextVisit,
+} from "@/components/account/customer-dashboard-advanced";
+// (CustomerHeroSummary / CustomerActionCenter no longer rendered — client polish.)
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill, moneyTone } from "@/components/portal/status-pill";
-import { estimateStatusToneClass } from "@/lib/data/estimate-v2-status";
+// import { estimateStatusToneClass } from "@/lib/data/estimate-v2-status"; — old estimates list
 import { Button } from "@/components/ui/button";
 import { customerPaths } from "@/lib/customer-paths";
 import { formatMoney, formatShortDate } from "@/lib/format";
@@ -103,6 +108,8 @@ function batchTone(batch: CustomerQuoteBatch) {
   return "neutral" as const;
 }
 
+// Used by the old estimates list (now CustomerEstimatesToReview).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function estimateStatusLabel(status: string) {
   const clean = String(status || "").toLowerCase();
   if (clean === "converted_to_job") return "Job Created";
@@ -152,7 +159,8 @@ export function CustomerDashboardView() {
   const invoices = useAppSelector(selectCustomerInvoices);
   const invoicesLoading = useAppSelector(selectCustomerInvoicesLoading);
   // Same source as the header and avatar badges, so every count matches.
-  const { unreadMessages } = useCustomerPendingBadge();
+  // Messages card removed (client) — unread count now lives on the header icon:
+  // const { unreadMessages } = useCustomerPendingBadge();
 
   const firstName =
     String(user?.firstName || "").trim() ||
@@ -183,21 +191,22 @@ export function CustomerDashboardView() {
     void dispatch(fetchCustomerInvoices());
   }, [dispatch]);
 
-  const openRequests = useMemo(
-    () =>
-      batches.filter((b) => {
-        const statuses = (b.professionals || []).map((p) =>
-          String(p.status || "").toLowerCase(),
-        );
-        const isClosed =
-          statuses.some((s) => s === "converted_to_job" || s === "accepted") ||
-          (b.professionals.length > 0 &&
-            statuses.every(isDeclinedStatus) &&
-            b.estimateCount === 0);
-        return !isClosed;
-      }).length,
-    [batches],
-  );
+  // Requests card removed (client) — was:
+  // const openRequests = useMemo(
+  // () =>
+  // batches.filter((b) => {
+  // const statuses = (b.professionals || []).map((p) =>
+  // String(p.status || "").toLowerCase(),
+  // );
+  // const isClosed =
+  // statuses.some((s) => s === "converted_to_job" || s === "accepted") ||
+  // (b.professionals.length > 0 &&
+  // statuses.every(isDeclinedStatus) &&
+  // b.estimateCount === 0);
+  // return !isClosed;
+  // }).length,
+  // [batches],
+  // );
 
   const openOrders = useMemo(
     () =>
@@ -271,11 +280,68 @@ export function CustomerDashboardView() {
     };
   }, []);
 
+  // Advanced overview (client): one "Needs your attention" list + the next booked visit.
+  // "Needs your attention" removed (client) — was:
+  // const attentionRows = useMemo(
+  // () =>
+  // buildCustomerActions({
+  // estimates,
+  // invoices,
+  // changeOrders: pendingChangeOrders,
+  // unreadMessages,
+  // }),
+  // [estimates, invoices, pendingChangeOrders, unreadMessages],
+  // );
+  const dueInvoices = useMemo(
+    () => invoices.filter((item) => ["sent", "partially_paid", "overdue"].includes(item.status) && Number(item.balanceDue) > 0).length,
+    [invoices],
+  );
+  const nextVisit: NextVisit = useMemo(() => {
+    const now = today.getTime();
+    const upcoming = orders
+      .filter((order) => {
+        const start = order.booking?.startTime ? new Date(order.booking.startTime).getTime() : NaN;
+        return Number.isFinite(start) && start >= now && !["SETTLED", "CANCELLED", "DISPUTED"].includes(String(order.status || "").toUpperCase());
+      })
+      .sort((a, b) => new Date(a.booking!.startTime!).getTime() - new Date(b.booking!.startTime!).getTime())[0];
+    if (!upcoming?.booking?.startTime) return null;
+    const when = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(
+      new Date(upcoming.booking.startTime),
+    );
+    return { title: orderServiceTitle(upcoming), when, href: customerPaths.order(upcoming.id) };
+  }, [orders, today]);
+
   return (
     <PortalPage
-      eyebrow="Overview"
+      eyebrow="Dashboard"
       title={`${dashboardGreeting(today)}, ${firstName}`}
-      description={`${formattedToday} · Customer Dashboard`}
+      // Next visit sits in the greeting line with a soft pulsing dot (client). Was a KPI card;
+      // before that: description={`${formattedToday} · Customer Dashboard`}.
+      description={
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span>{formattedToday}</span>
+          {nextVisit ? (
+            <Link
+              href={nextVisit.href}
+              className="group inline-flex max-w-full items-center gap-2 rounded-full border border-primary/20 bg-primary/5 py-1 pr-3 pl-2.5 text-xs text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10"
+            >
+              <span className="relative flex size-2 shrink-0" aria-hidden>
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500/60 [animation-duration:2s]" />
+                <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="font-semibold text-primary">Next visit</span>
+              <span className="truncate">
+                {nextVisit.when} · {nextVisit.title}
+              </span>
+              <ArrowRight className="size-3 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
+            </Link>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <CalendarClock className="size-3.5" aria-hidden /> No visits booked yet
+            </span>
+          )}
+        </span>
+      }
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <Button asChild size="sm">
@@ -293,133 +359,230 @@ export function CustomerDashboardView() {
         </div>
       }
     >
-      {pendingChangeOrders.length > 0 ? (
-        <div
-          role="status"
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-amber-200 border-l-4 border-l-orange-500 bg-amber-50/70 px-3 py-2"
-        >
-          <span className="relative flex size-2.5 shrink-0" aria-hidden>
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-orange-500 opacity-75" />
-            <span className="relative inline-flex size-2.5 rounded-full bg-orange-500" />
-          </span>
-          <p className="text-sm text-amber-950">
-            <span className="font-semibold">
-              {pendingChangeOrders.length} change order{pendingChangeOrders.length === 1 ? "" : "s"} need your approval
-            </span>
-            <span className="text-amber-800">
-              {" "}
-              · +{formatMoney(pendingChangeOrders.reduce((sum, co) => sum + (Number(co.amount) || 0), 0))}
-            </span>
-          </p>
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-            {pendingChangeOrders.slice(0, 3).map((co) => (
-              <Link
-                key={`${co.jobId}-${co.id}`}
-                href={customerPaths.changeOrder(co.jobId, co.id)}
-                title={co.title || co.description || undefined}
-                className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-white px-2 py-0.5 text-xs text-slate-700 hover:border-amber-400 hover:text-slate-900"
-              >
-                <span className="font-semibold">{co.number}</span>
-                <span className="text-slate-400">·</span>
-                <span>{co.jobNumber || "Job"}</span>
-                <span className="font-medium tabular-nums text-amber-800">+{formatMoney(co.amount)}</span>
-              </Link>
-            ))}
-            {pendingChangeOrders.length > 3 ? (
-              <span className="text-xs text-amber-800">+{pendingChangeOrders.length - 3} more</span>
-            ) : null}
-          </div>
-          <Button size="sm" className="h-7 shrink-0" asChild>
-            <Link
-              href={
-                pendingChangeOrders.length === 1
-                  ? customerPaths.changeOrder(pendingChangeOrders[0].jobId, pendingChangeOrders[0].id)
-                  : customerPaths.changeOrders
-              }
-            >
-              Review
-              <ArrowRight className="size-3.5" />
-            </Link>
-          </Button>
-        </div>
-      ) : null}
-
-      {/* Summary metrics */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <MetricCard
+      {/* Client polish: compact soft KPI row (balance + next visit + counts) instead of the dark
+          summary band, "Needs your attention" removed, then Active projects (tiles) beside a
+          distinct Estimates-to-review queue. Previous: CustomerHeroSummary + CustomerActionCenter +
+          five tall MetricCards + list-style CustomerActiveProjects + charts row. */}
+      {/* Four essentials only (client). Previous: 7 cards incl. Next visit, Requests, Messages. */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <CompactStat
           index={0}
-          label="Requests"
-          icon={Inbox}
-          tone="primary"
-          value={batches.length}
-          loading={batchesLoading && !batches.length}
-          note={openRequests ? `${openRequests} active requests` : "Quote requests sent"}
-          progress={batches.length ? openRequests / batches.length : 0}
-          href={customerPaths.requests}
+          label="Balance due"
+          icon={Wallet}
+          tone={invoiceMoney.outstanding > 0 ? "amber" : "primary"}
+          value={formatMoney(invoiceMoney.outstanding)}
+          note={dueInvoices ? `${dueInvoices} invoice${dueInvoices === 1 ? "" : "s"} to pay` : "All paid up"}
+          loading={invoicesLoading && !invoices.length}
+          href={customerPaths.invoices}
         />
-        <MetricCard
+        {/* Next visit → greeting line; Requests → sidebar (client). */}
+        <CompactStat
           index={1}
           label="Estimates"
           icon={FileText}
-          tone="amber"
           value={estimates.length}
+          note={pendingEstimates ? `${pendingEstimates} to review` : "From your pros"}
           loading={estimatesLoading && !estimates.length}
-          note={pendingEstimates ? `${pendingEstimates} awaiting your review` : "Proposals from professionals"}
-          progress={estimates.length ? pendingEstimates / estimates.length : 0}
           href={customerPaths.estimates}
         />
-        <MetricCard
+        <CompactStat
           index={2}
           label="Orders"
           icon={ClipboardList}
-          tone="sky"
           value={pagination.totalDocs || orders.length}
+          note={openOrders ? `${openOrders} in progress` : "Booked services"}
           loading={ordersLoading && !orders.length}
-          note={openOrders ? `${openOrders} in progress` : "Booked fixed services & jobs"}
-          progress={orders.length ? openOrders / orders.length : 0}
           href={customerPaths.orders}
         />
-        <MetricCard
+        <CompactStat
           index={3}
           label="Invoices"
           icon={Receipt}
-          tone="emerald"
           value={invoices.length}
+          note={openInvoices ? `${openInvoices} awaiting payment` : "Bills from your pros"}
           loading={invoicesLoading && !invoices.length}
-          note={openInvoices ? `${openInvoices} awaiting payment` : "Bills from completed services"}
-          progress={invoices.length ? 1 - openInvoices / invoices.length : 0}
           href={customerPaths.invoices}
         />
-        <MetricCard
-          index={4}
-          label="Messages"
-          icon={MessageCircle}
-          tone="violet"
-          value={unreadMessages}
-          note={unreadMessages ? `${unreadMessages} unread message${unreadMessages === 1 ? "" : "s"}` : "Chat with professionals"}
-          href={customerPaths.messages}
-        />
+        {/* Messages → header icon (client). */}
       </div>
 
-      {/* Ongoing / upcoming work with stage progress */}
-      <div style={enterStyle(5)} className={ENTER_CLASS}>
-        <CustomerActiveProjects estimates={estimates} />
+      {pendingChangeOrders.length > 0 ? (
+        <Link
+          href={
+            pendingChangeOrders.length === 1
+              ? customerPaths.changeOrder(pendingChangeOrders[0].jobId, pendingChangeOrders[0].id)
+              : customerPaths.changeOrders
+          }
+          className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 transition hover:border-amber-300 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100"
+        >
+          <span className="size-2 shrink-0 rounded-full bg-orange-500" aria-hidden />
+          <span className="font-semibold">
+            {pendingChangeOrders.length} change order{pendingChangeOrders.length === 1 ? "" : "s"} need your approval
+          </span>
+          <span className="text-amber-800 dark:text-amber-200">
+            · +{formatMoney(pendingChangeOrders.reduce((sum, co) => sum + (Number(co.amount) || 0), 0))}
+          </span>
+          <span className="ml-auto inline-flex items-center gap-1 text-xs font-semibold">
+            Review <ArrowRight className="size-3.5" />
+          </span>
+        </Link>
+      ) : null}
+
+      <div style={enterStyle(7)} className={`${ENTER_CLASS} grid gap-4 xl:grid-cols-3`}>
+        <CustomerActiveProjectCards estimates={estimates} className="xl:col-span-2" />
+        <CustomerEstimatesToReview estimates={estimates} loading={estimatesLoading && !estimates.length} />
       </div>
 
-      {/* Visual summaries */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <SpendingCard index={5} paid={invoiceMoney.paid} outstanding={invoiceMoney.outstanding} href={customerPaths.invoices} />
-        <StatusBreakdownCard
-          index={6}
-          title="Estimates"
-          subtitle="Where your proposals stand"
-          href={customerPaths.estimates}
-          segments={estimateSegments}
-        />
+      {/* Spending + estimates insight, right after Active projects (client). */}
+      <div style={enterStyle(8)} className={`${ENTER_CLASS} grid gap-4 lg:grid-cols-2`}>
+        <SpendingInsight paid={invoiceMoney.paid} outstanding={invoiceMoney.outstanding} />
+        <EstimateInsight segments={estimateSegments} />
       </div>
 
+      {/* Previous top area (kept for reference):
+      //       {/ * Advanced overview: summary band + one list of what needs the customer. * /}
+      //       <CustomerHeroSummary
+      //         outstanding={invoiceMoney.outstanding}
+      //         dueCount={dueInvoices}
+      //         nextVisit={nextVisit}
+      //         attentionCount={attentionRows.length}
+      //         activeProjects={openOrders}
+      //       />
+      //       <CustomerActionCenter
+      //         rows={attentionRows}
+      //         loading={(estimatesLoading && !estimates.length) || (invoicesLoading && !invoices.length)}
+      //       />
+      // 
+      //       {/ * Previous change-orders-only banner — now part of "Needs your attention" above. * /}
+      //       {false && pendingChangeOrders.length > 0 ? (
+      //         <div
+      //           role="status"
+      //           className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-amber-200 border-l-4 border-l-orange-500 bg-amber-50/70 px-3 py-2"
+      //         >
+      //           <span className="relative flex size-2.5 shrink-0" aria-hidden>
+      //             <span className="absolute inline-flex size-full animate-ping rounded-full bg-orange-500 opacity-75" />
+      //             <span className="relative inline-flex size-2.5 rounded-full bg-orange-500" />
+      //           </span>
+      //           <p className="text-sm text-amber-950">
+      //             <span className="font-semibold">
+      //               {pendingChangeOrders.length} change order{pendingChangeOrders.length === 1 ? "" : "s"} need your approval
+      //             </span>
+      //             <span className="text-amber-800">
+      //               {" "}
+      //               · +{formatMoney(pendingChangeOrders.reduce((sum, co) => sum + (Number(co.amount) || 0), 0))}
+      //             </span>
+      //           </p>
+      //           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+      //             {pendingChangeOrders.slice(0, 3).map((co) => (
+      //               <Link
+      //                 key={`${co.jobId}-${co.id}`}
+      //                 href={customerPaths.changeOrder(co.jobId, co.id)}
+      //                 title={co.title || co.description || undefined}
+      //                 className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-white px-2 py-0.5 text-xs text-slate-700 hover:border-amber-400 hover:text-slate-900"
+      //               >
+      //                 <span className="font-semibold">{co.number}</span>
+      //                 <span className="text-slate-400">·</span>
+      //                 <span>{co.jobNumber || "Job"}</span>
+      //                 <span className="font-medium tabular-nums text-amber-800">+{formatMoney(co.amount)}</span>
+      //               </Link>
+      //             ))}
+      //             {pendingChangeOrders.length > 3 ? (
+      //               <span className="text-xs text-amber-800">+{pendingChangeOrders.length - 3} more</span>
+      //             ) : null}
+      //           </div>
+      //           <Button size="sm" className="h-7 shrink-0" asChild>
+      //             <Link
+      //               href={
+      //                 pendingChangeOrders.length === 1
+      //                   ? customerPaths.changeOrder(pendingChangeOrders[0].jobId, pendingChangeOrders[0].id)
+      //                   : customerPaths.changeOrders
+      //               }
+      //             >
+      //               Review
+      //               <ArrowRight className="size-3.5" />
+      //             </Link>
+      //           </Button>
+      //         </div>
+      //       ) : null}
+      // 
+      //       {/ * Summary metrics * /}
+      //       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      //         <MetricCard
+      //           index={0}
+      //           label="Requests"
+      //           icon={Inbox}
+      //           tone="primary"
+      //           value={batches.length}
+      //           loading={batchesLoading && !batches.length}
+      //           note={openRequests ? `${openRequests} active requests` : "Quote requests sent"}
+      //           progress={batches.length ? openRequests / batches.length : 0}
+      //           href={customerPaths.requests}
+      //         />
+      //         <MetricCard
+      //           index={1}
+      //           label="Estimates"
+      //           icon={FileText}
+      //           tone="amber"
+      //           value={estimates.length}
+      //           loading={estimatesLoading && !estimates.length}
+      //           note={pendingEstimates ? `${pendingEstimates} awaiting your review` : "Proposals from professionals"}
+      //           progress={estimates.length ? pendingEstimates / estimates.length : 0}
+      //           href={customerPaths.estimates}
+      //         />
+      //         <MetricCard
+      //           index={2}
+      //           label="Orders"
+      //           icon={ClipboardList}
+      //           tone="sky"
+      //           value={pagination.totalDocs || orders.length}
+      //           loading={ordersLoading && !orders.length}
+      //           note={openOrders ? `${openOrders} in progress` : "Booked fixed services & jobs"}
+      //           progress={orders.length ? openOrders / orders.length : 0}
+      //           href={customerPaths.orders}
+      //         />
+      //         <MetricCard
+      //           index={3}
+      //           label="Invoices"
+      //           icon={Receipt}
+      //           tone="emerald"
+      //           value={invoices.length}
+      //           loading={invoicesLoading && !invoices.length}
+      //           note={openInvoices ? `${openInvoices} awaiting payment` : "Bills from completed services"}
+      //           progress={invoices.length ? 1 - openInvoices / invoices.length : 0}
+      //           href={customerPaths.invoices}
+      //         />
+      //         <MetricCard
+      //           index={4}
+      //           label="Messages"
+      //           icon={MessageCircle}
+      //           tone="violet"
+      //           value={unreadMessages}
+      //           note={unreadMessages ? `${unreadMessages} unread message${unreadMessages === 1 ? "" : "s"}` : "Chat with professionals"}
+      //           href={customerPaths.messages}
+      //         />
+      //       </div>
+      // 
+      //       {/ * Ongoing / upcoming work with stage progress * /}
+      //       <div style={enterStyle(5)} className={ENTER_CLASS}>
+      //         <CustomerActiveProjects estimates={estimates} />
+      //       </div>
+      // 
+      //       {/ * Visual summaries * /}
+      //       <div className="grid gap-4 lg:grid-cols-2">
+      //         <SpendingCard index={5} paid={invoiceMoney.paid} outstanding={invoiceMoney.outstanding} href={customerPaths.invoices} />
+      //         <StatusBreakdownCard
+      //           index={6}
+      //           title="Estimates"
+      //           subtitle="Where your proposals stand"
+      //           href={customerPaths.estimates}
+      //           segments={estimateSegments}
+      //         />
+      //       </div>
+      // 
+      // 
+      */}
       {/* Recent activity */}
-      <div style={enterStyle(7)} className={`${ENTER_CLASS} grid gap-6 xl:grid-cols-2`}>
+      <div style={enterStyle(9)} className={`${ENTER_CLASS} grid gap-4 lg:grid-cols-3`}>
         {/* Quote Requests */}
         <BoardCard
           title="Quote requests"
@@ -433,11 +596,11 @@ export function CustomerDashboardView() {
                 : "No quote requests yet. Request an estimate for custom work."
           }
         >
-          {batches.slice(0, 5).map((batch) => (
+          {batches.slice(0, 4).map((batch) => (
             <Link
               key={batchKey(batch)}
               href={customerPaths.quoteRequest(batchKey(batch))}
-              className="flex items-center justify-between gap-4 px-5 py-3.5 text-sm transition-colors hover:bg-muted/40"
+              className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-muted/40"
             >
               <div className="min-w-0">
                 <p className="truncate font-medium text-foreground">
@@ -463,51 +626,7 @@ export function CustomerDashboardView() {
           ))}
         </BoardCard>
 
-        {/* Estimates to Review */}
-        <BoardCard
-          title="Estimates to review"
-          href={customerPaths.estimates}
-          hrefLabel="View all"
-          empty={
-            estimatesLoading && !estimates.length
-              ? "Loading estimates…"
-              : estimates.length
-                ? undefined
-                : "No estimates yet. Request a quote to receive proposals."
-          }
-        >
-          {estimates.slice(0, 5).map((item) => (
-            <Link
-              key={item.id}
-              href={
-                item.shareToken
-                  ? customerPaths.estimate(item.shareToken)
-                  : customerPaths.estimates
-              }
-              className="flex items-center justify-between gap-4 px-5 py-3.5 text-sm transition-colors hover:bg-muted/40"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium text-foreground">
-                  {item.title || item.number || "Estimate"}
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {item.provider?.companyName || "Service Professional"}
-                  {item.createdAt ? ` · ${formatShortDate(item.createdAt)}` : ""}
-                </p>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <StatusPill
-                  label={estimateStatusLabel(item.status)}
-                  className={estimateStatusToneClass(item.status)}
-                />
-                <span className="font-semibold tabular-nums text-foreground">
-                  {item.total ? formatMoney(item.total) : "—"}
-                </span>
-              </div>
-            </Link>
-          ))}
-        </BoardCard>
-
+        {/* Estimates list moved to <CustomerEstimatesToReview> above (was a 4th BoardCard here). */}
         {/* Recent Orders */}
         <BoardCard
           title="Recent orders"
@@ -521,11 +640,11 @@ export function CustomerDashboardView() {
                 : "No orders yet. Browse services on the marketplace to book a pro."
           }
         >
-          {orders.slice(0, 5).map((order) => (
+          {orders.slice(0, 4).map((order) => (
             <Link
               key={order.id}
               href={customerPaths.order(order.id)}
-              className="flex items-center justify-between gap-4 px-5 py-3.5 text-sm transition-colors hover:bg-muted/40"
+              className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-muted/40"
             >
               <div className="min-w-0">
                 <p className="truncate font-medium text-foreground">
@@ -567,11 +686,11 @@ export function CustomerDashboardView() {
                 : "No invoices yet. When a professional sends an invoice, it will appear here."
           }
         >
-          {invoices.slice(0, 5).map((item) => (
+          {invoices.slice(0, 4).map((item) => (
             <Link
               key={item.id}
               href={customerPaths.invoice(item.id)}
-              className="flex items-center justify-between gap-4 px-5 py-3.5 text-sm transition-colors hover:bg-muted/40"
+              className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-muted/40"
             >
               <div className="min-w-0">
                 <p className="truncate font-medium text-foreground">
@@ -602,6 +721,9 @@ export function CustomerDashboardView() {
           ))}
         </BoardCard>
       </div>
+
+      {/* (Charts moved up under Active projects and redesigned — client. Were SpendingCard +
+          StatusBreakdownCard here at the bottom.) */}
     </PortalPage>
   );
 }

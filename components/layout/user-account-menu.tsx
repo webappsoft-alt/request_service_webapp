@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ChevronDown,
+  LifeBuoy,
   LogOut,
   MessageCircle,
   Settings,
@@ -90,7 +91,7 @@ export function UserAccountMenu({
   }, [isProvider, user.email]);
 
   const avatarButton = (
-    <Avatar size="sm" className="size-8">
+    <Avatar size="sm" className="size-7">
       {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
       <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
         {initialsFor(user)}
@@ -132,6 +133,15 @@ export function UserAccountMenu({
           {isProvider ? "Business Profile" : "Settings"}
         </Link>
       </DropdownMenuItem>
+      {/* Customers: Support lives here now (moved out of the dashboard sidebar — client). */}
+      {!isProvider ? (
+        <DropdownMenuItem asChild>
+          <Link href={customerPaths.support}>
+            <LifeBuoy />
+            Support
+          </Link>
+        </DropdownMenuItem>
+      ) : null}
       <DropdownMenuSeparator />
       <DropdownMenuItem
         variant="destructive"
@@ -176,25 +186,32 @@ export function UserAccountMenu({
     );
   }
 
+  // Customers: avatar + dropdown arrow in one pill (client: show the arrow). Previous trigger was
+  // the round avatar only — `relative size-9 rounded-full border border-border p-0`.
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
+        <button
+          type="button"
+          // Borderless, like the technician / contractor header (client). Interim version was a
+          // bordered pill: "h-9 rounded-full border border-border bg-card p-0.5 pr-2".
           className={cn(
-            "relative size-9 rounded-full border border-border p-0 hover:bg-muted",
+            "group relative inline-flex h-8 items-center gap-1.5 rounded-md px-1.5 transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none data-[state=open]:bg-muted",
             className,
           )}
           aria-label="Open account menu"
         >
           {avatarButton}
+          <ChevronDown
+            className="size-3.5 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180"
+            aria-hidden="true"
+          />
           {unreadMessages > 0 && !hideAvatarBadge ? (
-            <span className="absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+            <span className="absolute -top-0.5 left-6 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
               {unreadMessages > 9 ? "9+" : unreadMessages}
             </span>
           ) : null}
-        </Button>
+        </button>
       </DropdownMenuTrigger>
       {menu}
     </DropdownMenu>

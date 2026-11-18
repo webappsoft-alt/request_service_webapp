@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronDown, LogOut, Menu, Search, X, type LucideIcon } from "lucide-react";
+import { ChevronDown, House, LogOut, MessageSquare, Menu, Search, X, type LucideIcon } from "lucide-react";
 import { handleUserLogout } from "@/components/api/apiFuntions";
 import { UserAccountMenu } from "@/components/layout/user-account-menu";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
@@ -182,6 +182,7 @@ function NavLinks({
     if (href === customerPaths.changeOrders) return [{ label: "Change orders to review", count: unreadChangeOrders }];
     if (href === customerPaths.invoices) return [{ label: "New invoice updates", count: unreadInvoices }];
     if (href === customerPaths.payments) return [{ label: "New payment updates", count: unreadPayments }];
+    // (Orders is a dropdown again, so change orders have their own row — no combined count here.)
     if (href === customerPaths.orders) return [{ label: "New order updates", count: unreadOrders }];
     return [];
   }
@@ -212,7 +213,7 @@ function NavLinks({
   // Rounded pill highlight with a soft inner edge for the active item.
   const rowClass = (active: boolean) =>
     cn(
-      "relative flex items-center gap-2.5 rounded-lg py-1.5 text-[13px] font-medium transition-colors",
+      "relative flex items-center gap-3 rounded-lg py-2 text-[13px] font-medium transition-colors",
       collapsed ? "justify-center px-0" : "px-3",
       active
         ? "bg-white/15 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]"
@@ -261,11 +262,11 @@ function NavLinks({
 
   return (
     <TooltipProvider delayDuration={collapsed ? 0 : 120} skipDelayDuration={400} disableHoverableContent>
-      <nav className="flex flex-col gap-4" aria-label="Customer dashboard">
+      <nav className="flex flex-col gap-5" aria-label="Customer dashboard">
         {customerNavGroups.map((group) => (
-          <div key={group.id} className="flex flex-col gap-0.5">
+          <div key={group.id} className="flex flex-col gap-1">
             {group.label && !collapsed ? (
-              <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.16em] text-white/45 uppercase">
+              <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.16em] text-white/50 uppercase">
                 {group.label}
               </p>
             ) : null}
@@ -274,10 +275,12 @@ function NavLinks({
                 ? false
                 : item.href === customerPaths.dashboard
                   ? isCustomerOverviewPath(pathname)
-                  : matches(item.href);
+                  : matches(item.href) || Boolean(item.matchAlso?.some((href) => matches(href)));
+              // Badge = this section + the sections folded into it (Orders + Change orders).
+              const count = badgeFor(item.href) + (item.matchAlso ?? []).reduce((sum, href) => sum + badgeFor(href), 0);
 
               if (!item.children?.length) {
-                return renderLink(item.href, item.href, item.label, item.icon, isActive, badgeFor(item.href), item.description);
+                return renderLink(item.href, item.href, item.label, item.icon, isActive, count, item.description);
               }
 
               // Collapsed sidebar: show each nested link as its own icon so none are unreachable.
@@ -403,6 +406,12 @@ export function CustomerShell({ children }: { children: ReactNode }) {
   }, [pathname]);
   const clearedKeyRef = useRef<string | null>(null);
   const customerEmail = String(authUser?.email || "").trim();
+  // Sidebar brand block: the customer's own name and photo.
+  const customerName =
+    [authUser?.firstName, authUser?.lastName].map((part) => String(part || "").trim()).filter(Boolean).join(" ") ||
+    String(authUser?.name || "").trim() ||
+    "My account";
+  const customerPhoto = String(authUser?.avatarUrl || authUser?.avatar || "").trim() || null;
 
   const menuUser: AuthUser = authUser
     ? { ...authUser, role: authUser.role || "customer" }
@@ -609,21 +618,40 @@ export function CustomerShell({ children }: { children: ReactNode }) {
       >
         <div
           className={cn(
-            "flex h-12 items-center border-b border-white/10",
+            "flex h-14 items-center border-b border-white/10",
             collapsed ? "justify-center px-2" : "px-4",
           )}
         >
+          {/* Customer name + "Customer dashboard" subtitle, like the technician portal's brand
+              block (client). Previous: "RS" mark + "Customer Dashboard". */}
           <Link
             href={customerPaths.dashboard}
-            className="truncate text-sm font-semibold tracking-wide"
+            className="flex min-w-0 items-center gap-2.5"
+            aria-label={collapsed ? `${customerName} — customer dashboard` : undefined}
           >
-            {collapsed ? "RS" : "Customer Dashboard"}
+            {customerPhoto ? (
+              // eslint-disable-next-line @next/next/no-img-element -- user avatar from any CDN, tiny thumbnail
+              <img src={customerPhoto} alt="" className="size-9 shrink-0 rounded-lg object-cover ring-1 ring-white/25" />
+            ) : (
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white text-[#003F7D] shadow-sm">
+                <House className="size-4.5" aria-hidden="true" />
+              </span>
+            )}
+            {collapsed ? null : (
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-white">{customerName}</span>
+                {/* One line (was wrapping to two at tracking-[0.16em]). */}
+                <span className="block truncate text-[9.5px] font-semibold tracking-[0.12em] whitespace-nowrap text-sky-200 uppercase">
+                  Customer dashboard
+                </span>
+              </span>
+            )}
           </Link>
         </div>
         <div
           className={cn(
-            "flex-1 overflow-y-auto py-3",
-            collapsed ? "px-2" : "px-2",
+            "flex-1 overflow-y-auto py-4",
+            collapsed ? "px-2" : "px-3",
           )}
         >
           <NavLinks
@@ -683,14 +711,25 @@ export function CustomerShell({ children }: { children: ReactNode }) {
                     unreadOrders={unreadOrders}
                   />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleUserLogout()}
-                  className="flex items-center gap-2 border-t border-white/10 px-3 py-3 text-left text-xs font-medium text-white/80 hover:bg-white/10 hover:text-white"
-                >
-                  <LogOut className="size-3.5 shrink-0" />
-                  Log out
-                </button>
+                <div className="flex items-center border-t border-white/10">
+                  <SheetClose asChild>
+                    <Link
+                      href={customerPaths.site}
+                      className="flex flex-1 items-center gap-2 px-3 py-3 text-xs font-medium text-white/80 hover:bg-white/10 hover:text-white"
+                    >
+                      <House className="size-3.5 shrink-0" />
+                      Back to site
+                    </Link>
+                  </SheetClose>
+                  <button
+                    type="button"
+                    onClick={() => handleUserLogout()}
+                    className="flex flex-1 items-center gap-2 border-l border-white/10 px-3 py-3 text-left text-xs font-medium text-white/80 hover:bg-white/10 hover:text-white"
+                  >
+                    <LogOut className="size-3.5 shrink-0" />
+                    Log out
+                  </button>
+                </div>
               </SheetContent>
             </Sheet>
 
@@ -728,27 +767,43 @@ export function CustomerShell({ children }: { children: ReactNode }) {
               />
             </div>
 
-            <div className="ml-auto flex items-center gap-2 lg:ml-0">
+            {/* Same plain icon row as the technician / contractor portals (client):
+                Back to site · Messages (unread badge) · dark mode · bell · avatar + arrow.
+                Previous: bell + theme toggle inside a bordered pill, avatar in a bordered pill. */}
+            <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="mr-1 hidden h-8 text-xs sm:inline-flex"
+              >
+                <Link href={customerPaths.site}>Back to site</Link>
+              </Button>
+              <Button
+                asChild
+                variant="ghost"
+                size="icon"
+                className="relative"
+                aria-label={unreadMessages ? `Messages, ${unreadMessages} unread` : "Messages"}
+              >
+                <Link href={customerPaths.messages}>
+                  <MessageSquare />
+                  {unreadMessages > 0 ? (
+                    <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#c2410c] px-1 text-[10px] leading-none font-semibold text-white">
+                      {unreadMessages > 99 ? "99+" : unreadMessages}
+                    </span>
+                  ) : null}
+                </Link>
+              </Button>
+              <ThemeToggle />
               <NotificationBell
                 hrefFor={customerNotificationHref}
                 autoReadWhen={isViewingNotificationChat}
                 onItemsRead={onBellItemsRead}
                 onAllRead={onBellAllRead}
                 emptyText="No notifications yet."
-                buttonClassName="size-8"
-                iconClassName="size-4"
               />
-
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                className="hidden sm:inline-flex h-8 text-xs"
-              >
-                <Link href={customerPaths.site}>Back to site</Link>
-              </Button>
-              <ThemeToggle />
-              <UserAccountMenu user={menuUser} className="size-8 border-input" />
+              <UserAccountMenu user={menuUser} />
             </div>
           </div>
         </header>

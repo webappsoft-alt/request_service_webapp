@@ -31,6 +31,7 @@ import providerFaqsReducer from "./providerFaqsSlice";
 import siteBrandingReducer from "./siteBrandingSlice";
 import ordersReducer from "./ordersSlice";
 import providerOrdersReducer from "./providerOrdersSlice";
+import crewOrdersReducer from "./crewOrdersSlice";
 import customersReducer from "./customersSlice";
 import estimatesReducer from "./estimatesSlice";
 import customerQuotesReducer from "./customerQuotesSlice";
@@ -99,6 +100,7 @@ const rootReducer = combineReducers({
   siteBranding: siteBrandingReducer,
   orders: ordersReducer,
   providerOrders: providerOrdersReducer,
+  crewOrders: crewOrdersReducer,
   customers: customersReducer,
   estimates: estimatesReducer,
   customerQuotes: customerQuotesReducer,
@@ -200,6 +202,7 @@ function needsReducerHotReplace(state: RootState) {
     state.siteBranding === undefined ||
     state.orders === undefined ||
     state.providerOrders === undefined ||
+    state.crewOrders === undefined ||
     state.customers === undefined ||
     state.estimates === undefined ||
     state.customerQuotes === undefined ||

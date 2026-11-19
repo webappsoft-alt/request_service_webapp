@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
   AlertCircle,
-  ArrowLeft,
+  FilePlus2,
   CheckCircle2,
   Clock,
   ExternalLink,
@@ -13,10 +13,7 @@ import {
   Info,
   Mail,
   MapPin,
-  Navigation,
   Phone,
-  Play,
-  RefreshCw,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -35,7 +32,19 @@ import {
   formatPaymentStatus,
   OrderStatusPill,
 } from "@/components/portal/orders/order-status-pill";
+import { orderStatusAsJob } from "@/components/portal/orders/crew-work-list";
+import { JobStatusPill } from "@/components/technician/tech-ui";
+import {
+  CrewCompletionBanner,
+  CrewOrderClockCard,
+  OrderCrewActions,
+  OrderCrewCard,
+  OrderInvoiceAction,
+} from "@/components/portal/orders/order-crew";
+import { TechChatButton } from "@/components/tech-chat/tech-chat-button";
+import { OrderRequestsTab, orderPendingRequests } from "@/components/portal/orders/order-requests-tab";
 import { RecordWorkspace, type RecordTab } from "@/components/portal/record-workspace";
+import { subscribeRealtime } from "@/components/realtime/realtime-provider";
 import { StatusPill } from "@/components/portal/status-pill";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -50,7 +59,10 @@ import {
   clearProviderOrdersError,
   completeProviderOrder,
   fetchProviderOrderById,
+  getOrderApiScope,
   proposeChangeOrder,
+  setOrderApiScope,
+  type OrderApiScope,
   rejectProviderOrder,
   startWorkProviderOrder,
   transitProviderOrder,
@@ -113,14 +125,15 @@ function ChangeOrdersTabPanel({
 }: {
   order: ProviderOrder;
   loading: boolean;
-  onPropose: () => void;
+  /** Omitted on the Pro's page — only the assigned crew proposes change orders in the field. */
+  onPropose?: () => void;
   proposeDisabled: boolean;
 }) {
   const changeOrders = Array.isArray(order.changeOrders)
     ? order.changeOrders
     : [];
-  const canPropose =
-    order.status === "IN_PROGRESS" || order.status === "ARRIVED";
+  const inField = order.status === "IN_PROGRESS" || order.status === "ARRIVED";
+  const canPropose = inField && Boolean(onPropose);
 
   if (loading) {
     return (
@@ -169,6 +182,9 @@ function ChangeOrdersTabPanel({
               {co.createdAt ? (
                 <span className="text-muted-foreground">
                   Submitted {formatDate(co.createdAt)}
+                  {co.requestedBy && co.requestedBy.type !== "provider" && co.requestedBy.name
+                    ? ` by ${co.requestedBy.name}`
+                    : ""}
                 </span>
               ) : null}
             </div>
@@ -206,7 +222,9 @@ function ChangeOrdersTabPanel({
       <p className="mx-auto max-w-md text-xs text-muted-foreground">
         {canPropose
           ? "In-field scope changes and extra parts will appear here after you propose them."
-          : order.status === "BOOKING_REQUESTED" ||
+          : !onPropose && order.status !== "SETTLED" && order.status !== "CANCELLED"
+            ? "Change orders raised by the assigned employee or contractor in the field will appear here."
+            : order.status === "BOOKING_REQUESTED" ||
               order.status === "CONFIRMED" ||
               order.status === "IN_TRANSIT"
             ? "Change orders become available after you arrive on site and start work."
@@ -259,6 +277,40 @@ function formatSlotWindow(
   return `${dateStr} at ${timeStr}${endStr}${durationStr}`;
 }
 
+/** Pro's page: the Pro assigns & manages; the assigned employee / contractor runs the field steps. */
+function getProStageBanner(status: string, hasCrew: boolean) {
+  const assign = hasCrew
+    ? ""
+    : " Assign an employee or contractor so they can run it from their portal.";
+  switch (status) {
+    case "CONFIRMED":
+      return {
+        tone: "border-blue-200 bg-blue-50/80 text-blue-950",
+        message: hasCrew
+          ? "Order is confirmed. The assigned crew departs, checks in on site and runs the work from their portal — status updates here live."
+          : `Order is confirmed.${assign}`,
+      };
+    case "IN_TRANSIT":
+      return {
+        tone: "border-amber-200 bg-amber-50/80 text-amber-950",
+        message: "The assigned crew is en route to the property. Arrival is verified against the 200m geofence.",
+      };
+    case "ARRIVED":
+      return {
+        tone: "border-purple-200 bg-purple-50/80 text-purple-950",
+        message: "The assigned crew is on site (arrival verified) and about to start work.",
+      };
+    case "IN_PROGRESS":
+      return {
+        tone: "border-purple-200 bg-purple-50/80 text-purple-950",
+        message:
+          "Work is in progress by the assigned crew. Change orders and completion proof they submit appear in the tabs below.",
+      };
+    default:
+      return getOrderStageBanner(status);
+  }
+}
+
 function getOrderStageBanner(status: string) {
   switch (status) {
     case "BOOKING_REQUESTED":
@@ -283,13 +335,13 @@ function getOrderStageBanner(status: string) {
       return {
         tone: "border-purple-200 bg-purple-50/80 text-purple-950",
         message:
-          "Arrival on site verified. Click Start Work when ready to commence physical service execution.",
+          "Arrival on site verified. Check in to start the work — your time is tracked until you check out.",
       };
     case "IN_PROGRESS":
       return {
         tone: "border-purple-200 bg-purple-50/80 text-purple-950",
         message:
-          "Service work is currently in progress. If unexpected scope or parts are needed, propose a change order. When finished, submit work completion with photos.",
+          "Work is in progress. Check out to pause (e.g. a break) and check in again to resume. Propose a change order for extra scope or parts, and Complete Work with photos when finished.",
       };
     case "CHANGE_ORDER_PENDING":
       return {
@@ -322,7 +374,22 @@ function getOrderStageBanner(status: string) {
   }
 }
 
-export function OrderDetailPageView({ id }: { id: string }) {
+/**
+ * `viewer`: "provider" = the Pro's order page (/pro/dashboard/orders/[id]); "technician" /
+ * "contractor" = the same screen in the crew portals for an assigned employee / contractor — the
+ * thunks call that portal's order API, and Pro-only parts (accept / decline / cancel, payout,
+ * financials, crew editing) are hidden.
+ */
+export function OrderDetailPageView({ id, viewer = "provider" }: { id: string; viewer?: OrderApiScope }) {
+  // Before any fetch below: point the order thunks at this portal's API.
+  if (getOrderApiScope() !== viewer) setOrderApiScope(viewer);
+  const isPro = viewer === "provider";
+  const listHref =
+    viewer === "technician" ? "/technical/orders" : viewer === "contractor" ? "/contractor/orders" : "/pro/dashboard/orders";
+  // Crew: fixed-price orders are listed under Jobs, so "back" goes to the Jobs list.
+  const backHref =
+    viewer === "technician" ? "/technical/jobs" : viewer === "contractor" ? "/contractor/jobs" : listHref;
+  const backLabel = isPro ? "Back to fixed service orders" : "Back to my jobs";
   const dispatch = useAppDispatch();
   const {
     selectedOrder: selectedOrder,
@@ -384,19 +451,26 @@ export function OrderDetailPageView({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when order id changes
   }, [id]);
 
+  // Live status sync: the Pro, assigned crew and the customer all move the same order
+  // (ORDER_UPDATED reaches every party's socket) — reload when it's this one.
+  const refreshRef = useRef(refreshOrder);
+  useEffect(() => {
+    refreshRef.current = refreshOrder;
+  });
+  useEffect(() => {
+    return subscribeRealtime((detail) => {
+      if (String(detail?.type || "") !== "ORDER_UPDATED") return;
+      const payload = (detail.payload || {}) as { id?: string; orderId?: string };
+      if (String(payload.id || payload.orderId || "") === id) void refreshRef.current();
+    });
+  }, [id]);
+
   useEffect(() => {
     if (error && !loading) {
       toast.error(error);
       dispatch(clearProviderOrdersError());
     }
   }, [dispatch, error, loading]);
-
-  const handleRefresh = () => {
-    if (id) {
-      refreshOrder();
-      toast.success("Order refreshed.");
-    }
-  };
 
   const handleAccept = async () => {
     if (!displayOrder) return;
@@ -531,7 +605,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
       <div className="rounded-md border border-border-soft bg-card p-6">
         <h1 className="text-lg font-semibold">Order not found</h1>
         <Button asChild className="mt-4 h-8" size="sm">
-          <Link href="/pro/dashboard/orders">Back to fixed service orders</Link>
+          <Link href={backHref}>{backLabel}</Link>
         </Button>
       </div>
     );
@@ -570,17 +644,48 @@ export function OrderDetailPageView({ id }: { id: string }) {
       label: `Change Orders (${order.changeOrders?.length || 0})`,
     },
     { id: "completion", label: "Completion & Proof" },
-    { id: "financials", label: "Financials" },
+    // Pro: crew completion requests, same tab + badge as a job's Requests.
+    ...(isPro ? [{ id: "requests", label: "Requests", alert: orderPendingRequests(order) }] : []),
+    ...(isPro ? [{ id: "financials", label: "Financials" }] : []),
   ];
 
-  const banner = getOrderStageBanner(order.status);
+  const hasCrew =
+    (order.crew?.employees?.length || 0) + (order.crew?.contractors?.length || 0) > 0;
+  // Crew can complete / raise change orders only while checked in on an in-progress order.
+  // Crew: same as a job — once clocked in the order is in progress; Mark complete / Request scope change then open.
+  const completionPending = order.crewCompletion?.status === "pending";
+  const completionRejected = order.crewCompletion?.status === "rejected";
+  const crewWorking = !isPro && order.status === "IN_PROGRESS" && !completionPending;
+  const crewClosed = ["WORK_COMPLETED", "SETTLED", "CANCELLED"].includes(order.status);
+  const banner = isPro
+    ? completionPending
+      ? {
+          tone: "border-amber-200 bg-amber-50/80 text-amber-950",
+          message: `${order.crewCompletion?.submittedBy?.name || "The crew"} marked the work complete. Review the proof on the Requests tab — approve to send it to the customer, or request re-work.`,
+        }
+      : order.status === "WORK_COMPLETED"
+        ? {
+            tone: "border-emerald-200 bg-emerald-50/80 text-emerald-950",
+            message: !order.invoice
+              ? "Work approved. Convert the order to an invoice and send it to the customer — they pay it, then sign off."
+              : order.invoice.status === "paid"
+                ? `Invoice ${order.invoice.number} is paid. Waiting for the customer to sign off.`
+                : order.invoice.status === "draft"
+                  ? `Invoice ${order.invoice.number} is a draft. Open it and send it to the customer.`
+                  : `Invoice ${order.invoice.number} was sent. The customer pays it, then signs off.`,
+          }
+        : getProStageBanner(order.status, hasCrew)
+    : getOrderStageBanner(order.status);
 
   return (
     <>
       <RecordWorkspace
-        href={`/pro/dashboard/orders/${order.id}`}
+        href={`${listHref}/${order.id}`}
         label={`${orderLabel} · ${serviceTitle}`}
+        backHref={backHref}
+        backLabel={backLabel}
         kind="order"
+        trackOpen={isPro}
         tabs={tabs}
         subnavTabs={["change_orders", "completion"]}
         subnav={(activeTab) => {
@@ -595,7 +700,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                     In-field scope modifications and additional parts.
                   </p>
                 </div>
-                {order.status === "IN_PROGRESS" || order.status === "ARRIVED" ? (
+                {crewWorking ? (
                   <Button
                     size="sm"
                     className="h-8 shrink-0 gap-1.5"
@@ -620,7 +725,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                     Completion notes, proof photos, and customer sign-off.
                   </p>
                 </div>
-                {order.status === "IN_PROGRESS" ? (
+                {crewWorking ? (
                   <Button
                     size="sm"
                     className="h-8 shrink-0 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -636,32 +741,51 @@ export function OrderDetailPageView({ id }: { id: string }) {
           }
           return null;
         }}
-        badge={<OrderStatusPill status={order.status} full />}
+        // Crew: job-style status (Scheduled / In progress / Completed / Paid), like their jobs.
+        badge={isPro ? <OrderStatusPill status={order.status} full /> : <JobStatusPill status={orderStatusAsJob(order.status)} />}
         actions={
           <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-              className="h-8 gap-1.5 border-border-soft text-xs"
-            >
-              <Link href="/pro/dashboard/orders">
-                <ArrowLeft className="size-3.5" /> Back to fixed service orders
-              </Link>
-            </Button>
+            {/* Pro: assign crew (same buttons as a job). Crew: on-site check in / out. */}
+            {isPro ? (
+              <>
+                <OrderInvoiceAction order={order} onChanged={refreshOrder} />
+                <OrderCrewActions order={order} onChanged={refreshOrder} />
+              </>
+            ) : (
+              // Same header as a job in the crew portals. Previous: Check in / Check out + Depart / Arrive / Start work.
+              <>
+                <Button
+                  size="sm"
+                  className="h-8 gap-1.5 bg-emerald-600 text-xs text-white hover:bg-emerald-700"
+                  disabled={!crewWorking || isActionLoading}
+                  title={
+                    crewWorking
+                      ? "Send proof photos to the office to close this job"
+                      : completionPending
+                        ? "Waiting for the office to review your completion."
+                        : "Clock in on site to start the work first."
+                  }
+                  onClick={() => setActiveModal("complete")}
+                >
+                  <CheckCircle2 className="size-3.5" /> {completionRejected ? "Resubmit work" : "Mark complete"}
+                </Button>
+                {viewer === "technician" ? (
+                  <TechChatButton side="technician" contextType="general" label="Chat with office" className="h-8" />
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs"
+                  disabled={!crewWorking || isActionLoading}
+                  title={crewWorking ? undefined : crewClosed ? "This job is closed." : "Clock in on site to start the work first."}
+                  onClick={() => setActiveModal("changeOrder")}
+                >
+                  <FilePlus2 className="size-3.5" /> Request scope change
+                </Button>
+              </>
+            )}
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={loading && !order}
-              className="h-8 gap-1.5 border-border-soft text-xs"
-            >
-              <RefreshCw className={`size-3.5 ${loading && !order ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-
-            {order.status === "BOOKING_REQUESTED" ? (
+            {isPro && order.status === "BOOKING_REQUESTED" ? (
               <div className="flex shrink-0 items-center justify-end gap-2">
                 <Button
                   size="sm"
@@ -683,82 +807,40 @@ export function OrderDetailPageView({ id }: { id: string }) {
               </div>
             ) : null}
 
+            {/* Field steps (Depart → Arrive → Start → Change order → Complete) are the assigned
+                crew's — shown only in their portal. The Pro assigns, manages and can cancel. */}
             {order.status === "CONFIRMED" && (
               <>
-                <Button
-                  size="sm"
-                  onClick={() => setActiveModal("transit")}
-                  disabled={isActionLoading}
-                  className="h-8 gap-1.5 bg-blue-600 text-xs font-medium text-white hover:bg-blue-700"
-                >
-                  <Navigation className="size-3.5" /> Depart
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setActiveModal("cancel")}
-                  disabled={isActionLoading}
-                  className="h-8 gap-1.5 border-red-200 text-xs text-red-600 hover:bg-red-50"
-                >
-                  <AlertCircle className="size-3.5" /> Cancel
-                </Button>
+                {isPro ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setActiveModal("cancel")}
+                    disabled={isActionLoading}
+                    className="h-8 gap-1.5 border-red-200 text-xs text-red-600 hover:bg-red-50"
+                  >
+                    <AlertCircle className="size-3.5" /> Cancel
+                  </Button>
+                ) : null}
               </>
             )}
 
             {order.status === "IN_TRANSIT" && (
               <>
-                <Button
-                  size="sm"
-                  onClick={() => setActiveModal("arrive")}
-                  disabled={isActionLoading}
-                  className="h-8 gap-1.5 bg-amber-600 text-xs font-medium text-white hover:bg-amber-700"
-                >
-                  <MapPin className="size-3.5" /> Arrive On-Site
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setActiveModal("cancel")}
-                  disabled={isActionLoading}
-                  className="h-8 gap-1.5 border-red-200 text-xs text-red-600 hover:bg-red-50"
-                >
-                  <AlertCircle className="size-3.5" /> Cancel
-                </Button>
+                {isPro ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setActiveModal("cancel")}
+                    disabled={isActionLoading}
+                    className="h-8 gap-1.5 border-red-200 text-xs text-red-600 hover:bg-red-50"
+                  >
+                    <AlertCircle className="size-3.5" /> Cancel
+                  </Button>
+                ) : null}
               </>
             )}
 
-            {order.status === "ARRIVED" && (
-              <Button
-                size="sm"
-                onClick={() => setActiveModal("startWork")}
-                disabled={isActionLoading}
-                className="h-8 gap-1.5 bg-purple-600 text-xs font-medium text-white hover:bg-purple-700"
-              >
-                <Play className="size-3.5" /> Start Work
-              </Button>
-            )}
-
-            {order.status === "IN_PROGRESS" && (
-              <>
-                <Button
-                  size="sm"
-                  onClick={() => setActiveModal("complete")}
-                  disabled={isActionLoading}
-                  className="h-8 gap-1.5 bg-emerald-600 text-xs font-medium text-white hover:bg-emerald-700"
-                >
-                  <CheckCircle2 className="size-3.5" /> Complete Work
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setActiveModal("changeOrder")}
-                  disabled={isActionLoading}
-                  className="h-8 gap-1.5 border-border-soft text-xs"
-                >
-                  <FileEdit className="size-3.5" /> + Change Order
-                </Button>
-              </>
-            )}
           </div>
         }
       >
@@ -786,6 +868,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                           : ""}
                       </p>
                     </div>
+                    {isPro ? (
                     <div className="rounded-md bg-secondary px-3 py-2 text-right">
                       <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
                         Payout total
@@ -797,8 +880,13 @@ export function OrderDetailPageView({ id }: { id: string }) {
                         </span>
                       </p>
                     </div>
+                    ) : null}
                   </div>
 
+                  {/* Crew sees where their completion stands. The Pro reviews it on the Requests tab
+                      (like a job). Previous: an inline review card here on the Pro's Summary. */}
+                  {!isPro ? <CrewCompletionBanner order={order} /> : null}
+                  {isPro ? (
                   <div
                     className={cn(
                       "flex items-start gap-2.5 rounded-md border px-4 py-3 text-sm",
@@ -808,6 +896,13 @@ export function OrderDetailPageView({ id }: { id: string }) {
                     <Info className="mt-0.5 size-4 shrink-0" />
                     <span>{banner.message}</span>
                   </div>
+                  ) : (
+                    // Crew: "Time on this job" card, same as a job (Clock In starts the work).
+                    <CrewOrderClockCard order={order} portal={viewer} onChanged={refreshOrder} />
+                  )}
+
+                  {/* Assigned employees / contractors (Pro: edit; crew: who else is on it). */}
+                  <OrderCrewCard order={order} onChanged={refreshOrder} viewer={viewer} />
 
                   {slotLabel ? (
                     <div className="rounded-md bg-sky-50 px-4 py-2.5 text-sm">
@@ -823,7 +918,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
 
                   <div className="grid gap-4 lg:grid-cols-5">
                     <SoftPanel
-                      title="Service & payout"
+                      title={isPro ? "Service & payout" : "Service"}
                       className="lg:col-span-3"
                     >
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -840,14 +935,18 @@ export function OrderDetailPageView({ id }: { id: string }) {
                               : "—"
                           }
                         />
-                        <Fact
-                          label="Total Payout"
-                          value={`${payoutTotal} ${payoutCurrency}`}
-                        />
-                        <Fact
-                          label="Payment Status"
-                          value={formatPaymentStatus(order.payment?.status)}
-                        />
+                        {isPro ? (
+                          <>
+                            <Fact
+                              label="Total Payout"
+                              value={`${payoutTotal} ${payoutCurrency}`}
+                            />
+                            <Fact
+                              label="Payment Status"
+                              value={formatPaymentStatus(order.payment?.status)}
+                            />
+                          </>
+                        ) : null}
                         <Fact label="Order Number" value={orderLabel} />
                         <Fact
                           label="Created At"
@@ -919,10 +1018,12 @@ export function OrderDetailPageView({ id }: { id: string }) {
                         label="Subcategory"
                         value={order.service?.subcategory || "—"}
                       />
-                      <Fact
-                        label="Base Price"
-                        value={`$${order.service?.basePrice?.toFixed(2) || order.pricing?.basePrice?.toFixed(2) || "0.00"}`}
-                      />
+                      {isPro ? (
+                        <Fact
+                          label="Base Price"
+                          value={`${order.service?.basePrice?.toFixed(2) || order.pricing?.basePrice?.toFixed(2) || "0.00"}`}
+                        />
+                      ) : null}
                       <Fact
                         label="Billing Unit"
                         value={order.service?.unit || "per visit"}
@@ -1093,7 +1194,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                 <ChangeOrdersTabPanel
                   order={order}
                   loading={showLoading}
-                  onPropose={() => setActiveModal("changeOrder")}
+                  onPropose={crewWorking ? () => setActiveModal("changeOrder") : undefined}
                   proposeDisabled={isActionLoading}
                 />
               );
@@ -1194,6 +1295,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                             : "—"
                         }
                       />
+                      {isPro ? (
                       <Fact
                         label="Tip Added"
                         value={
@@ -1202,6 +1304,7 @@ export function OrderDetailPageView({ id }: { id: string }) {
                             : "$0.00"
                         }
                       />
+                      ) : null}
                     </div>
                     {order.completionDetails?.customerSignOff?.review ? (
                       <div className="border-t border-border-soft pt-3 text-xs text-muted-foreground">
@@ -1215,7 +1318,10 @@ export function OrderDetailPageView({ id }: { id: string }) {
                 </div>
               );
 
+            case "requests":
+              return <OrderRequestsTab order={order} onDecided={refreshOrder} />;
             case "financials":
+              if (!isPro) return null;
               return (
                 <div className="max-w-xl space-y-4">
                   <SoftPanel title="Financial Breakdown">

@@ -126,7 +126,44 @@ export const providerOrdersApi = {
   complete: (id: string) => `provider/orders/${id}/complete`,
   /** PUT provider emergency cancellation */
   cancel: (id: string) => `provider/orders/${id}/cancel`,
-} as const;
+  /** GET crew (employees + contractors) on the order */
+  crew: (id: string) => `provider/orders/${id}/crew`,
+  /** PUT { employeeIds } — assign / remove employees */
+  crewEmployees: (id: string) => `provider/orders/${id}/crew/employees`,
+  /** DELETE one employee (blocked once they started work) */
+  crewEmployee: (id: string, employeeId: string) => `provider/orders/${id}/crew/employees/${employeeId}`,
+  /** POST assign / update one contractor */
+  crewContractors: (id: string) => `provider/orders/${id}/crew/contractors`,
+  /** DELETE one contractor (blocked once they started work) */
+  crewContractor: (id: string, contractorId: string) => `provider/orders/${id}/crew/contractors/${contractorId}`,
+  /** Pro reviews the crew's "Mark complete" (approve → customer; reject → re-work). */
+  completionApprove: (id: string) => `provider/orders/${id}/completion/approve`,
+  completionReject: (id: string) => `provider/orders/${id}/completion/reject`,
+  /** Completed order → draft invoice (like a job's Convert to invoice). */
+  convertToInvoice: (id: string) => `provider/orders/${id}/convert-to-invoice`,
+};
+
+/**
+ * Fixed service orders for assigned crew — technician portal (`technician/orders`) and contractor
+ * portal (`contractor/orders`). Same lifecycle endpoints as providerOrdersApi (no accept / reject /
+ * cancel), plus on-site check-in / check-out.
+ */
+export function crewOrdersApi(portal: "technician" | "contractor") {
+  const base = `${portal}/orders`;
+  return {
+    ...providerOrdersApi,
+    list: base,
+    count: `${base}/count`,
+    byId: (id: string) => `${base}/${id}`,
+    transit: (id: string) => `${base}/${id}/transit`,
+    arrive: (id: string) => `${base}/${id}/arrive`,
+    startWork: (id: string) => `${base}/${id}/start-work`,
+    changeOrder: (id: string) => `${base}/${id}/change-order`,
+    complete: (id: string) => `${base}/${id}/complete`,
+    checkIn: (id: string) => `${base}/${id}/check-in`,
+    checkOut: (id: string) => `${base}/${id}/check-out`,
+  };
+}
 
 /** Provider CRM / FSM endpoints (Bearer JWT, role: provider). */
 export const providerCrmApi = {

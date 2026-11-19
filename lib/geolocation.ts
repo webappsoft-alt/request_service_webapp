@@ -3,7 +3,9 @@
  * resume against the job site (200 m), so location must be on for those.
  */
 
-export type DeviceLocation = { lat: number; lng: number; accuracy: number };
+import { getCachedFix } from "@/lib/location-cache";
+
+export type DeviceLocation ={ lat: number; lng: number; accuracy: number };
 
 export class LocationError extends Error {
   /** Short heading for the toast. */
@@ -25,6 +27,13 @@ export function getDeviceLocation(timeoutMs = 15000): Promise<DeviceLocation> {
           "This browser can't share your location. Use a phone or browser with location services to check in/out.",
         ),
       );
+      return;
+    }
+    // Crew portals keep a warm fix (lib/location-cache); one from the last 30 s is as fresh as
+    // the maximumAge below already allows, so use it instantly.
+    const warm = getCachedFix(30000);
+    if (warm) {
+      resolve({ lat: warm.lat, lng: warm.lng, accuracy: warm.accuracy });
       return;
     }
     navigator.geolocation.getCurrentPosition(

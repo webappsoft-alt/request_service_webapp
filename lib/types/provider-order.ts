@@ -75,6 +75,8 @@ export interface ProviderChangeOrderItem {
   status?: "PENDING" | "APPROVED" | "REJECTED" | string;
   createdAt?: string;
   respondedAt?: string;
+  /** Who raised it: the Pro, or an assigned employee / contractor. */
+  requestedBy?: OrderActor | null;
 }
 
 export interface ProviderCustomerSignOff {
@@ -105,7 +107,94 @@ export interface ProviderBookingSnapshot {
   durationMinutes?: number;
 }
 
+/** Someone who moved the order through a step: the Pro, or assigned crew. */
+export interface OrderActor {
+  type: "provider" | "employee" | "contractor";
+  id?: string | null;
+  name: string;
+}
+
+/** Shared by employees and contractors on a fixed service order (GET …/orders/:id → crew). */
+interface OrderCrewMemberBase {
+  name: string;
+  trade?: string;
+  phone?: string;
+  email?: string;
+  hasPortalAccess: boolean;
+  /** Checked in on the order, or moved it through a step → can't be removed. */
+  started: boolean;
+  checkedIn: boolean;
+  firstCheckInAt?: string | null;
+  lastCheckOutAt?: string | null;
+  removable: boolean;
+}
+
+export interface OrderCrewEmployee extends OrderCrewMemberBase {
+  employeeId: string;
+  role?: string;
+}
+
+export interface OrderCrewContractor extends OrderCrewMemberBase {
+  contractorId: string;
+  title?: string;
+  instructions?: string;
+  startAt?: string | null;
+  endAt?: string | null;
+  payType?: "hourly" | "fixed";
+  payRate?: number;
+}
+
+export interface OrderCrew {
+  employees: OrderCrewEmployee[];
+  contractors: OrderCrewContractor[];
+  lastActor?: OrderActor | null;
+}
+
+/** Crew "Mark complete" waiting for / reviewed by the Pro (like a job completion request). */
+export interface OrderCrewCompletion {
+  status: "none" | "pending" | "approved" | "rejected";
+  submittedBy: OrderActor | null;
+  submittedAt: string | null;
+  photos: string[];
+  notes: string;
+  reviewNote: string;
+  reviewedAt: string | null;
+}
+
+/** The order's invoice (Pro "Convert to invoice" after completion; customer pays, then signs off). */
+export interface OrderInvoiceSummary {
+  id: string;
+  number: string;
+  status: string;
+  total: number;
+  amountPaid: number;
+  balanceDue: number;
+  dueAt: string | null;
+}
+
+/** Parse the API's `invoice` summary on an order (null when none / not visible). */
+export function parseOrderInvoice(raw: unknown): OrderInvoiceSummary | null {
+  if (!raw || typeof raw !== "object") return null;
+  const rec = raw as Record<string, unknown>;
+  const id = typeof rec.id === "string" ? rec.id : "";
+  if (!id) return null;
+  return {
+    id,
+    number: typeof rec.number === "string" ? rec.number : "",
+    status: typeof rec.status === "string" ? rec.status : "draft",
+    total: Number(rec.total) || 0,
+    amountPaid: Number(rec.amountPaid) || 0,
+    balanceDue: Number(rec.balanceDue) || 0,
+    dueAt: typeof rec.dueAt === "string" ? rec.dueAt : null,
+  };
+}
+
 export interface ProviderOrder {
+  /** Invoice created from this order (Pro view; customer once sent). */
+  invoice?: OrderInvoiceSummary | null;
+  /** Assigned employees / contractors (Pro + crew views; absent for customers). */
+  crew?: OrderCrew;
+  crewCompletion?: OrderCrewCompletion;
   id: string;
   orderNumber: string;
   bookingId?: string;

@@ -11,6 +11,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { contractorRefreshRequested } from "@/store/contractorPortalSlice";
 import { techRefreshRequested } from "@/store/technicianSlice";
 import { timeEntryReceived } from "@/store/timeTrackingSlice";
+import { startLocationWarmup } from "@/lib/location-cache";
 
 /** Report at most this often unless the device moved farther than MIN_MOVE_METERS. */
 const MIN_INTERVAL_MS = 30_000;
@@ -174,4 +175,13 @@ export function ContractorGeofenceWatch() {
       }}
     />
   );
+}
+
+/**
+ * Crew portals: start watching the device position as soon as the portal opens (and follow it
+ * while it moves), so Depart / Arrive / Check in use a ready fix instead of waiting for GPS.
+ */
+export function CrewLocationWarmup() {
+  useEffect(() => startLocationWarmup(), []);
+  return null;
 }

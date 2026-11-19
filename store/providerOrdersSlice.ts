@@ -5,7 +5,7 @@ import {
 } from "@reduxjs/toolkit";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { getData, postData, putData } from "@/components/api/sliceHttp";
-import { providerOrdersApi } from "@/components/api/ApiRoutesFile";
+import { crewOrdersApi, providerOrdersApi } from "@/components/api/ApiRoutesFile";
 import type {
   ArriveOrderPayload,
   CancelOrderPayload,
@@ -18,7 +18,47 @@ import type {
   ProviderOrdersQueryParams,
   RejectOrderPayload,
   TransitOrderPayload,
+  OrderCrew,
+  OrderActor,
 } from "@/lib/types/provider-order";
+import { parseOrderInvoice } from "@/lib/types/provider-order";
+
+/**
+ * Which portal's order API the thunks call. The Pro uses /provider/orders; the technician and
+ * contractor portals reuse the same order screens against /technician/orders and
+ * /contractor/orders (set once by that portal's order page).
+ */
+export type OrderApiScope = "provider" | "technician" | "contractor";
+let orderApiScope: OrderApiScope = "provider";
+export function setOrderApiScope(scope: OrderApiScope) {
+  orderApiScope = scope;
+}
+export function getOrderApiScope(): OrderApiScope {
+  return orderApiScope;
+}
+function orderApi() {
+  return orderApiScope === "provider" ? providerOrdersApi : crewOrdersApi(orderApiScope);
+}
+
+function asActor(value: unknown): OrderActor | null {
+  const rec = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+  if (!rec || typeof rec.type !== "string") return null;
+  return {
+    type: rec.type as OrderActor["type"],
+    id: rec.id != null ? String(rec.id) : null,
+    name: typeof rec.name === "string" ? rec.name : "",
+  };
+}
+
+function asCrew(value: unknown): OrderCrew | undefined {
+  const rec = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+  if (!rec) return undefined;
+  return {
+    employees: Array.isArray(rec.employees) ? (rec.employees as OrderCrew["employees"]) : [],
+    contractors: Array.isArray(rec.contractors) ? (rec.contractors as OrderCrew["contractors"]) : [],
+    lastActor: asActor(rec.lastActor),
+  };
+}
 
 export type ProviderOrdersState = {
   items: ProviderOrder[];
@@ -167,6 +207,7 @@ function normalizeOrder(raw: unknown): ProviderOrder {
     "";
 
   return {
+    crew: asCrew(record.crew),
     id: pickId(record),
     orderNumber:
       typeof record.orderNumber === "string" ? record.orderNumber : "",
@@ -320,8 +361,24 @@ function normalizeOrder(raw: unknown): ProviderOrder {
           typeof coRec.respondedAt === "string"
             ? coRec.respondedAt
             : undefined,
+        requestedBy: asActor(coRec.requestedBy),
       };
     }),
+    invoice: parseOrderInvoice(record.invoice),
+    crewCompletion: (() => {
+      const cc = asRecord(record.crewCompletion);
+      if (!cc) return undefined;
+      const status = String(cc.status || "none");
+      return {
+        status: (["pending", "approved", "rejected"].includes(status) ? status : "none") as "none" | "pending" | "approved" | "rejected",
+        submittedBy: asActor(cc.submittedBy) ?? null,
+        submittedAt: typeof cc.submittedAt === "string" ? cc.submittedAt : null,
+        photos: Array.isArray(cc.photos) ? cc.photos.filter((p): p is string => typeof p === "string") : [],
+        notes: typeof cc.notes === "string" ? cc.notes : "",
+        reviewNote: typeof cc.reviewNote === "string" ? cc.reviewNote : "",
+        reviewedAt: typeof cc.reviewedAt === "string" ? cc.reviewedAt : null,
+      };
+    })(),
     completionDetails: completionDetails
       ? {
           notes:
@@ -507,7 +564,7 @@ export const fetchProviderOrders = createAsyncThunk<
       if (search && search.trim()) {
         query.search = search.trim();
       }
-      const response = await getData(providerOrdersApi.list, query, {
+      const response = await getData(orderApi().list, query, {
         silent: true,
         force: true,
       });
@@ -538,7 +595,7 @@ export const fetchProviderOrderById = createAsyncThunk<
   const trimmed = String(id || "").trim();
   if (!trimmed) return rejectWithValue("Order ID is required.");
   try {
-    const response = await getData(providerOrdersApi.byId(trimmed), undefined, {
+    const response = await getData(orderApi().byId(trimmed), undefined, {
       silent: true,
       force: true,
     });
@@ -616,7 +673,7 @@ export const transitProviderOrder = createAsyncThunk<
   const trimmed = String(payload.id || "").trim();
   try {
     const response = await putData(
-      providerOrdersApi.transit(trimmed),
+      orderApi().transit(trimmed),
       {
         startCoordinates: payload.startCoordinates,
       },
@@ -646,7 +703,7 @@ export const arriveProviderOrder = createAsyncThunk<
   const trimmed = String(payload.id || "").trim();
   try {
     const response = await putData(
-      providerOrdersApi.arrive(trimmed),
+      orderApi().arrive(trimmed),
       {
         coordinates: payload.coordinates,
       },
@@ -675,7 +732,7 @@ export const startWorkProviderOrder = createAsyncThunk<
 >("providerOrders/startWork", async (id, { rejectWithValue }) => {
   const trimmed = String(id || "").trim();
   try {
-    const response = await putData(providerOrdersApi.startWork(trimmed), undefined, {
+    const response = await putData(orderApi().startWork(trimmed), undefined, {
       silent: true,
     });
     const root = asRecord(response) ?? {};
@@ -701,7 +758,7 @@ export const proposeChangeOrder = createAsyncThunk<
   const trimmed = String(payload.id || "").trim();
   try {
     const response = await postData(
-      providerOrdersApi.changeOrder(trimmed),
+      orderApi().changeOrder(trimmed),
       {
         description: payload.description,
         reason: payload.reason,
@@ -733,7 +790,7 @@ export const completeProviderOrder = createAsyncThunk<
   const trimmed = String(payload.id || "").trim();
   try {
     const response = await putData(
-      providerOrdersApi.complete(trimmed),
+      orderApi().complete(trimmed),
       {
         completionNotes: payload.completionNotes,
         beforePhotos: payload.beforePhotos || [],

@@ -247,6 +247,8 @@ export interface CustomerOrdersListResult {
 /** Detail shape from `GET /api/orders/:id` (populated fields when API returns them). */
 export interface CustomerOrderDetail {
   id: string;
+  /** Fixed order invoice once the Pro sent it — pay it, then sign off. */
+  orderInvoice?: import("./provider-order").OrderInvoiceSummary | null;
   /** Pro jobs: the estimate's project stages and the updates shared with the customer. */
   projectStages?: ProjectStage[];
   projectUpdates?: ProjectUpdate[];

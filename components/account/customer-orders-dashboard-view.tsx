@@ -101,10 +101,22 @@ export function CustomerOrdersDashboardView() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState("all");
   const [search, setSearch] = useState("");
+  /** Search sent to the API (debounced) so it covers every order, not just the loaded page. */
+  const [serverSearch, setServerSearch] = useState("");
+  useEffect(() => {
+    const next = search.trim();
+    if (next === serverSearch) return;
+    const timer = window.setTimeout(() => {
+      setServerSearch(next);
+      setPage(1);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [search, serverSearch]);
   const query = {
     page,
     limit: CUSTOMER_ORDERS_PAGE_LIMIT,
     status: status === "all" ? undefined : status,
+    search: serverSearch || undefined,
   };
   // Spinner only when the table would show a different page/filter; a refresh of
   // the rows already on screen happens silently in the background.
@@ -122,24 +134,9 @@ export function CustomerOrdersDashboardView() {
     return map;
   }, [changeOrders]);
 
-  const visibleOrders = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) return orders;
-    return orders.filter((row) => {
-      const cos = changeOrdersByJob.get(row.id) || [];
-      return [
-        orderServiceTitle(row),
-        row.orderNumber,
-        row.provider?.companyName,
-        row.status,
-        ...cos.map((co) => `${co.number} ${co.title}`),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(needle);
-    });
-  }, [changeOrdersByJob, orders, search]);
+  // Rows come back already filtered by the server search (order #, service, Pro, address).
+  // Previous: filtered only the loaded page client-side, so the count / pages never changed.
+  const visibleOrders = orders;
 
   useEffect(() => {
     if (!auth.hydrated || !isAuthenticated) return;
@@ -159,9 +156,10 @@ export function CustomerOrdersDashboardView() {
         page,
         limit: CUSTOMER_ORDERS_PAGE_LIMIT,
         status: status === "all" ? undefined : status,
+        search: serverSearch || undefined,
       }),
     );
-  }, [auth.hydrated, dispatch, isAuthenticated, page, router, status]);
+  }, [auth.hydrated, dispatch, isAuthenticated, page, router, serverSearch, status]);
 
   if (!auth.hydrated || (!isAuthenticated && !loading)) {
     return <CenteredSpinner label="Checking your account…" />;

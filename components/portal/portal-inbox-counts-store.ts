@@ -7,6 +7,8 @@ export type PortalInboxCounts = {
   newLeads: number;
   unreadChats: number;
   pendingOrders: number;
+  /** Fixed service orders still waiting for Accept / Decline (live; not cleared by opening the page). */
+  awaitingOrders: number;
   pendingEstimates: number;
   /** Unread customer / field updates per section (estimate signed, change order answered…). */
   estimateUpdates: number;
@@ -23,6 +25,7 @@ const KEYS: Array<keyof PortalInboxCounts> = [
   "newLeads",
   "unreadChats",
   "pendingOrders",
+  "awaitingOrders",
   "pendingEstimates",
   "estimateUpdates",
   "jobUpdates",
@@ -36,6 +39,7 @@ const counts: PortalInboxCounts = {
   newLeads: 0,
   unreadChats: 0,
   pendingOrders: 0,
+  awaitingOrders: 0,
   pendingEstimates: 0,
   estimateUpdates: 0,
   jobUpdates: 0,

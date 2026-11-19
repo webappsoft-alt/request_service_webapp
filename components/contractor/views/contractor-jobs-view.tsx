@@ -1,78 +1,142 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { ContractorChatButton, ContractorMapButton } from "@/components/contractor/contractor-job-actions";
 import { CompletionStatePill, RequirementSummary, siteLine } from "@/components/contractor/contractor-ui";
 import { useContractorSectionSeen } from "@/components/contractor/use-contractor-section-seen";
-import { PortalDataTable } from "@/components/portal/portal-data-table";
+import {
+  CrewWorkTable,
+  loadAllPages,
+  orderMatchesJobStatus,
+  orderWorkRow,
+  useCrewOrderRows,
+  type CrewWorkRow,
+} from "@/components/portal/orders/crew-work-list";
+import { markCrewOrdersSeen } from "@/components/portal/orders/use-crew-open-orders";
 import { PortalPage } from "@/components/portal/portal-page";
 import { JobStatusPill } from "@/components/technician/tech-ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { listContractorJobs, type ContractorJob } from "@/lib/api/contractor-portal-client";
 import { contractorPaths } from "@/lib/contractor-paths";
 import { JOB_STATUS_FILTERS } from "@/lib/data/portal";
-import { formatDate } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { CONTRACTOR_PAGE_SIZE, fetchContractorJobs } from "@/store/contractorPortalSlice";
+import { fetchContractorJobs } from "@/store/contractorPortalSlice";
 
 const ALL = "__all__";
 
+/** Jobs per request for the combined list (API max). */
+const JOBS_BATCH = 100;
+
+/**
+ * Contractor "Assigned jobs": jobs and assigned fixed-price orders in ONE list (newest first),
+ * filtered by status. Jobs come from the contractor portal slice (page 1, cached / de-duplicated);
+ * orders from the shared crewOrders slice.
+ * Previous: a server-paged jobs-only table, then an All · Jobs · Fixed price type filter.
+ */
 export function ContractorJobsView() {
   const dispatch = useAppDispatch();
   const { data, loading, error } = useAppSelector((state) => state.contractorPortal.jobs);
   const version = useAppSelector((state) => state.contractorPortal.versions.jobs);
   /** "" = all statuses (nothing sent to the API). */
   const [status, setStatus] = useState("");
-  const [search, setSearch] = useState("");
-  const [debounced, setDebounced] = useState("");
-  const [page, setPage] = useState(1);
+  const { orders, loading: ordersLoading, error: ordersError } = useCrewOrderRows("contractor");
+  /** Jobs beyond the first 100 (rare) — fetched only when the slice page says there are more. */
+  const [moreJobs, setMoreJobs] = useState<ContractorJob[]>([]);
 
   useContractorSectionSeen("jobs");
 
+  // Opening Jobs clears the fixed-price part of the sidebar badge (on open, on new orders, on leave).
   useEffect(() => {
-    const id = window.setTimeout(() => {
-      setDebounced(search);
-      setPage(1);
-    }, 300);
-    return () => window.clearTimeout(id);
-  }, [search]);
+    markCrewOrdersSeen("contractor");
+    return () => markCrewOrdersSeen("contractor");
+  }, [orders]);
 
-  // Fresh data whenever the page opens or a socket refresh lands; the cached
-  // page stays on screen meanwhile.
+  // Fresh data whenever the page opens, the status changes or a socket refresh lands; the cached
+  // list stays on screen meanwhile.
   useEffect(() => {
-    void dispatch(
-      fetchContractorJobs({ page, limit: CONTRACTOR_PAGE_SIZE, search: debounced, status: status || undefined, force: true }),
-    );
-  }, [dispatch, page, debounced, status, version]);
+    void dispatch(fetchContractorJobs({ page: 1, limit: JOBS_BATCH, status: status || undefined, force: true }));
+  }, [dispatch, status, version]);
 
-  const rows = data?.items ?? [];
+  const totalPages = data?.totalPages ?? 1;
+  useEffect(() => {
+    if (totalPages <= 1) {
+      setMoreJobs([]);
+      return;
+    }
+    let cancelled = false;
+    loadAllPages(async (page) =>
+      page === 1 ? { items: [], totalPages } : listContractorJobs({ page, limit: JOBS_BATCH, status: status || undefined }),
+    )
+      .then((items) => {
+        if (!cancelled) setMoreJobs(items);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [status, totalPages, version]);
+
+  const rows = useMemo<CrewWorkRow[]>(() => {
+    const jobRows: CrewWorkRow[] = [...(data?.items ?? []), ...moreJobs].map((row) => ({
+      key: `job:${row.id}`,
+      kind: "job",
+      id: row.id,
+      number: row.number || "Job",
+      title: row.assignment.title || row.title || "",
+      customer: row.customer.name,
+      phone: row.customer.phone,
+      address: siteLine(row),
+      scheduledAt: row.scheduledAt,
+      at: new Date(row.assignment.startAt || row.scheduledAt || 0).getTime() || 0,
+      status: (
+        <div className="flex flex-wrap gap-1.5">
+          <JobStatusPill status={row.status} />
+          <CompletionStatePill job={row} />
+        </div>
+      ),
+      statusText: row.status,
+      done: false,
+      href: contractorPaths.job(row.id),
+      badge: (
+        <p className="text-[11px] text-muted-foreground">
+          <RequirementSummary job={row} />
+        </p>
+      ),
+      addressCell: (
+        <div className="flex items-center gap-2">
+          <span className="line-clamp-2 min-w-0 flex-1">{siteLine(row) || "—"}</span>
+          <ContractorMapButton job={row} compact />
+        </div>
+      ),
+      chat: <ContractorChatButton jobId={row.id} number={row.number} compact />,
+    }));
+    const orderRows = (orders ?? [])
+      .filter((order) => orderMatchesJobStatus(order.status, status))
+      .map((order) => orderWorkRow(order, contractorPaths.order(order.id)));
+    return [...jobRows, ...orderRows];
+  }, [data, moreJobs, orders, status]);
+
+  const listLoading = (loading && !data) || ordersLoading;
+  const listError = error || ordersError;
 
   return (
     <PortalPage
       eyebrow="Contractor / Assigned jobs"
-      title={`Assigned jobs${data ? ` (${data.total})` : ""}`}
+      title={`Assigned jobs${listLoading ? "" : ` (${rows.length})`}`}
       description="Jobs the office assigned to you, with the labor, material, and equipment each one needs."
     >
-      {error ? <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p> : null}
+      {listError ? (
+        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{listError}</p>
+      ) : null}
 
-      <PortalDataTable
+      <CrewWorkTable
         filename="assigned-jobs"
-        countLabel="Jobs"
-        searchPlaceholder="Search job #, title, address"
-        loading={loading}
-        empty={debounced || status ? "No jobs match your filters." : "No jobs assigned to you yet."}
+        loading={listLoading}
         rows={rows}
-        rowKey={(row) => row.id}
-        rowHref={(row) => contractorPaths.job(row.id)}
+        empty={status ? "No jobs match your filters." : "No jobs assigned to you yet."}
         toolbar={
           <div className="h-8 w-40 sm:w-48">
-            <Select
-              value={status || ALL}
-              onValueChange={(value) => {
-                setStatus(value === ALL ? "" : value);
-                setPage(1);
-              }}
-            >
+            <Select value={status || ALL} onValueChange={(value) => setStatus(value === ALL ? "" : value)}>
               <SelectTrigger id="contractor-jobs-status" aria-label="Filter by status" size="sm" className="h-8 w-full border-border-soft text-xs">
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
@@ -86,83 +150,6 @@ export function ContractorJobsView() {
             </Select>
           </div>
         }
-        serverPagination={{
-          page,
-          pageSize: CONTRACTOR_PAGE_SIZE,
-          total: data?.total ?? 0,
-          totalPages: data?.totalPages ?? 1,
-          onPageChange: setPage,
-          search,
-          onSearchChange: setSearch,
-        }}
-        columns={[
-          {
-            id: "number",
-            header: "Job #",
-            sortValue: (row) => row.number,
-            exportValue: (row) => row.number,
-            cell: (row) => (
-              <div className="min-w-0">
-                <Link href={contractorPaths.job(row.id)} className="font-semibold text-primary hover:underline">
-                  {row.number || "Job"}
-                </Link>
-                {row.assignment.title || row.title ? (
-                  <p className="truncate text-xs text-muted-foreground">{row.assignment.title || row.title}</p>
-                ) : null}
-              </div>
-            ),
-          },
-          {
-            id: "scheduled",
-            header: "Scheduled",
-            sortValue: (row) => row.scheduledAt || "",
-            exportValue: (row) => (row.scheduledAt ? formatDate(row.scheduledAt) : ""),
-            cell: (row) => (row.scheduledAt ? formatDate(row.scheduledAt) : "—"),
-          },
-          {
-            id: "site",
-            header: "Site",
-            className: "min-w-56",
-            exportValue: (row) => siteLine(row),
-            cell: (row) => (
-              <div className="flex items-center gap-2">
-                <span className="line-clamp-2 min-w-0 flex-1">{siteLine(row) || "—"}</span>
-                <ContractorMapButton job={row} compact />
-              </div>
-            ),
-          },
-          {
-            id: "requirements",
-            header: "Requirements",
-            exportValue: (row) =>
-              `${row.requirements.labor.length} labor, ${row.requirements.material.length} material, ${row.requirements.equipment.length} equipment`,
-            cell: (row) => (
-              <span className="text-xs">
-                <RequirementSummary job={row} />
-              </span>
-            ),
-          },
-          {
-            id: "status",
-            header: "Status",
-            sortValue: (row) => row.status,
-            exportValue: (row) => row.status,
-            cell: (row) => (
-              <div className="flex flex-wrap gap-1.5">
-                <JobStatusPill status={row.status} />
-                <CompletionStatePill job={row} />
-              </div>
-            ),
-          },
-          {
-            id: "chat",
-            header: "Chat",
-            className: "w-16",
-            exportValue: () => "",
-            cell: (row) => <ContractorChatButton jobId={row.id} number={row.number} compact />,
-          },
-        ]}
-        actions={(row) => [{ label: "Open job", href: contractorPaths.job(row.id) }]}
       />
     </PortalPage>
   );

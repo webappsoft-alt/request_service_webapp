@@ -4,6 +4,9 @@ export const contractorPaths = {
   dashboard: "/contractor/dashboard",
   jobs: "/contractor/jobs",
   job: (id: string) => `/contractor/jobs/${id}`,
+  /** Fixed service orders the office assigned to this contractor. */
+  orders: "/contractor/orders",
+  order: (id: string) => `/contractor/orders/${id}`,
   changeRequests: "/contractor/change-requests",
   schedule: "/contractor/schedule",
   payouts: "/contractor/payouts",

@@ -11,13 +11,11 @@ import {
   ExternalLink,
   FileCheck,
   FileEdit,
-  MapPin,
   MoreHorizontal,
-  Navigation,
-  Play,
   RefreshCw,
   Search,
   Wrench,
+  UserPlus,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -51,6 +49,9 @@ import { formatDate } from "@/lib/format";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   acceptProviderOrder,
+  getOrderApiScope,
+  setOrderApiScope,
+  type OrderApiScope,
   arriveProviderOrder,
   cancelProviderOrder,
   clearProviderOrdersError,
@@ -74,8 +75,8 @@ const ORDER_FILTERS = [
   { value: "", label: "All" },
   { value: "BOOKING_REQUESTED", label: "Requested" },
   { value: "CONFIRMED", label: "Confirmed" },
-  { value: "IN_TRANSIT", label: "In Transit" },
-  { value: "ARRIVED", label: "Arrived" },
+  // "In Transit" / "Arrived" tabs removed: the crew now just clocks in on site (job flow), so
+  // orders go Confirmed → In Progress. Older orders in those states still show under All.
   { value: "IN_PROGRESS", label: "In Progress" },
   { value: "CHANGE_ORDER_PENDING", label: "Change Orders" },
   { value: "WORK_COMPLETED", label: "Completed" },
@@ -83,7 +84,25 @@ const ORDER_FILTERS = [
   { value: "CANCELLED", label: "Cancelled" },
 ];
 
-export function OrdersView() {
+/**
+ * `viewer`: "provider" = the Pro's Fixed service orders; "technician" / "contractor" = the orders
+ * assigned to the signed-in employee / contractor in their portal (same table, their API, no
+ * accept / decline / cancel or payout).
+ */
+/** "Mike R., Bright Electric" — assigned employees then contractors. */
+function crewNames(row: ProviderOrder) {
+  return [...(row.crew?.employees || []), ...(row.crew?.contractors || [])]
+    .map((member) => member.name)
+    .filter(Boolean)
+    .join(", ");
+}
+
+export function OrdersView({ viewer = "provider" }: { viewer?: OrderApiScope } = {}) {
+  // Before any fetch below: point the order thunks at this portal's API.
+  if (getOrderApiScope() !== viewer) setOrderApiScope(viewer);
+  const isPro = viewer === "provider";
+  const basePath =
+    viewer === "technician" ? "/technical/orders" : viewer === "contractor" ? "/contractor/orders" : "/pro/dashboard/orders";
   const searchParams = useSearchParams();
   const urlStatus = searchParams.get("status") ?? "";
 
@@ -156,11 +175,12 @@ export function OrdersView() {
 
   // Opening Fixed service orders clears the sidebar badge locally — no ack API.
   useEffect(() => {
+    if (!isPro) return;
     setPortalInboxCleared("orders", true);
     window.dispatchEvent(
       new CustomEvent("rs-realtime", { detail: { type: "ORDERS_TAB_OPENED" } }),
     );
-  }, []);
+  }, [isPro]);
 
   // Sync URL tab status with Redux statusFilter
   useEffect(() => {
@@ -404,7 +424,7 @@ export function OrdersView() {
       cell: (row) => (
         <div>
           <Link
-            href={`/pro/dashboard/orders/${row.id}`}
+            href={`${basePath}/${row.id}`}
             className="text-left font-mono font-semibold text-primary hover:underline"
           >
             {row.orderNumber || row.id.slice(-8).toUpperCase()}
@@ -472,6 +492,23 @@ export function OrdersView() {
         </div>
       ),
     },
+    ...(isPro
+      ? [
+          {
+            id: "crew",
+            header: "Assigned",
+            sortValue: (row: ProviderOrder) => crewNames(row) || "",
+            cell: (row: ProviderOrder) => {
+              const names = crewNames(row);
+              return names ? (
+                <span className="line-clamp-1 max-w-40 text-xs font-medium text-foreground">{names}</span>
+              ) : (
+                <span className="text-xs text-muted-foreground">Unassigned</span>
+              );
+            },
+          } satisfies PortalTableColumn<ProviderOrder>,
+        ]
+      : []),
     {
       id: "pricing",
       header: "Total Payout",
@@ -503,6 +540,13 @@ export function OrdersView() {
 
         switch (row.status) {
           case "BOOKING_REQUESTED":
+            if (!isPro) {
+              return (
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700">
+                  <Clock className="size-3" /> Awaiting the office
+                </span>
+              );
+            }
             return (
               <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                 <Button
@@ -525,69 +569,42 @@ export function OrdersView() {
               </div>
             );
 
+          // The Pro assigns & manages; Depart / Arrive / Start / Complete / Change order are the
+          // assigned crew's (Clock In on site in their portal). Previous: those buttons here.
           case "CONFIRMED":
-            return (
-              <div onClick={(e) => e.stopPropagation()}>
-                <Button
-                  size="sm"
-                  onClick={() => handleOpenModal("transit", row)}
-                  disabled={isActionLoading}
-                  className="h-7 px-2.5 text-xs bg-blue-600 hover:bg-blue-700 text-white gap-1"
-                >
-                  <Navigation className="size-3" /> Depart
-                </Button>
-              </div>
-            );
-
           case "IN_TRANSIT":
-            return (
-              <div onClick={(e) => e.stopPropagation()}>
-                <Button
-                  size="sm"
-                  onClick={() => handleOpenModal("arrive", row)}
-                  disabled={isActionLoading}
-                  className="h-7 px-2.5 text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1"
-                >
-                  <MapPin className="size-3" /> Arrive
-                </Button>
-              </div>
-            );
-
           case "ARRIVED":
-            return (
+            return crewNames(row) ? (
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                <Clock className="size-3" /> Waiting for crew
+              </span>
+            ) : (
               <div onClick={(e) => e.stopPropagation()}>
-                <Button
-                  size="sm"
-                  onClick={() => handleOpenModal("startWork", row)}
-                  disabled={isActionLoading}
-                  className="h-7 px-2.5 text-xs bg-purple-600 hover:bg-purple-700 text-white gap-1"
-                >
-                  <Play className="size-3" /> Start Work
+                <Button size="sm" variant="outline" asChild className="h-7 gap-1 px-2.5 text-xs">
+                  <Link href={`${basePath}/${row.id}`}>
+                    <UserPlus className="size-3" /> Assign
+                  </Link>
                 </Button>
               </div>
             );
 
           case "IN_PROGRESS":
+            // Crew marked it complete → the Pro reviews the proof (approve → customer, reject → re-work).
+            if (row.crewCompletion?.status === "pending") {
+              return (
+                <div onClick={(e) => e.stopPropagation()}>
+                  <Button size="sm" asChild className="h-7 gap-1 bg-amber-600 px-2.5 text-xs text-white hover:bg-amber-700">
+                    <Link href={`${basePath}/${row.id}?tab=requests`}>
+                      <CheckCircle2 className="size-3" /> Review completion
+                    </Link>
+                  </Button>
+                </div>
+              );
+            }
             return (
-              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                <Button
-                  size="sm"
-                  onClick={() => handleOpenModal("complete", row)}
-                  disabled={isActionLoading}
-                  className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
-                >
-                  <CheckCircle2 className="size-3" /> Complete
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleOpenModal("changeOrder", row)}
-                  disabled={isActionLoading}
-                  className="h-7 px-2 text-xs"
-                >
-                  + Change
-                </Button>
-              </div>
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-purple-700">
+                <Clock className="size-3" /> Work in progress
+              </span>
             );
 
           case "CHANGE_ORDER_PENDING":
@@ -626,7 +643,7 @@ export function OrdersView() {
                 asChild
                 className="h-7 px-2 text-xs text-muted-foreground"
               >
-                <Link href={`/pro/dashboard/orders/${row.id}`}>
+                <Link href={`${basePath}/${row.id}`}>
                   View
                 </Link>
               </Button>
@@ -636,16 +653,18 @@ export function OrdersView() {
     },
   ];
 
+  const visibleColumns = isPro ? columns : columns.filter((column) => column.id !== "pricing");
+
   // Row Dropdown Actions
   const tableActions = (row: ProviderOrder): PortalTableAction<ProviderOrder>[] => {
     const list: PortalTableAction<ProviderOrder>[] = [
       {
         label: "View details",
-        href: `/pro/dashboard/orders/${row.id}`,
+        href: `${basePath}/${row.id}`,
       },
     ];
 
-    if (["CONFIRMED", "IN_TRANSIT"].includes(row.status)) {
+    if (isPro && ["CONFIRMED", "IN_TRANSIT"].includes(row.status)) {
       list.push({
         label: "Emergency Cancel Order",
         variant: "destructive",
@@ -658,9 +677,13 @@ export function OrdersView() {
 
   return (
     <PortalPage
-      eyebrow="Work / Fixed service orders"
-      title={`Fixed service orders (${total})`}
-      description="Operational job orders assigned to you. Track status, navigation, arrival, and work execution."
+      eyebrow={isPro ? "Work / Fixed service orders" : "Work / My orders"}
+      title={isPro ? `Fixed service orders (${total})` : `My fixed service orders (${total})`}
+      description={
+        isPro
+          ? "Accept bookings, assign an employee or contractor, and follow each order through to completion."
+          : "Fixed-price orders the office assigned to you. Depart, check in on site, raise change orders and submit completion proof."
+      }
       actions={
         <Button
           variant="outline"
@@ -678,7 +701,7 @@ export function OrdersView() {
     >
       {/* Rest-of-app Standard Filter Tabs */}
       <FilterTabs
-        baseHref="/pro/dashboard/orders"
+        baseHref={basePath}
         value={urlStatus}
         options={ORDER_FILTERS}
       />
@@ -687,10 +710,10 @@ export function OrdersView() {
       <PortalDataTable
         rows={items}
         rowKey={(row) => row.id}
-        rowHref={(row) => `/pro/dashboard/orders/${row.id}`}
-        columns={columns}
+        rowHref={(row) => `${basePath}/${row.id}`}
+        columns={visibleColumns}
         actions={tableActions}
-        filename="provider-orders"
+        filename={isPro ? "provider-orders" : "my-orders"}
         searchPlaceholder="Search orders, customers, addresses..."
         empty={loading ? "Refreshing…" : "No operational orders found in this view."}
         loading={

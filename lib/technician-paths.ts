@@ -6,6 +6,9 @@ export const technicianPaths = {
   job: (id: string) => `/technical/jobs/${id}`,
   estimates: "/technical/estimates",
   estimate: (id: string) => `/technical/estimates/${id}`,
+  /** Fixed service orders the office assigned to this employee. */
+  orders: "/technical/orders",
+  order: (id: string) => `/technical/orders/${id}`,
   schedule: "/technical/schedule",
   time: "/technical/time-tracking",
   payments: "/technical/payments",

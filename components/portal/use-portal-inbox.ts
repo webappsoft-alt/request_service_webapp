@@ -46,6 +46,7 @@ function countsFromPayload(payload: unknown): Partial<PortalInboxCounts> | null 
     newLeads: Number(row.newLeads) || 0,
     unreadChats: Number(row.unreadChats) || 0,
     pendingOrders: Number(row.pendingOrders) || 0,
+    ...(row.awaitingOrders !== undefined ? { awaitingOrders: Number(row.awaitingOrders) || 0 } : {}),
     pendingEstimates: Number(row.pendingEstimates) || 0,
     ...(sections
       ? {
@@ -191,6 +192,8 @@ export function usePortalInbox() {
         ) {
           bumpPortalInboxCount("pendingOrders", -1);
         }
+        // Live "awaiting Accept / Decline" count comes from the server (exact, any tab).
+        requestProviderInboxCounts();
         return;
       }
       if (type === "NEW_NOTIFICATION") {
@@ -274,6 +277,7 @@ export function usePortalInbox() {
     newLeads: newLeadCount,
     unreadChats,
     pendingOrders,
+    awaitingOrders: counts.awaitingOrders || 0,
     pendingEstimates,
     estimateUpdates: counts.estimateUpdates || 0,
     jobUpdates: counts.jobUpdates || 0,

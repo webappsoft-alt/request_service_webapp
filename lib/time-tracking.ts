@@ -34,6 +34,8 @@ export type TimeEntry = {
   employee?: { id: string; name: string } | null;
   job: TimeEntryRef | null;
   estimate: TimeEntryRef | null;
+  /** Fixed service order (crew check-in on /orders). Optional for older call sites. */
+  order?: TimeEntryRef | null;
   status: "active" | "completed";
   clockInAt: string;
   clockOutAt: string | null;
@@ -118,8 +120,13 @@ function refFrom(value: unknown): TimeEntryRef | null {
   if (!id) return null;
   return {
     id,
-    number: row.number ? String(row.number) : undefined,
-    title: row.title ? String(row.title) : undefined,
+    // Fixed service orders carry orderNumber / serviceSnapshot.servicesName instead.
+    number: row.number ? String(row.number) : row.orderNumber ? String(row.orderNumber) : undefined,
+    title: row.title
+      ? String(row.title)
+      : asRecord(row.serviceSnapshot).servicesName
+        ? String(asRecord(row.serviceSnapshot).servicesName)
+        : undefined,
     status: row.status ? String(row.status) : undefined,
   };
 }
@@ -151,6 +158,7 @@ export function mapTimeEntry(raw: unknown): TimeEntry | null {
         : null,
     job: refFrom(row.jobId),
     estimate: refFrom(row.estimateId),
+    order: refFrom(row.orderId),
     status,
     clockInAt: String(row.clockInAt || ""),
     clockOutAt: row.clockOutAt ? String(row.clockOutAt) : null,

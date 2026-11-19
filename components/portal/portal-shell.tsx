@@ -99,9 +99,11 @@ function NavLinks({
     // counts, since a change request shows in both.
     if (href === "/pro/dashboard/new-estimate")
       return Math.max(inbox.pendingEstimates, inbox.estimateUpdates);
-    // New booking requests + other order updates (status, dispute, payment released).
+    // Live: bookings waiting for Accept / Decline (stays until the Pro acts, like Leads shows
+    // what's new) + unread order updates (crew check-ins, change orders answered, settled…).
+    // Previous: inbox.pendingOrders + inbox.orderUpdates (new requests since the page was opened).
     if (href === "/pro/dashboard/orders")
-      return inbox.pendingOrders + inbox.orderUpdates;
+      return Math.max(inbox.awaitingOrders, inbox.pendingOrders) + inbox.orderUpdates;
     // Completion proofs / change order requests from the field + answered change orders.
     if (href === "/pro/dashboard/jobs")
       return pendingFieldRequests + inbox.jobUpdates;
@@ -140,7 +142,7 @@ function NavLinks({
       return [{ label: "Customer payments", count: inbox.paymentUpdates }];
     if (href === "/pro/dashboard/orders")
       return [
-        { label: "New booking requests", count: inbox.pendingOrders },
+        { label: "Awaiting accept / decline", count: Math.max(inbox.awaitingOrders, inbox.pendingOrders) },
         { label: "Order updates", count: inbox.orderUpdates },
       ];
     return [];

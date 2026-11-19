@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Clock3, FilePlus2, Mail, Phone } from "lucide-react";
+import { CheckCircle2, Clock3, FilePlus2, Mail, Phone } from "lucide-react";
 import { ChangeOrderRequestDialog } from "@/components/contractor/change-order-request-dialog";
 import { RequestStatusPill } from "@/components/contractor/contractor-ui";
 import {
@@ -207,6 +207,8 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
       <RecordWorkspace
         href={technicianPaths.job(job.id)}
         label={`${job.number}${job.title ? ` · ${job.title}` : ""}`}
+        backHref={technicianPaths.jobs}
+        backLabel="Back to my jobs"
         kind="job"
         trackOpen={false}
         badge={<JobStatusPill status={job.status} />}
@@ -225,11 +227,7 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
             <Button size="sm" variant="outline" className="h-8" disabled={closed} onClick={() => setChangeOpen(true)}>
               <FilePlus2 className="size-3.5" /> Request scope change
             </Button>
-            <Button asChild size="sm" variant="outline" className="h-8">
-              <Link href={technicianPaths.jobs}>
-                <ArrowLeft className="size-3.5" /> My jobs
-              </Link>
-            </Button>
+            {/* Previous: a "My jobs" text button here — now the icon back arrow left of the title (backHref). */}
           </>
         }
         metaBar={

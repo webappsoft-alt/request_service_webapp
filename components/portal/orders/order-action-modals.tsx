@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { extractUploadedUrl, uploadFile } from "@/components/api/uploadFile";
+import { getFastPosition } from "@/lib/location-cache";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -330,11 +331,12 @@ export function TransitOrderModal({
     setGpsError(null);
     setIsPermissionDenied(false);
 
-    navigator.geolocation.getCurrentPosition(
+    // Warm portal fix when fresh, else a quick coarse reading (was: new high-accuracy fix, maxAge 0, 10 s → timeouts).
+    getFastPosition().then(
       (pos) => {
         setDetectingGps(false);
-        const numLng = pos.coords.longitude;
-        const numLat = pos.coords.latitude;
+        const numLng = pos.lng;
+        const numLat = pos.lat;
         setCoords([numLng, numLat]);
         setGpsError(null);
         setIsPermissionDenied(false);
@@ -365,7 +367,6 @@ export function TransitOrderModal({
           toast.error(err.message);
         }
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
     );
   };
 
@@ -567,10 +568,11 @@ export function ArriveOrderModal({
     }
     setDetectingGps(true);
     setGpsError(null);
-    navigator.geolocation.getCurrentPosition(
+    // Arrival is checked against the 200 m geofence, so accept a warm fix up to 30 s old only.
+    getFastPosition(30_000).then(
       (pos) => {
         setDetectingGps(false);
-        setCoords([pos.coords.longitude, pos.coords.latitude]);
+        setCoords([pos.lng, pos.lat]);
         setLocationSource("gps");
         setGpsError(null);
         toast.success("Location verified.");
@@ -591,7 +593,6 @@ export function ArriveOrderModal({
           toast.error(err.message);
         }
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
     );
   }, []);
 

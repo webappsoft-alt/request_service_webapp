@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { handleUserLogout } from "@/components/api/apiFuntions";
 import { ContractorRealtimeBridge } from "@/components/contractor/contractor-realtime-bridge";
-import { ContractorGeofenceWatch } from "@/components/time-tracking/geofence-watch";
+import { CrewLocationWarmup, ContractorGeofenceWatch } from "@/components/time-tracking/geofence-watch";
 import { RouteMapProvider, useRouteOrigin } from "@/components/portal/route-map-provider";
 import { useTechChatUnread } from "@/components/tech-chat/use-tech-chat-unread";
 import { NotificationBell } from "@/components/notifications/notification-bell";
@@ -35,6 +35,7 @@ import {
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import type { ContractorSection } from "@/lib/api/contractor-portal-client";
 import { contractorPaths } from "@/lib/contractor-paths";
+import { CrewOrdersSync, useCrewUnseenOrders } from "@/components/portal/orders/use-crew-open-orders";
 import type { AppNotification } from "@/lib/api/notifications-client";
 import { cn } from "@/lib/utils";
 import { NavHoverCardContent } from "@/components/layout/nav-hover-card";
@@ -56,11 +57,16 @@ type NavItem = {
   section?: ContractorSection;
   /** Badge from unread office messages instead of a section counter. */
   chat?: boolean;
+  /**
+   * Jobs also holds the fixed-price orders assigned to me (the separate "Fixed Orders" item was
+   * folded into Jobs): badge adds the open-order count, and /orders/… pages highlight Jobs.
+   */
+  orders?: boolean;
 };
 
 const NAV: NavItem[] = [
   { href: contractorPaths.dashboard, label: "Dashboard", icon: LayoutDashboard, description: "Your assigned work at a glance" },
-  { href: contractorPaths.jobs, label: "Assigned Jobs", icon: Briefcase, section: "jobs", description: "Jobs the office assigned to you" },
+  { href: contractorPaths.jobs, label: "Assigned Jobs", icon: Briefcase, section: "jobs", orders: true, description: "Jobs the office assigned to you" },
   { href: contractorPaths.schedule, label: "Schedule", icon: CalendarDays, description: "Your upcoming job days" },
   { href: contractorPaths.messages, label: "Messages", icon: MessageSquare, chat: true, description: "Chat with the office" },
   { href: contractorPaths.changeRequests, label: "Change Requests", icon: FilePlus2, section: "changeRequests", description: "Extra work you asked the office to approve" },
@@ -69,6 +75,8 @@ const NAV: NavItem[] = [
 ];
 
 function isActive(pathname: string, href: string) {
+  // Fixed-price order screens live under Jobs in the sidebar.
+  if (href === contractorPaths.jobs && (pathname === contractorPaths.orders || pathname.startsWith(`${contractorPaths.orders}/`))) return true;
   if (href === contractorPaths.dashboard) return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -78,14 +86,17 @@ function NavBadge({
   section,
   chat = false,
   collapsed = false,
+  extra = 0,
 }: {
   section?: ContractorSection;
   chat?: boolean;
   collapsed?: boolean;
+  /** Added to the section count (Jobs: open fixed-price orders). */
+  extra?: number;
 }) {
   const sectionCount = useAppSelector((state) => (section ? selectContractorSectionBadge(state, section) : 0));
   const chatCount = useTechChatUnread("technician");
-  const count = chat ? chatCount : sectionCount;
+  const count = chat ? chatCount : sectionCount + extra;
   if (!count) return null;
   return (
     <span
@@ -102,12 +113,36 @@ function NavBadge({
   );
 }
 
+/** Jobs badge: new job updates + fixed-price orders assigned since Jobs was last opened. */
+function JobsNavBadge({ section, collapsed = false, active = false }: { section?: ContractorSection; collapsed?: boolean; active?: boolean }) {
+  const openOrders = useCrewUnseenOrders("contractor", active);
+  return <NavBadge section={section} collapsed={collapsed} extra={openOrders} />;
+}
+
 /** What each section badge counts, as the row in the hover card. */
 const HOVER_ROW_LABELS: Partial<Record<ContractorSection, string>> = {
   jobs: "New job updates",
   changeRequests: "Change request updates",
   payouts: "New payout updates",
 };
+
+/** Jobs hover card: job updates + open fixed-price orders (they live under Jobs). */
+function JobsHoverCard({ item }: { item: NavItem }) {
+  const sectionCount = useAppSelector((state) => (item.section ? selectContractorSectionBadge(state, item.section) : 0));
+  const pathname = usePathname();
+  const openOrders = useCrewUnseenOrders("contractor", isActive(pathname, item.href));
+  return (
+    <NavHoverCardContent
+      title={item.label}
+      description={item.description}
+      icon={item.icon as LucideIcon}
+      rows={[
+        { label: (item.section && HOVER_ROW_LABELS[item.section]) || "New job updates", count: sectionCount },
+        { label: "New fixed-price jobs", count: openOrders },
+      ]}
+    />
+  );
+}
 
 /** Sidebar hover card: title, description and the exact count behind the badge. */
 function NavItemHoverCard({ item }: { item: NavItem }) {
@@ -163,7 +198,11 @@ function NavLinks({
                 aria-hidden
               />
               {collapsed ? <span className="sr-only">{item.label}</span> : item.label}
-              <NavBadge section={item.section} chat={item.chat} collapsed={collapsed} />
+              {item.orders ? (
+                <JobsNavBadge section={item.section} collapsed={collapsed} active={active} />
+              ) : (
+                <NavBadge section={item.section} chat={item.chat} collapsed={collapsed} />
+              )}
             </Link>
           );
           if (closeOnNavigate) {
@@ -177,7 +216,7 @@ function NavLinks({
           return (
             <Tooltip key={item.href}>
               <TooltipTrigger asChild>{link}</TooltipTrigger>
-              <NavItemHoverCard item={item} />
+              {item.orders ? <JobsHoverCard item={item} /> : <NavItemHoverCard item={item} />}
             </Tooltip>
           );
         })}
@@ -286,6 +325,8 @@ export function ContractorShell({ children }: { children: ReactNode }) {
     <div className="contractor-theme portal-app min-h-svh bg-[var(--ct-bg)]">
       <ContractorRealtimeBridge />
       <ContractorGeofenceWatch />
+      <CrewLocationWarmup />
+      <CrewOrdersSync portal="contractor" />
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-30 hidden flex-col bg-gradient-to-b from-[var(--ct-sidebar)] to-[var(--ct-sidebar-2)] transition-[width] duration-200 lg:flex",

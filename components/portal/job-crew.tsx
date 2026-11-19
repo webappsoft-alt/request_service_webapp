@@ -34,6 +34,19 @@ import { insufficientBalanceText, useProviderWallet } from "@/components/portal/
 import { useAppDispatch } from "@/store/hooks";
 import { fetchProviderWallet } from "@/store/providerWalletSlice";
 import type { Job, JobContractorAssignment } from "@/lib/types";
+
+/**
+ * What the assign-contractor dialog needs from the record it assigns to — a job, or a fixed
+ * service order (number = order number, scheduledAt / dueAt = the booked slot).
+ */
+export type ContractorAssignTarget = Pick<Job, "id" | "number" | "title" | "scheduledAt" | "dueAt" | "crewContractors">;
+export type AssignContractorFn = (input: {
+  contractorId: string;
+  title: string;
+  instructions: string;
+  startAt: string;
+  endAt: string;
+}) => Promise<unknown>;
 import { ADD_CONTRACTOR_HREF } from "@/lib/crew-links";
 
 function errorText(error: unknown, fallback: string) {
@@ -54,7 +67,7 @@ function toLocalInput(value: string | Date) {
 }
 
 /** Default window: the job's start day (or today), 8 AM – 5 PM. */
-function defaultWindow(job: Job) {
+function defaultWindow(job: ContractorAssignTarget) {
   const base = job.scheduledAt ? new Date(job.scheduledAt) : new Date();
   const start = new Date(base);
   start.setHours(8, 0, 0, 0);
@@ -84,12 +97,18 @@ export function AssignContractorDialog({
   onOpenChange,
   existing,
   onSaved,
+  assign,
+  recordLabel = "job",
 }: {
-  job: Job;
+  job: ContractorAssignTarget;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   existing?: JobContractorAssignment | null;
   onSaved: () => void | Promise<void>;
+  /** Save call; defaults to the job endpoint (orders pass their own). */
+  assign?: AssignContractorFn;
+  /** "job" / "order" — used in the dialog copy. */
+  recordLabel?: string;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -100,6 +119,8 @@ export function AssignContractorDialog({
           existing={existing ?? null}
           onOpenChange={onOpenChange}
           onSaved={onSaved}
+          assign={assign}
+          recordLabel={recordLabel}
         />
       ) : null}
     </Dialog>
@@ -111,11 +132,15 @@ function AssignContractorForm({
   existing,
   onOpenChange,
   onSaved,
+  assign,
+  recordLabel = "job",
 }: {
-  job: Job;
+  job: ContractorAssignTarget;
   existing: JobContractorAssignment | null;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void | Promise<void>;
+  assign?: AssignContractorFn;
+  recordLabel?: string;
 }) {
   const paging = usePaginatedCrmOptions(existing ? null : "contractor", !existing);
   const initial = existing?.startAt
@@ -132,7 +157,7 @@ function AssignContractorForm({
 
   const alreadyOnJob = !existing && (job.crewContractors || []).some((row) => row.contractorId === contractorId);
   const errors = {
-    contractor: !contractorId ? "Choose a contractor." : alreadyOnJob ? "This contractor is already on the job — edit them instead." : null,
+    contractor: !contractorId ? "Choose a contractor." : alreadyOnJob ? `This contractor is already on the ${recordLabel} — edit them instead.` : null,
     title: !title.trim() ? "Add a title." : null,
     start: !startAt ? "Choose a start." : null,
     end: !endAt ? "Choose an end." : startAt && endAt <= startAt ? "End must be after the start." : null,
@@ -144,13 +169,14 @@ function AssignContractorForm({
     if (hasErrors || saving) return;
     setSaving(true);
     try {
-      await assignJobContractor(job.id, {
+      const input = {
         contractorId,
         title: title.trim(),
         instructions: instructions.trim(),
         startAt: new Date(startAt).toISOString(),
         endAt: new Date(endAt).toISOString(),
-      });
+      };
+      await (assign ? assign(input) : assignJobContractor(job.id, input));
       toast.success(existing ? `${contractorLabel || "Contractor"} updated.` : `${contractorLabel || "Contractor"} assigned to ${job.number}.`);
       await onSaved();
       onOpenChange(false);
@@ -223,7 +249,7 @@ function AssignContractorForm({
             maxLength={4000}
             value={instructions}
             onChange={(event) => setInstructions(event.target.value)}
-            placeholder="What this contractor is responsible for on this job"
+            placeholder={`What this contractor is responsible for on this ${recordLabel}`}
           />
         </Field>
 

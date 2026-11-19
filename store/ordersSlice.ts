@@ -1,4 +1,5 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import { parseOrderInvoice } from "@/lib/types/provider-order";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { getData, postData } from "@/components/api/sliceHttp";
 import { bookingsApi, ordersApi } from "@/components/api/ApiRoutesFile";
@@ -574,6 +575,7 @@ function parseOrderDetail(response: unknown): CustomerOrderDetail {
 
   return {
     id: pickId(data),
+    orderInvoice: parseOrderInvoice(data.invoice),
     orderNumber: typeof data.orderNumber === "string" ? data.orderNumber : "",
     status:
       (typeof data.status === "string" && data.status) || "BOOKING_REQUESTED",
@@ -663,11 +665,13 @@ function listRequestKey(arg: {
   page?: number;
   limit?: number;
   status?: string;
+  search?: string;
 }): string {
   return JSON.stringify({
     page: Math.max(1, Number(arg.page) || 1),
     limit: Math.max(1, Number(arg.limit) || CUSTOMER_ORDERS_PAGE_LIMIT),
     status: String(arg.status || "").trim().toUpperCase() || null,
+    search: String(arg.search || "").trim().toLowerCase() || null,
   });
 }
 
@@ -782,7 +786,7 @@ export const checkoutFixedServiceOrder = createAsyncThunk<
 
 export const fetchCustomerOrders = createAsyncThunk<
   CustomerOrdersListResult,
-  { page?: number; limit?: number; status?: string } | undefined,
+  { page?: number; limit?: number; status?: string; search?: string } | undefined,
   {
     state: { orders: OrdersState };
     rejectValue: string;
@@ -796,6 +800,8 @@ export const fetchCustomerOrders = createAsyncThunk<
       Number(arg?.limit) || CUSTOMER_ORDERS_PAGE_LIMIT,
     );
     const status = String(arg?.status || "").trim() || undefined;
+    // Server-side search across all orders (not just the loaded page).
+    const search = String(arg?.search || "").trim() || undefined;
     try {
       const response = await getData(
         ordersApi.list,
@@ -803,6 +809,7 @@ export const fetchCustomerOrders = createAsyncThunk<
           page,
           limit,
           status,
+          search,
         },
         // force: bypass the 45s GET cache so every tab visit refreshes in the background.
         { silent: true, force: true },
@@ -1033,7 +1040,7 @@ export const selectCustomerOrdersLoading = (state: { orders?: OrdersState }) =>
  * or filter change). Re-fetching the rows already on screen stays silent.
  */
 export const selectCustomerOrdersTableLoading =
-  (arg: { page?: number; limit?: number; status?: string }) =>
+  (arg: { page?: number; limit?: number; status?: string; search?: string }) =>
   (state: { orders?: OrdersState }) =>
     Boolean(state.orders?.listLoading) &&
     state.orders?.listLoadedKey !== listRequestKey(arg);

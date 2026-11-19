@@ -41,6 +41,7 @@ import {
   selectCustomerChangeOrders,
 } from "@/store/customerChangeOrdersSlice";
 import { customerPaths } from "@/lib/customer-paths";
+import type { OrderInvoiceSummary } from "@/lib/types/provider-order";
 import { formatDate } from "@/lib/format";
 import {
   formatOrderAddressLine,
@@ -173,10 +174,15 @@ function CustomerOrderActions({
   orderId,
   status,
   onDone,
+  fixedOrder = false,
+  invoice = null,
 }: {
   orderId: string;
   status: string;
   onDone: () => void;
+  /** Fixed service order: pay the Pro's invoice before signing off (like a job). */
+  fixedOrder?: boolean;
+  invoice?: OrderInvoiceSummary | null;
 }) {
   const [busy, setBusy] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
@@ -186,9 +192,12 @@ function CustomerOrderActions({
   const canDispute = ["IN_PROGRESS", "WORK_COMPLETED", "ON_HOLD"].includes(
     upper,
   );
-  const canSignOff = upper === "WORK_COMPLETED";
+  // Fixed orders: the Pro invoices, you pay, and signing off is the last step.
+  // Previous: sign-off was available straight after the work was marked complete.
+  const awaitingInvoice = fixedOrder && upper === "WORK_COMPLETED" && invoice?.status !== "paid";
+  const canSignOff = upper === "WORK_COMPLETED" && !awaitingInvoice;
 
-  if (!canDispute && !canSignOff) return null;
+  if (!canDispute && !canSignOff && !awaitingInvoice) return null;
 
   async function run(action: () => Promise<unknown>, success: string) {
     setBusy(true);
@@ -208,6 +217,24 @@ function CustomerOrderActions({
       <h3 className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
         Order actions
       </h3>
+
+      {awaitingInvoice ? (
+        <div className="mt-4 space-y-2.5 border-b border-input pb-4">
+          <p className="text-sm font-semibold text-foreground">
+            {invoice ? "Pay your invoice" : "Invoice on its way"}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {invoice
+              ? `Invoice ${invoice.number} · ${invoice.balanceDue.toFixed(2)} due. Pay it, then come back to sign off on the work.`
+              : "The work is complete. Your provider will send the invoice here — pay it, then sign off."}
+          </p>
+          {invoice ? (
+            <Button asChild size="sm" className="w-full gap-1.5">
+              <Link href={customerPaths.invoice(invoice.id)}>Pay invoice</Link>
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       {canSignOff ? (
         <div className="mt-4 space-y-2.5 border-b border-input pb-4">
@@ -1381,6 +1408,8 @@ export function CustomerOrderDetailView({
               <CustomerOrderActions
                 orderId={activeOrder.id}
                 status={activeOrder.status}
+                fixedOrder={activeOrder.orderType !== "pro_service"}
+                invoice={activeOrder.orderInvoice ?? null}
                 onDone={() => void dispatch(fetchCustomerOrderById(orderId))}
               />
             </aside>

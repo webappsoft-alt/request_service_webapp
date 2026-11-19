@@ -1,3 +1,4 @@
+import { BlogSection } from "@/components/home/blog-section";
 import { HomeMotion } from "@/components/home/home-motion";
 import { ProClose } from "@/components/pro/pro-close";
 import { ProFaqSection } from "@/components/pro/pro-faq-section";
@@ -30,7 +31,7 @@ export const metadata = buildMetadata({
 /**
  * Pro landing page — the client-approved layout (formerly the /for-pros-v1 preview).
  * Below the hero, in order: feature tabs, the "Get started" band, pipeline & workflow, pricing,
- * regional directory links, then FAQ.
+ * latest Pro blog articles (dynamic), regional directory links, then FAQ.
  */
 export default function ProLandingPage() {
   return (
@@ -66,6 +67,11 @@ export default function ProLandingPage() {
 
           {/* 5 · Transparent pricing */}
           <ProPricingV1 />
+
+          {/* 5b · Latest Pro blog articles — live from the blogs API (?audience=pro), hidden when none. */}
+          <div className="bg-muted/50">
+            <BlogSection site="pro" limit={4} />
+          </div>
 
           {/* 6 · Internal links to the city / trade directories (SEO crawl path) */}
           <ProRegionalLinks />

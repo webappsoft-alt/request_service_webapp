@@ -8,7 +8,7 @@ import { buildMetadata } from "@/lib/seo";
 export const metadata = buildMetadata({
   title: "Home Services Journal",
   description:
-    "Guides for homeowners and service businesses on estimates, bookings, payments, maintenance, and how Request Service works.",
+    "Guides for homeowners on hiring local pros, comparing estimates, change orders, payments, home maintenance, and how Request Service works.",
   path: "/blog",
   keywords: ["home service guides", "contractor estimates", "home maintenance"],
 });
@@ -25,7 +25,8 @@ export default function BlogPage() {
       <BlogHero />
       <div id="articles" className="bg-[#f5f5f5] pt-6 pb-12 md:pt-8 md:pb-16">
         <Container>
-          <BlogIndex />
+          {/* Customer blog: customer + "both" articles. Pro articles live on /for-pros/blog. */}
+          <BlogIndex site="customer" />
         </Container>
       </div>
     </>

@@ -16,7 +16,8 @@ ${siteConfig.description}
 - [For Pros](${siteConfig.url}/for-pros)
 - [Join as a Pro](${siteConfig.url}/for-pros/join)
 - [How it works](${siteConfig.url}/how-it-works)
-- [Blog](${siteConfig.url}/blog)
+- [Blog (homeowners)](${siteConfig.url}/blog)
+- [Pro Blog (service businesses)](${siteConfig.url}/for-pros/blog)
 - [FAQ](${siteConfig.url}/faq)
 - [Contact](${siteConfig.url}/contact)
 

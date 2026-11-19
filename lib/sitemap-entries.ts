@@ -5,7 +5,8 @@
  */
 
 import type { MetadataRoute } from "next";
-import { BLOG_CATEGORIES, fetchPublicBlogs } from "@/lib/data/public-blogs";
+import { blogPaths as blogUrl, canonicalSite } from "@/lib/data/blog-audience";
+import { blogCategoriesFor, fetchPublicBlogs } from "@/lib/data/public-blogs";
 import { getAllJobs } from "@/lib/data/jobs";
 import { listLocationCities, listLocationStates } from "@/lib/data/locations";
 import { proTrades } from "@/lib/data/pro-trades";
@@ -50,11 +51,17 @@ function corePaths(): Entry[] {
   return staticRoutes;
 }
 
-/** Blog categories + every published post (from the blogs API). */
+/**
+ * Both blogs (customer /blog + Pro /for-pros/blog), their categories, and every published post at
+ * its canonical URL ("both" posts are listed once, under the customer blog).
+ */
 async function blogPaths(): Promise<Entry[]> {
-  const entries = BLOG_CATEGORIES.filter((category) => category.slug !== "all").map((category) =>
-    entry(`/blog/category/${category.slug}`, 0.5),
-  );
+  const entries: Entry[] = [entry(blogUrl.index("pro"), 0.7)];
+  for (const site of ["customer", "pro"] as const) {
+    for (const category of blogCategoriesFor(site)) {
+      if (category.slug !== "all") entries.push(entry(blogUrl.category(site, category.slug), 0.5));
+    }
+  }
   const seen = new Set<string>();
   for (let page = 1; page <= MAX_BLOG_PAGES; page += 1) {
     const { data, pagination } = await fetchPublicBlogs({ page, limit: 50 });
@@ -62,7 +69,7 @@ async function blogPaths(): Promise<Entry[]> {
       if (!post.slug || seen.has(post.slug)) continue;
       seen.add(post.slug);
       const updated = new Date(post.updatedAt || post.publishedAt || post.createdAt || Date.now());
-      entries.push(entry(`/blog/${post.slug}`, 0.6, "monthly", Number.isNaN(updated.getTime()) ? new Date() : updated));
+      entries.push(entry(blogUrl.article(canonicalSite(post), post.slug), 0.6, "monthly", Number.isNaN(updated.getTime()) ? new Date() : updated));
     }
     if (!data.length || page >= (pagination?.totalPages || 1)) break;
   }

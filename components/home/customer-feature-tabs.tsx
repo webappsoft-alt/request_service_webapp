@@ -11,7 +11,6 @@ import {
 import Link from "next/link";
 import {
   ArrowUpRight,
-  BadgeCheck,
   Bell,
   CalendarClock,
   Camera,
@@ -25,10 +24,12 @@ import {
   MessageCircle,
   Navigation,
   Receipt,
+  Scale,
   Send,
   ShieldCheck,
   Star,
   Wrench,
+  X,
 } from "lucide-react";
 import { Container, Section } from "@/components/layout/container";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,9 @@ import { cn } from "@/lib/utils";
  * Previous versions: (1) one centred card per tab (too much empty space), (2) every tab inside the
  * same mock panel frame (all tabs looked alike). The Invoices scene is the one from version 1
  * (client: "payment tab previous is ok").
+ * 2026-11-19: added the Change Orders tab (mirrors /account/dashboard/change-orders) and reworked
+ * Estimates into a multi-estimate compare → approve/decline flow. No "Approvals" tab on purpose:
+ * the customer panel has no such page — approvals live in Estimates and Change Orders.
  */
 
 const EASE = "ease-[cubic-bezier(0.22,1,0.36,1)]";
@@ -404,102 +408,158 @@ function QuoteRequestsVisual() {
   );
 }
 
-/* ───────────────────────── 3. Estimates: read, sign, approved ───────────────────────── */
+/* ───────────────────────── 3. Estimates: one or several estimates → compare → approve ───────────────────────── */
 
-const EST_LINES = [
-  { label: "50-gal gas water heater", amount: 980 },
-  { label: "Labor & installation", amount: 210 },
-  { label: "Haul away old unit", amount: 50 },
+const EST_PROS = [
+  { name: "Master Plumbers", id: "EST-584", rating: 4.9, price: 1240, start: "Thu", warranty: "2-yr labor", perk: "Top rated" },
+  { name: "FlowRight Plumbing", id: "EST-591", rating: 4.8, price: 1385, start: "Fri", warranty: "1-yr labor", perk: "Longest parts warranty" },
+  { name: "Apex Home Services", id: "EST-597", rating: 4.7, price: 1190, start: "Mon", warranty: "90-day labor", perk: "Lowest price" },
 ] as const;
-const EST_STEPS = 7;
-const EST_MS = 1000;
+const EST_CHOSEN = 0;
+const EST_STEPS = 8;
+const EST_MS = 1100;
 
 function EstimatesVisual() {
   const { ref, step } = useLoopStep(EST_STEPS, EST_MS);
-  const shown = Math.min(step, EST_LINES.length);
-  const total = EST_LINES.slice(0, shown).reduce((sum, line) => sum + line.amount, 0);
-  const signing = step >= 4;
-  const approved = step >= 6;
+  const arrived = Math.min(step, EST_PROS.length);
+  const comparing = step >= 4;
+  const pressing = step === 5;
+  const decided = step >= 6;
   return (
-    <Stage rootRef={ref} className="flex items-center justify-center p-3 @md:p-6">
-      <div className={cn(FLOAT_CARD, "relative w-full max-w-lg overflow-hidden @md:mr-24")}>
-        <div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-4 py-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">Estimate EST-584</p>
-            <p className="truncate text-[11px] text-muted-foreground">Master Plumbers · licensed &amp; insured</p>
-          </div>
-          <BadgeCheck className="size-5 shrink-0 text-primary" aria-hidden="true" />
-        </div>
-        <ul className="divide-y px-4">
-          {EST_LINES.map((line, index) => (
-            <li
-              key={line.label}
-              className={cn(
-                "flex items-center justify-between py-2.5 text-sm transition-all duration-500",
-                index < shown ? "opacity-100" : "opacity-0",
-              )}
-            >
-              <span>{line.label}</span>
-              <span className="font-medium tabular-nums">{dollars(line.amount)}</span>
-            </li>
-          ))}
-        </ul>
-        <div className="flex items-center justify-between border-t px-4 py-3">
-          <span className="text-sm text-muted-foreground">Total</span>
-          <span className="text-lg font-semibold">
-            <CountUp value={total} format={dollars} />
-          </span>
+    <Stage rootRef={ref} className="flex flex-col gap-2.5 p-3 @md:p-5">
+      <div className={cn(FLOAT_CARD, "flex shrink-0 items-center justify-between gap-2 px-3 py-2")}>
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold">REQ-643 · Water heater replacement</p>
+          <p className="text-[10px] text-muted-foreground">
+            <span className="tabular-nums">{arrived}</span> {arrived === 1 ? "estimate" : "estimates"} received
+          </p>
         </div>
         <span
-          aria-hidden="true"
           className={cn(
-            "pointer-events-none absolute right-5 bottom-14 -rotate-12 rounded-md border-2 border-emerald-600 px-2 py-0.5 text-sm font-bold tracking-widest text-emerald-600 uppercase transition-all duration-500",
-            approved ? "scale-100 opacity-100" : "scale-150 opacity-0",
+            "flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-semibold transition-colors duration-300",
+            comparing ? "border-primary bg-primary/8 text-primary" : "border-border text-muted-foreground",
           )}
         >
-          Approved
+          <Scale className="size-3" aria-hidden="true" />
+          {comparing ? "Comparing 3" : "Compare"}
         </span>
       </div>
-      {/* Signature card, floating over the estimate's corner. */}
+
+      <div className="grid min-h-0 flex-1 gap-2 @md:grid-cols-3 @md:gap-2.5">
+        {EST_PROS.map((pro, index) => {
+          const show = index < arrived;
+          const chosen = index === EST_CHOSEN;
+          const status = decided ? (chosen ? "approved" : "declined") : comparing ? "review" : "new";
+          return (
+            <div
+              key={pro.id}
+              className={cn(
+                FLOAT_CARD,
+                "flex min-h-0 flex-col p-3 transition-all duration-500",
+                EASE,
+                show ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0",
+                decided && !chosen && "opacity-55",
+                chosen && (pressing || decided) && "ring-2 ring-primary/40",
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Initials name={pro.name} className="size-7 text-[10px]" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold">{pro.name}</p>
+                  <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <Star className="size-2.5 fill-amber-400 text-amber-400" aria-hidden="true" />
+                    {pro.rating} · {pro.id}
+                  </p>
+                </div>
+                <p className="text-sm font-semibold tabular-nums @md:hidden">{dollars(pro.price)}</p>
+                <span className="@md:hidden">
+                  <EstimateChip status={status} />
+                </span>
+              </div>
+              <div className="hidden @md:block">
+                <p className="mt-3 text-xl font-semibold tracking-tight tabular-nums">{dollars(pro.price)}</p>
+                <dl className="mt-2 flex flex-col gap-1 text-[11px]">
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-muted-foreground">Can start</dt>
+                    <dd className="font-medium">{pro.start}</dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-muted-foreground">Warranty</dt>
+                    <dd className="font-medium">{pro.warranty}</dd>
+                  </div>
+                </dl>
+                <p
+                  className={cn(
+                    "mt-2 truncate rounded-md bg-primary/8 px-2 py-1 text-[10px] font-semibold text-primary transition-opacity duration-500",
+                    comparing ? "opacity-100" : "opacity-0",
+                  )}
+                >
+                  {pro.perk}
+                </p>
+              </div>
+              <div className="mt-auto hidden pt-3 @md:block">
+                <div className="mb-2">
+                  <EstimateChip status={status} />
+                </div>
+                {decided ? (
+                  <span
+                    className={cn(
+                      "flex items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-semibold",
+                      chosen ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {chosen ? (
+                      <>
+                        <Check className="size-3" aria-hidden="true" /> Job booked
+                      </>
+                    ) : (
+                      "Not selected"
+                    )}
+                  </span>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <span className="flex items-center justify-center gap-1 rounded-lg border py-1.5 text-[11px] font-semibold text-muted-foreground">
+                      <X className="size-3" aria-hidden="true" /> Decline
+                    </span>
+                    <span
+                      className={cn(
+                        "flex items-center justify-center rounded-lg bg-primary py-1.5 text-[11px] font-semibold text-primary-foreground transition-all duration-300",
+                        chosen && pressing && "scale-95 ring-4 ring-primary/25",
+                      )}
+                    >
+                      Approve
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       <div
         className={cn(
-          FLOAT_CARD,
-          "absolute right-3 bottom-3 w-52 p-3 transition-all duration-500 @md:right-6 @md:bottom-8",
-          EASE,
-          signing ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0",
+          "flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 transition-all duration-500",
+          decided ? "border-emerald-200 bg-emerald-50 opacity-100 dark:border-emerald-500/30 dark:bg-emerald-500/10" : "opacity-0",
         )}
       >
-        <p className="text-[11px] font-semibold text-muted-foreground">Sign to approve</p>
-        <svg viewBox="0 0 200 50" className="mt-1 h-10 w-full" aria-hidden="true">
-          <path
-            d="M6 34 C 20 6, 30 46, 44 24 S 66 10, 74 30 S 98 44, 108 22 S 132 8, 140 28 S 168 40, 194 18"
-            fill="none"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            pathLength={1}
-            strokeDasharray="1"
-            strokeDashoffset={step >= 5 ? 0 : 1}
-            className="stroke-primary transition-[stroke-dashoffset] duration-1000 ease-out"
-          />
-        </svg>
-        <div className="mt-1 border-t pt-1.5 text-[10px] text-muted-foreground">Sarah Johnson · Nov 18</div>
-        <span
-          className={cn(
-            "mt-2 flex items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-semibold transition-colors duration-300",
-            approved ? "bg-emerald-600 text-white" : "bg-primary text-primary-foreground",
-          )}
-        >
-          {approved ? (
-            <>
-              <Check className="size-3" aria-hidden="true" /> Job booked
-            </>
-          ) : (
-            "Approve estimate"
-          )}
-        </span>
+        <Check className="size-4 shrink-0 text-emerald-600" aria-hidden="true" />
+        <span className="truncate text-xs font-medium">EST-584 approved &amp; signed · JOB-381 booked for Thu 9–11 AM</span>
       </div>
     </Stage>
   );
+}
+
+function EstimateChip({ status }: { status: "new" | "review" | "approved" | "declined" }) {
+  if (status === "approved")
+    return (
+      <Chip tone="green">
+        <Check className="size-3" aria-hidden="true" /> Approved
+      </Chip>
+    );
+  if (status === "declined") return <Chip tone="slate">Declined</Chip>;
+  if (status === "review") return <Chip tone="amber">Awaiting your review</Chip>;
+  return <Chip tone="blue">New</Chip>;
 }
 
 /* ───────────────────────── 4. Orders: live map + change order ───────────────────────── */
@@ -613,7 +673,157 @@ function OrdersVisual() {
   );
 }
 
-/* ───────────────────────── 5. Invoices (kept from the first version) ───────────────────────── */
+/* ───────────────────────── 5. Change orders: extra work → review → approve ───────────────────────── */
+
+const CO_LIST = [
+  { id: "CO-112", job: "JOB-381 · Water heater", title: "Corroded shut-off valve", amount: 95, pending: true },
+  { id: "CO-108", job: "JOB-374 · Kitchen outlet", title: "GFCI outlet upgrade", amount: 150, pending: false },
+  { id: "CO-101", job: "ORD-207 · Drain cleaning", title: "Camera inspection", amount: 120, pending: false },
+] as const;
+const CO_LINES = [
+  { label: "¾\" brass shut-off valve", amount: 65 },
+  { label: "Labor · 30 min", amount: 30 },
+] as const;
+const CO_ORIGINAL = 1240;
+const CO_STEPS = 7;
+const CO_MS = 1100;
+
+function ChangeOrdersVisual() {
+  const { ref, step } = useLoopStep(CO_STEPS, CO_MS);
+  const opened = step >= 1;
+  const lines = Math.max(0, Math.min(CO_LINES.length, step - 1));
+  const added = CO_LINES.slice(0, lines).reduce((sum, line) => sum + line.amount, 0);
+  const pressing = step === 4;
+  const approved = step >= 5;
+  return (
+    <Stage rootRef={ref} className="grid gap-3 p-3 @md:grid-cols-[1fr_1.15fr] @md:p-5">
+      <div className={cn(FLOAT_CARD, "hidden min-h-0 flex-col overflow-hidden @md:flex")}>
+        <p className="shrink-0 border-b px-3 py-2 text-xs font-semibold">Change orders</p>
+        <ul className="grid min-h-0 flex-1 auto-rows-fr divide-y">
+          {CO_LIST.map((item, index) => {
+            const selected = index === 0 && opened;
+            const pending = item.pending && !approved;
+            return (
+              <li
+                key={item.id}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-1 transition-colors duration-500",
+                  selected && "bg-primary/5",
+                  pending && !selected && "bg-amber-50/70 dark:bg-amber-500/5",
+                )}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold">
+                    {item.id} · {item.title}
+                  </p>
+                  <p className="truncate text-[10px] text-muted-foreground">{item.job}</p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="text-xs font-semibold tabular-nums">+{dollars(item.amount)}</span>
+                  {pending ? (
+                    <Chip tone="amber">Pending approval</Chip>
+                  ) : (
+                    <Chip tone="green">
+                      <Check className="size-3" aria-hidden="true" /> Approved
+                    </Chip>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <div
+        className={cn(
+          FLOAT_CARD,
+          "relative flex min-h-0 flex-col overflow-hidden transition-all duration-500",
+          EASE,
+          opened ? "translate-x-0 opacity-100" : "translate-x-4 opacity-0",
+        )}
+      >
+        <div
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 transition-colors duration-500",
+            approved ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-amber-50 dark:bg-amber-500/10",
+          )}
+        >
+          <Wrench
+            className={cn("size-3.5 shrink-0", approved ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300")}
+            aria-hidden="true"
+          />
+          <span
+            className={cn(
+              "truncate text-[11px] font-semibold",
+              approved ? "text-emerald-900 dark:text-emerald-200" : "text-amber-900 dark:text-amber-200",
+            )}
+          >
+            CO-112 · {approved ? "Approved — work can continue" : "Needs your approval"}
+          </span>
+        </div>
+        <div className="flex flex-1 flex-col gap-2 p-3">
+          <div className="flex gap-2.5">
+            <span className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-500/15">
+              <ImageIcon className="size-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold">Corroded shut-off valve</p>
+              <p className="text-[11px] leading-4 text-muted-foreground">
+                Found on site by Mike R. — the old valve won&apos;t seal with the new heater.
+              </p>
+            </div>
+          </div>
+          <ul className="divide-y rounded-lg border px-2.5 text-[11px]">
+            {CO_LINES.map((line, index) => (
+              <li
+                key={line.label}
+                className={cn("flex justify-between py-1.5 transition-opacity duration-500", index < lines ? "opacity-100" : "opacity-0")}
+              >
+                <span>{line.label}</span>
+                <span className="font-medium tabular-nums">+{dollars(line.amount)}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-col gap-0.5 text-[11px]">
+            <div className="flex justify-between text-muted-foreground">
+              <span>Original estimate EST-584</span>
+              <span className="tabular-nums">{dollars(CO_ORIGINAL)}</span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="font-medium">New job total</span>
+              <span className="text-base font-semibold">
+                <CountUp value={CO_ORIGINAL + added} format={dollars} />
+              </span>
+            </div>
+          </div>
+          <div className="mt-auto">
+            {approved ? (
+              <span className="flex items-center justify-center gap-1 rounded-lg bg-emerald-600 py-1.5 text-[11px] font-semibold text-white">
+                <Check className="size-3" aria-hidden="true" /> Approved · added to INV-559
+              </span>
+            ) : (
+              <div className="grid grid-cols-[1fr_1.6fr] gap-1.5">
+                <span className="flex items-center justify-center gap-1 rounded-lg border py-1.5 text-[11px] font-semibold text-muted-foreground">
+                  <X className="size-3" aria-hidden="true" /> Decline
+                </span>
+                <span
+                  className={cn(
+                    "flex items-center justify-center rounded-lg bg-primary py-1.5 text-[11px] font-semibold text-primary-foreground transition-all duration-300",
+                    pressing && "scale-95 ring-4 ring-primary/25",
+                  )}
+                >
+                  Review &amp; approve
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </Stage>
+  );
+}
+
+/* ───────────────────────── 6. Invoices (kept from the first version) ───────────────────────── */
 
 const INV_MS = 1300;
 const INV_STEPS = 5;
@@ -686,7 +896,7 @@ function InvoicesVisual() {
   );
 }
 
-/* ───────────────────────── 6. Payments: history chart + printed receipt ───────────────────────── */
+/* ───────────────────────── 7. Payments: history chart + printed receipt ───────────────────────── */
 
 const PAY_MONTHS = [
   { month: "Jul", amount: 149 },
@@ -794,7 +1004,7 @@ function PaymentsVisual() {
   );
 }
 
-/* ───────────────────────── 7. Messages: phone chat + notifications ───────────────────────── */
+/* ───────────────────────── 8. Messages: phone chat + notifications ───────────────────────── */
 
 const CHAT = [
   { from: "pro", text: "Hi Sarah, I can come Thursday 9–11 AM." },
@@ -888,7 +1098,7 @@ function MessagesVisual() {
   );
 }
 
-/* ───────────────────────── 8. Support: ticket + resolution timeline ───────────────────────── */
+/* ───────────────────────── 9. Support: ticket + resolution timeline ───────────────────────── */
 
 const SUP_TIMELINE = [
   { label: "Request opened", time: "Mon 10:02 AM" },
@@ -996,9 +1206,9 @@ const FEATURES = [
   {
     id: "estimates",
     label: "Estimates",
-    title: "Itemized estimates you sign online",
-    body: "Every line, price and term is written out before work starts. Approve with your signature and the job is booked.",
-    alt: "Itemized estimate signed and stamped approved",
+    title: "Compare estimates, approve the one you want",
+    body: "Get one estimate or several for the same request — each itemized with price, start date and warranty. Compare them side by side, approve your pick online and decline the rest.",
+    alt: "Three competing estimates for one request being compared, one approved and the others declined",
     Visual: EstimatesVisual,
     loopMs: EST_MS * EST_STEPS,
   },
@@ -1010,6 +1220,15 @@ const FEATURES = [
     alt: "Map with a technician driving to the customer's home, order progress and a change order",
     Visual: OrdersVisual,
     loopMs: ORDER_MS * ORDER_STEPS,
+  },
+  {
+    id: "change-orders",
+    label: "Change Orders",
+    title: "No surprise extras on your bill",
+    body: "If your pro finds more work on site, they send a change order with photos, the added cost and your new total. Nothing extra is done until you review and approve it.",
+    alt: "List of change orders with one pending approval, its cost breakdown and new total being approved",
+    Visual: ChangeOrdersVisual,
+    loopMs: CO_MS * CO_STEPS,
   },
   {
     id: "invoices",
@@ -1109,8 +1328,8 @@ export function CustomerFeatureTabs() {
             Track your whole project, from quote to paid
           </h2>
           <p className="text-sm leading-7 text-muted-foreground md:text-base">
-            Every Request Service customer gets a free dashboard — quote requests, estimates, orders, invoices,
-            payments, messages and support in one place.
+            Every Request Service customer gets a free dashboard — quote requests, estimates, orders, change orders,
+            invoices, payments, messages and support in one place.
           </p>
         </div>
 

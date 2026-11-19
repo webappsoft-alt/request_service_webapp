@@ -1,26 +1,56 @@
 import Image from "next/image";
 import Link from "next/link";
-import { BookOpen, Briefcase, Home } from "lucide-react";
+import { BookOpen, Briefcase, Home, Rocket, Wrench } from "lucide-react";
 import { Container } from "@/components/layout/container";
+import { blogPaths, type BlogSite } from "@/lib/data/blog-audience";
+import { proPaths } from "@/lib/pro-paths";
 import { HERO_HOME_IMAGE } from "@/lib/site";
 
-const topics = [
-  { label: "For homeowners", hint: "Hiring and estimates", href: "/blog/category/homeowners", icon: Home },
-  { label: "For service businesses", hint: "Jobs and invoices", href: "/blog/category/service-business", icon: Briefcase },
-  { label: "How the platform works", hint: "Requests to payments", href: "/blog/category/platform", icon: BookOpen },
-];
+/** Each blog's hero: its topic shortcuts, default copy and breadcrumb root. */
+const HERO = {
+  customer: {
+    title: "Guides for hiring, estimates, and getting the job done",
+    description:
+      "Practical writing for homeowners — how to request work, compare and approve estimates, handle change orders, and look after your home.",
+    root: { label: "Home", href: "/" },
+    topics: [
+      { label: "For homeowners", hint: "Hiring and estimates", href: blogPaths.category("customer", "homeowners"), icon: Home },
+      { label: "Home maintenance", hint: "Seasonal checklists", href: blogPaths.category("customer", "maintenance"), icon: Wrench },
+      { label: "How the platform works", hint: "Requests to payments", href: blogPaths.category("customer", "platform"), icon: BookOpen },
+    ],
+  },
+  pro: {
+    title: "Insights for running a home service business",
+    description:
+      "Practical playbooks for Pros — win more estimates, manage change orders, schedule your crew, cut no-shows, and get paid faster.",
+    root: { label: "For Pros", href: proPaths.home },
+    topics: [
+      { label: "For service businesses", hint: "Estimates, jobs, invoices", href: blogPaths.category("pro", "service-business"), icon: Briefcase },
+      { label: "Platform news", hint: "What's new for Pros", href: blogPaths.category("pro", "platform"), icon: BookOpen },
+      { label: "Join as a Pro", hint: "No commission on your work", href: proPaths.join, icon: Rocket },
+    ],
+  },
+} as const;
 
 export function BlogHero({
-  title = "Guides for hiring, estimates, and running the job",
-  description = "Practical writing for homeowners and local operators — how to request work, read an estimate, and keep the record clean when the scope changes.",
-  eyebrow = "Journal",
+  site = "customer",
+  title,
+  description,
+  eyebrow,
   current = "Blog",
 }: {
+  site?: BlogSite;
   title?: string;
   description?: string;
   eyebrow?: string;
   current?: string;
 }) {
+  const hero = HERO[site];
+  const topics = hero.topics;
+  title ??= hero.title;
+  description ??= hero.description;
+  eyebrow ??= site === "pro" ? "Pro insights" : "Journal";
+  const blogHref = blogPaths.index(site);
   return (
     <section className="relative isolate overflow-hidden">
       <div className="relative min-h-[17rem] w-full sm:min-h-[19rem] lg:min-h-[21rem]">
@@ -45,8 +75,8 @@ export function BlogHero({
           <nav aria-label="Breadcrumb">
             <ol className="flex items-center gap-2 text-sm text-white/70">
               <li>
-                <Link href="/" className="transition-colors hover:text-white">
-                  Home
+                <Link href={hero.root.href} className="transition-colors hover:text-white">
+                  {hero.root.label}
                 </Link>
               </li>
               <li aria-hidden="true">/</li>
@@ -57,7 +87,7 @@ export function BlogHero({
               ) : (
                 <>
                   <li>
-                    <Link href="/blog" prefetch={false} className="transition-colors hover:text-white">
+                    <Link href={blogHref} prefetch={false} className="transition-colors hover:text-white">
                       Blog
                     </Link>
                   </li>

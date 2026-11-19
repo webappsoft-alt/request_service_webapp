@@ -42,8 +42,10 @@ export const footerNav = {
     { label: "Pro Login", href: "/pro/login" },
     { label: "Create a Pro Account", href: proPaths.join },
     { label: "Pro dashboard", href: "/pro/dashboard" },
+    { label: "Pro Blog", href: `${proPaths.home}/blog` },
   ],
   // Contact Us / FAQ sit under Company (no separate Support heading).
+  // "Blog" is swapped for the Pro blog on Pro pages (components/layout/site-footer.tsx).
   company: [
     { label: "About", href: "/about" },
     { label: "Blog", href: "/blog" },

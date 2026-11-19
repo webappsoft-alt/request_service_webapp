@@ -2,10 +2,13 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { Mail, MapPin, MessageCircle } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
+import { blogPaths } from "@/lib/data/blog-audience";
 import { footerNav } from "@/lib/data/navigation";
+import { isProMarketingPath } from "@/lib/pro-paths";
 import { serviceCategories } from "@/lib/data/services";
 import { siteConfig } from "@/lib/site";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -50,6 +53,13 @@ const linkClass =
 export function SiteFooter() {
   const dispatch = useAppDispatch();
   const branding = useAppSelector(selectSiteBranding);
+  const pathname = usePathname() || "/";
+  // On Pro pages (/for-pros…) the Company "Blog" link opens the Pro blog, not the customer one.
+  const companyLinks = isProMarketingPath(pathname)
+    ? footerNav.company.map((item) =>
+        item.href === blogPaths.index("customer") ? { ...item, href: blogPaths.index("pro") } : item,
+      )
+    : footerNav.company;
 
   useEffect(() => {
     void dispatch(fetchSiteBranding());
@@ -157,7 +167,7 @@ export function SiteFooter() {
             <FooterColumn title="For Professionals" items={footerNav.providers} />
           </div>
           <div className="flex flex-col gap-8">
-            <FooterColumn title="Company" items={footerNav.company} />
+            <FooterColumn title="Company" items={companyLinks} />
           </div>
         </div>
 

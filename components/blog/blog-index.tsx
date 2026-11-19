@@ -5,8 +5,9 @@ import { ChevronDown, Loader2, Search, Sparkles, X } from "lucide-react";
 import { BlogCard } from "@/components/shared/blog-card";
 import { BlogCardSkeleton } from "@/components/shared/loading-skeletons";
 import { Button } from "@/components/ui/button";
+import type { BlogSite } from "@/lib/data/blog-audience";
 import {
-  BLOG_CATEGORIES,
+  blogCategoriesFor,
   fetchPublicBlogs,
   slugToCategoryName,
 } from "@/lib/data/public-blogs";
@@ -14,9 +15,12 @@ import type { PublicBlogItem } from "@/lib/types";
 
 interface BlogIndexProps {
   initialCategorySlug?: string;
+  /** customer → /blog (customer + "both" articles), pro → /for-pros/blog (pro + "both"). */
+  site?: BlogSite;
 }
 
-export function BlogIndex({ initialCategorySlug }: BlogIndexProps) {
+export function BlogIndex({ initialCategorySlug, site = "customer" }: BlogIndexProps) {
+  const categories = blogCategoriesFor(site);
   const initialCategory = initialCategorySlug
     ? slugToCategoryName(initialCategorySlug) || ""
     : "";
@@ -53,6 +57,7 @@ export function BlogIndex({ initialCategorySlug }: BlogIndexProps) {
       limit: PAGE_LIMIT,
       category: category || undefined,
       search: searchTerm || undefined,
+      audience: site,
     })
       .then((res) => {
         if (cancelled) return;
@@ -81,7 +86,7 @@ export function BlogIndex({ initialCategorySlug }: BlogIndexProps) {
     return () => {
       cancelled = true;
     };
-  }, [category, searchTerm]);
+  }, [category, searchTerm, site]);
 
   // Load more / See more pagination
   const handleSeeMore = async () => {
@@ -96,6 +101,7 @@ export function BlogIndex({ initialCategorySlug }: BlogIndexProps) {
         limit: PAGE_LIMIT,
         category: category || undefined,
         search: searchTerm || undefined,
+        audience: site,
       });
 
       if (res.data && res.data.length > 0) {
@@ -184,7 +190,7 @@ export function BlogIndex({ initialCategorySlug }: BlogIndexProps) {
           role="tablist"
           aria-label="Filter articles by category"
         >
-          {BLOG_CATEGORIES.map((item) => {
+          {categories.map((item) => {
             const isActive = category === item.value;
             return (
               <button
@@ -222,7 +228,7 @@ export function BlogIndex({ initialCategorySlug }: BlogIndexProps) {
         <div className="flex flex-col gap-8">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {blogs.map((post) => (
-              <BlogCard key={post._id || post.slug} post={post} />
+              <BlogCard key={post._id || post.slug} post={post} site={site} />
             ))}
           </div>
 

@@ -1,4 +1,5 @@
 import { publicApi } from "@/components/api/ApiRoutesFile";
+import type { BlogSite } from "@/lib/data/blog-audience";
 import type {
   BlogsPagination,
   PublicBlogComment,
@@ -33,6 +34,23 @@ export const BLOG_CATEGORIES = [
     description: "Seasonal and preventive maintenance topics across major home systems.",
   },
 ] as const;
+
+export type BlogCategoryOption = (typeof BLOG_CATEGORIES)[number];
+
+/** Category pills each blog shows (its articles only come from these categories in practice). */
+const SITE_CATEGORY_SLUGS: Record<BlogSite, readonly string[]> = {
+  customer: ["all", "homeowners", "maintenance", "platform"],
+  pro: ["all", "service-business", "platform"],
+};
+
+export function blogCategoriesFor(site: BlogSite): BlogCategoryOption[] {
+  return BLOG_CATEGORIES.filter((category) => SITE_CATEGORY_SLUGS[site].includes(category.slug));
+}
+
+/** The blog that owns a category page (e.g. /blog/category/service-business moves to the Pro blog). */
+export function siteForCategorySlug(slug: string): BlogSite {
+  return SITE_CATEGORY_SLUGS.customer.includes(slug) ? "customer" : "pro";
+}
 
 export function slugToCategoryName(slug?: string): string | undefined {
   if (!slug || slug === "all") return undefined;
@@ -70,6 +88,8 @@ export type FetchBlogsQuery = {
   limit?: number;
   search?: string;
   category?: string;
+  /** customer → articles for /blog, pro → articles for /for-pros/blog ("both" articles appear in each). */
+  audience?: BlogSite;
 };
 
 /**
@@ -106,6 +126,10 @@ export async function fetchPublicBlogs(
 
     if (query.category && query.category.trim() && query.category !== "All") {
       params.set("category", query.category.trim());
+    }
+
+    if (query.audience) {
+      params.set("audience", query.audience);
     }
 
     const url = `${base}/${publicApi.blogs}?${params.toString()}`;

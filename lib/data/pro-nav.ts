@@ -16,6 +16,8 @@ import { serviceCategories } from "@/lib/data/services";
 import { serviceIcons } from "@/lib/icons";
 import { proPaths } from "@/lib/pro-paths";
 
+const proBlog = `${proPaths.home}/blog`;
+
 export const proProductLinks = [
   {
     href: `${proPaths.home}#how-it-works`,
@@ -104,19 +106,20 @@ export const proResourceGroups = [
   {
     title: "From the desk",
     links: [
-      { href: "/blog", label: "Blog", hint: "Notes for service companies" },
+      // Pro blog (/for-pros/blog) — never the customer blog.
+      { href: proBlog, label: "Blog", hint: "Notes for service companies" },
       {
-        href: "/blog/why-change-orders-protect-contractors-and-homeowners",
+        href: `${proBlog}/why-change-orders-protect-contractors-and-homeowners`,
         label: "Change orders",
         hint: "Keep the original estimate",
       },
       {
-        href: "/blog/invoice-and-milestone-billing-habits-that-reduce-payment-delays",
+        href: `${proBlog}/invoice-and-milestone-billing-habits-that-reduce-payment-delays`,
         label: "Deposits and balances",
         hint: "How the invoice stays the parent",
       },
       {
-        href: "/blog/building-a-public-profile-that-converts-visitors",
+        href: `${proBlog}/building-a-public-profile-that-converts-visitors`,
         label: "Your public profile",
         hint: "What homeowners see",
       },

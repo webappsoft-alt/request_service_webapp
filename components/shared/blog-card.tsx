@@ -1,11 +1,27 @@
 import Link from "next/link";
 import { ArrowRight, CalendarDays, Eye, Heart, MessageSquare } from "lucide-react";
 import { BlogImage } from "@/components/blog/blog-image";
+import { blogPaths, siteForPost, type BlogSite } from "@/lib/data/blog-audience";
 import { extractFirstImageUrl } from "@/lib/data/public-blogs";
 import { formatDate } from "@/lib/format";
 import type { BlogPost, PublicBlogItem } from "@/lib/types";
 
-export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
+/**
+ * `site` = the blog this card is shown on. The card links to the article on that blog when the
+ * article belongs there ("both" articles do), otherwise to the blog it was written for.
+ */
+export function BlogCard({ post, site = "customer" }: { post: BlogPost | PublicBlogItem; site?: BlogSite }) {
+  const href = blogPaths.article(
+    siteForPost(
+      {
+        audience: "audience" in post ? post.audience : undefined,
+        category: "category" in post && typeof post.category === "string" ? post.category : undefined,
+      },
+      site,
+    ),
+    post.slug,
+  );
+
   const categoryName =
     "category" in post && typeof post.category === "string" && post.category
       ? post.category
@@ -62,13 +78,15 @@ export function BlogCard({ post }: { post: BlogPost | PublicBlogItem }) {
             className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-muted-foreground"
           >
             <CalendarDays className="size-3" aria-hidden="true" />
-            {formatDate(post.publishedAt)}
+            {/* Admin-picked publish date — date and year only, never the time. */}
+            <span>Published</span>
+            <span className="text-foreground/80">{formatDate(post.publishedAt)}</span>
           </time>
         ) : null}
 
         <h3 className="line-clamp-2 text-base leading-snug font-semibold tracking-tight text-balance text-foreground transition-colors group-hover:text-primary">
           <Link
-            href={`/blog/${post.slug}`}
+            href={href}
             prefetch={false}
             className="after:absolute after:inset-0 focus-visible:outline-none"
           >

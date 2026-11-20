@@ -13,10 +13,19 @@ export default function manifest(): MetadataRoute.Manifest {
     lang: "en-US",
     categories: ["business", "lifestyle"],
     icons: [
+      // Rounded macOS-style icon (transparent margin) — desktop dock / taskbar.
       {
         src: "/icon",
         sizes: "512x512",
         type: "image/png",
+        purpose: "any",
+      },
+      // Full-bleed square — Android launchers cut their own shape.
+      {
+        src: "/maskable-icon",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable",
       },
     ],
   };

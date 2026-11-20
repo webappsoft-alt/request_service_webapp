@@ -2180,6 +2180,7 @@ export function mapChatMessage(raw: unknown): ChatMessage | null {
     status,
     isRead: booleanValue(record.isRead, Boolean(record.readAt)),
     readAt: toIsoString(record.readAt) || undefined,
+    deliveredAt: toIsoString(record.deliveredAt) || undefined,
   };
 }
 

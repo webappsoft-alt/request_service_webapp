@@ -1,5 +1,6 @@
 "use client";
 
+import { MoreActionsMenuContent } from "@/components/portal/mobile-actions-menu";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -87,7 +88,6 @@ import { ChatPanelSkeleton } from "@/components/shared/loading-skeletons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -1304,7 +1304,7 @@ export function RequestDetailView({ id }: { id: string }) {
                       value={taskPriorityFilter || "all"}
                       onValueChange={(val) => setTaskPriorityFilter(val === "all" ? "" : val)}
                     >
-                      <SelectTrigger size="sm" className="h-8 w-36 py-0 text-xs leading-none bg-card border-border-soft">
+                      <SelectTrigger size="sm" className="h-8 w-36 py-0 text-xs leading-none bg-card">
                         <SelectValue placeholder="All priorities" />
                       </SelectTrigger>
                       <SelectContent align="end">
@@ -1375,9 +1375,6 @@ export function RequestDetailView({ id }: { id: string }) {
         notice={<FileNotices kind="request" id={request.id} />}
         actions={
           <>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/pro/dashboard/requests">Close</Link>
-            </Button>
             {hasJob ? (
               <Button size="sm" asChild>
                 <Link href={job ? `/pro/dashboard/jobs/${job.id}` : `/pro/dashboard/requests/${request.id}?tab=jobs`}>
@@ -1414,7 +1411,7 @@ export function RequestDetailView({ id }: { id: string }) {
                   <ChevronDown className="size-3.5" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-44">
+              <MoreActionsMenuContent align="end" className="min-w-44">
                 {request.status === "new" || request.status === "viewed" ? (
                   <DropdownMenuItem onSelect={markContacted} className="gap-2 cursor-pointer text-xs">
                     <PhoneCall className="size-3.5 text-muted-foreground" />
@@ -1474,7 +1471,7 @@ export function RequestDetailView({ id }: { id: string }) {
                   )}
                   {isArchived ? "Restore" : "Archive"}
                 </DropdownMenuItem>
-              </DropdownMenuContent>
+              </MoreActionsMenuContent>
             </DropdownMenu>
           </>
         }

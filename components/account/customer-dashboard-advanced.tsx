@@ -92,13 +92,13 @@ export function CustomerHeroSummary({
       style={enterStyle(0)}
       className={cn(
         ENTER_CLASS,
-        "relative overflow-hidden rounded-xl bg-[#003F7D] p-5 text-white shadow-sm sm:p-6 dark:bg-slate-900 dark:ring-1 dark:ring-border",
+        "relative overflow-hidden rounded-xl bg-[#003F7D] p-4 text-white shadow-sm sm:p-6 dark:bg-slate-900 dark:ring-1 dark:ring-border",
       )}
     >
       <div aria-hidden className="pointer-events-none absolute -top-24 -right-16 size-72 rounded-full bg-sky-400/20 blur-3xl" />
       <div className="relative grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-lg bg-white/10 p-3.5 ring-1 ring-white/10">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
+          <div className="col-span-2 rounded-lg bg-white/10 p-3.5 ring-1 ring-white/10 sm:col-span-1">
             <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-white/70 uppercase">
               <Wallet className="size-3.5" aria-hidden /> Balance due
             </p>
@@ -107,7 +107,7 @@ export function CustomerHeroSummary({
               {dueCount ? `${dueCount} invoice${dueCount === 1 ? "" : "s"} to pay` : "You're all paid up"}
             </p>
           </div>
-          <div className="rounded-lg bg-white/10 p-3.5 ring-1 ring-white/10">
+          <div className="min-w-0 rounded-lg bg-white/10 p-3.5 ring-1 ring-white/10">
             <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-white/70 uppercase">
               <CalendarClock className="size-3.5" aria-hidden /> Next visit
             </p>
@@ -123,7 +123,7 @@ export function CustomerHeroSummary({
               </>
             )}
           </div>
-          <div className="rounded-lg bg-white/10 p-3.5 ring-1 ring-white/10">
+          <div className="min-w-0 rounded-lg bg-white/10 p-3.5 ring-1 ring-white/10">
             <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-white/70 uppercase">
               <CheckCircle2 className="size-3.5" aria-hidden /> Your projects
             </p>

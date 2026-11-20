@@ -16,6 +16,8 @@ export type TechChatMessage = {
   at: string;
   isRead: boolean;
   readAt: string | null;
+  /** Reached the recipient's app (✓✓ grey); null = sent only (✓). */
+  deliveredAt?: string | null;
 };
 
 export type TechChatThread = {
@@ -40,7 +42,13 @@ export type TechChatThread = {
   lastMessageFrom: "technician" | "provider" | "admin" | null;
 };
 
-export type TechChatThreadDetail = TechChatThread & { messages: TechChatMessage[]; hasMore: boolean };
+export type TechChatThreadDetail = TechChatThread & {
+  messages: TechChatMessage[];
+  hasMore: boolean;
+  /** Profile photos for the chat header ("" / missing → initials circle). */
+  technicianAvatar?: string;
+  providerAvatar?: string;
+};
 
 export type TechnicianLocation = {
   employeeId: string;

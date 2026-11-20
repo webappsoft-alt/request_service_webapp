@@ -1,5 +1,6 @@
 "use client";
 
+import { MoreActionsMenuContent } from "@/components/portal/mobile-actions-menu";
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
@@ -310,7 +311,7 @@ export function CustomerDetailView({ id }: { id: string }) {
                     >
                       <SelectTrigger
                         id="estimate-status-filter"
-                        className="h-8 w-full text-xs border-border-soft bg-card"
+                        className="h-8 w-full text-xs bg-card"
                       >
                         <SelectValue placeholder="All statuses" />
                       </SelectTrigger>
@@ -355,7 +356,7 @@ export function CustomerDetailView({ id }: { id: string }) {
                     >
                       <SelectTrigger
                         id="job-status-filter"
-                        className="h-8 w-full text-xs border-border-soft bg-card"
+                        className="h-8 w-full text-xs bg-card"
                       >
                         <SelectValue placeholder="All statuses" />
                       </SelectTrigger>
@@ -399,7 +400,7 @@ export function CustomerDetailView({ id }: { id: string }) {
                   >
                     <SelectTrigger
                       id="invoice-status-filter"
-                      className="h-8 w-full text-xs border-border-soft bg-card"
+                      className="h-8 w-full text-xs bg-card"
                     >
                       <SelectValue placeholder="All statuses" />
                     </SelectTrigger>
@@ -488,9 +489,6 @@ export function CustomerDetailView({ id }: { id: string }) {
         }
         actions={
           <>
-            <Button asChild variant="outline" size="sm" className="h-8">
-              <Link href="/pro/dashboard/customers">Close</Link>
-            </Button>
             <Button size="sm" className="h-8" onClick={saveCustomer}>
               Save
             </Button>
@@ -501,11 +499,11 @@ export function CustomerDetailView({ id }: { id: string }) {
                   <ChevronDown className="size-3.5" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-44">
+              <MoreActionsMenuContent align="end" className="min-w-44">
                 <DropdownMenuItem onSelect={() => setTaskOpen(true)}>Create task</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setNoteOpen(true)}>Add note</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setReminderOpen(true)}>Set reminder</DropdownMenuItem>
-              </DropdownMenuContent>
+              </MoreActionsMenuContent>
             </DropdownMenu>
           </>
         }

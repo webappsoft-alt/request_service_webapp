@@ -182,7 +182,7 @@ export function NewEstimateView() {
                 </div>
               ) : null}
 
-              <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
+              <div className="mt-5 flex flex-wrap items-center justify-start gap-2 max-sm:*:flex-auto sm:justify-end border-t border-border pt-4">
                 <Button
                   size="sm"
                   className="gap-1.5 bg-[#003F7D] text-white hover:bg-[#003264]"

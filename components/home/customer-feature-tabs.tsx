@@ -1300,6 +1300,11 @@ export function CustomerFeatureTabs() {
     if (!list || !tab) return;
     const measure = () => setHighlight({ left: tab.offsetLeft, top: tab.offsetTop, width: tab.offsetWidth, height: tab.offsetHeight });
     measure();
+    // Phones scroll the tab row sideways: keep the active tab visible (scrolls the row only, never the page).
+    if (list.scrollWidth > list.clientWidth) {
+      const target = tab.offsetLeft - (list.clientWidth - tab.offsetWidth) / 2;
+      list.scrollTo({ left: Math.max(0, target), behavior: reducedMotion() ? "auto" : "smooth" });
+    }
     const observer = new ResizeObserver(measure);
     observer.observe(list);
     return () => observer.disconnect();
@@ -1337,7 +1342,9 @@ export function CustomerFeatureTabs() {
           ref={tabListRef}
           role="tablist"
           aria-label="Customer dashboard sections"
-          className="relative mx-auto flex max-w-5xl flex-wrap justify-center gap-1"
+          // Phones: one swipeable row (bleeds to the screen edges) instead of 4 ragged centred rows.
+          // sm+: the original wrapped, centred tab group.
+          className="no-scrollbar relative -mx-5 -my-3 flex max-w-[calc(100%+2.5rem)] snap-x scroll-px-5 gap-1 overflow-x-auto px-5 py-3 sm:mx-auto sm:my-0 sm:py-0 sm:max-w-5xl sm:flex-wrap sm:justify-center sm:overflow-visible sm:px-0"
         >
           {highlight ? <span aria-hidden="true" className="rs-tab-active" style={highlight} /> : null}
           {FEATURES.map((tab, index) => {
@@ -1357,7 +1364,7 @@ export function CustomerFeatureTabs() {
                 onClick={() => choose(index)}
                 onKeyDown={onTabKeyDown}
                 className={cn(
-                  "relative inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                  "relative inline-flex shrink-0 snap-start items-center gap-1.5 rounded-xl px-3.5 py-2.5 text-sm sm:px-4 font-medium whitespace-nowrap transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                   selected ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >

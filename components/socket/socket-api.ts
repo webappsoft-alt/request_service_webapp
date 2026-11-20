@@ -15,6 +15,8 @@ export type RealtimeEvents = {
     thread: import("@/lib/api/technician-chat-client").TechChatThread;
   };
   "techchat:read": { threadId: string; reader: "technician" | "provider"; readAt: string };
+  /** `deliveredTo` just connected: the other side's messages to them reached their app (✓ → ✓✓). */
+  "techchat:delivered": { threadId: string; deliveredTo: "technician" | "provider"; deliveredAt: string };
   "techchat:typing": { threadId: string; from: "technician" | "provider"; isTyping: boolean };
   "techchat:unread": { total: number };
   /** Provider room: a technician shared their live position. */

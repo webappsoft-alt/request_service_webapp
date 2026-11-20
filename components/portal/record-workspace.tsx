@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ComponentType, type ReactNode } from "react";
+import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -25,6 +25,7 @@ import {
   UserRound,
   Wrench,
 } from "lucide-react";
+import { MobileActionsMenu } from "@/components/portal/mobile-actions-menu";
 import { useOpenRecords } from "@/components/portal/use-open-records";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -130,6 +131,15 @@ export function RecordWorkspace({
   const hasSubnav = subnavTabs.includes(tab);
   const subnavNode = hasSubnav && subnav ? subnav(tab) : null;
 
+  // Phones scroll the tab row sideways: keep the active tab in view (scrolls the row only, never the page).
+  const tabListRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const list = tabListRef.current;
+    const active = list?.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(tab)}"]`);
+    if (!list || !active || list.scrollWidth <= list.clientWidth) return;
+    list.scrollTo({ left: Math.max(0, active.offsetLeft - (list.clientWidth - active.offsetWidth) / 2), behavior: "smooth" });
+  }, [tab]);
+
   useEffect(() => {
     if (trackOpen) openRecord({ href, label, kind });
   }, [href, kind, label, openRecord, trackOpen]);
@@ -146,8 +156,9 @@ export function RecordWorkspace({
 
   return (
     <div className="bg-card">
-      <div className="flex flex-col gap-2 border-b border-border-soft px-4 py-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
+      {/* Phones: title on the left, actions in a ⋮ menu on the right (MobileActionsMenu). */}
+      <div className="flex items-start justify-between gap-2 border-b border-border-soft px-4 py-2 sm:items-center">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           {backHref ? (
             <Link
               href={backHref}
@@ -164,9 +175,12 @@ export function RecordWorkspace({
           {badge}
         </div>
         {actions ? (
-          <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-auto print:hidden">
+          <MobileActionsMenu
+            label="Record actions"
+            className="flex flex-wrap items-center justify-end gap-2 sm:ml-auto print:hidden"
+          >
             {actions}
-          </div>
+          </MobileActionsMenu>
         ) : null}
       </div>
 
@@ -179,7 +193,10 @@ export function RecordWorkspace({
       {/* Main folder tabs — grey track only */}
       <div className="bg-[#e8ecf1] dark:bg-slate-900/90 px-3 pt-2 sm:px-4 print:hidden">
         <div
-          className="flex flex-wrap items-end gap-0.5 border-b border-[#cfd6e0] dark:border-border"
+          ref={tabListRef}
+          // Phones: one swipeable row; the baseline is an inset shadow (not a border) so the
+          // active tab still sits on it inside the scroll box. sm+: the original wrapped tabs.
+          className="no-scrollbar flex items-end gap-0.5 overflow-x-auto shadow-[inset_0_-1px_0_#cfd6e0] dark:shadow-[inset_0_-1px_0_var(--border)] sm:flex-wrap sm:overflow-visible sm:border-b sm:border-[#cfd6e0] sm:shadow-none dark:sm:border-border dark:sm:shadow-none"
           role="tablist"
         >
           {tabs.map((item) => {
@@ -194,7 +211,7 @@ export function RecordWorkspace({
                 data-tab-id={item.id}
                 onClick={() => setTab(item.id)}
                 className={cn(
-                  "inline-flex cursor-pointer items-center gap-1.5 px-3 py-2 text-sm transition-colors",
+                  "inline-flex shrink-0 cursor-pointer items-center gap-1.5 px-3 py-2 text-sm transition-colors",
                   active
                     ? "-mb-px rounded-t-md border border-b-0 border-[#cfd6e0] dark:border-border bg-card font-semibold text-[#003F7D] dark:text-primary"
                     : "mb-px font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100",

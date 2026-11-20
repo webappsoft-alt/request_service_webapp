@@ -191,7 +191,7 @@ export function StatusBreakdownCard({
               ))
           : null}
       </div>
-      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2.5 text-sm">
+      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm sm:gap-x-6">
         {segments.map((item) => (
           <div key={item.label} className="flex items-center justify-between gap-3">
             <dt className="flex items-center gap-2 truncate text-muted-foreground">

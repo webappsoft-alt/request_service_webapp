@@ -141,7 +141,7 @@ export function TechnicianJobsView() {
         toolbar={
           <div className="h-8 w-36 sm:w-40">
             <Select value={scope} onValueChange={(next) => setScope(next as "open" | "done" | "all")}>
-              <SelectTrigger id="tech-jobs-scope" aria-label="Filter by status" size="sm" className="h-8 w-full border-border-soft text-xs">
+              <SelectTrigger id="tech-jobs-scope" aria-label="Filter by status" size="sm" className="h-8 w-full text-xs">
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent position="popper" align="end" className="z-[100] w-[var(--radix-select-trigger-width)] min-w-[150px]">

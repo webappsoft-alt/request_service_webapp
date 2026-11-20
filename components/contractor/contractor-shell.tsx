@@ -367,7 +367,7 @@ export function ContractorShell({ children }: { children: ReactNode }) {
               </SheetTrigger>
               <SheetContent
                 side="left"
-                className="contractor-theme flex w-72 flex-col border-0 bg-gradient-to-b from-[var(--ct-sidebar)] to-[var(--ct-sidebar-2)] p-0 text-white"
+                className="contractor-theme flex w-72 flex-col data-[side=left]:w-72 data-[side=left]:max-w-[85vw] border-0 bg-gradient-to-b from-[var(--ct-sidebar)] to-[var(--ct-sidebar-2)] p-0 text-white"
               >
                 <SheetHeader className="border-b border-[var(--ct-sidebar-border)] px-4 py-3">
                   <SheetTitle className="sr-only">Contractor portal menu</SheetTitle>

@@ -25,6 +25,7 @@ import {
   listChatThreads,
   markChatRead,
   subscribeChat,
+  withLatestReceipts,
   type ChatAttachment,
   type ChatRole,
   type ChatThread,
@@ -77,7 +78,7 @@ function mergeThreads(existing: ChatThread[], incoming: ChatThread[]): ChatThrea
       ...inc,
       updatedAt:
         prev.updatedAt && prev.updatedAt > inc.updatedAt ? prev.updatedAt : inc.updatedAt,
-      messages: [...prev.messages, ...newFromInc],
+      messages: [...withLatestReceipts(prev.messages, inc.messages), ...newFromInc],
     });
   }
 

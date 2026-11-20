@@ -211,6 +211,9 @@ export function ProAssistantLauncher({
           ? "scale-105 cursor-grabbing shadow-2xl"
           : "cursor-pointer active:scale-95",
         open && "pointer-events-none scale-90 opacity-0",
+        // Phones: chat pages are composer + quick replies at the bottom — the launcher would sit on
+        // the send button, so it's hidden there (still in the header button / other pages).
+        CHAT_PAGE.test(pathname || "") && "max-sm:hidden",
       )}
     >
       <span className="relative flex size-10 shrink-0 items-center justify-center rounded-full bg-white/12 ring-1 ring-white/20">

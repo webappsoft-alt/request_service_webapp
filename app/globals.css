@@ -804,6 +804,14 @@
 @utility container-site {
   margin-inline: auto;
   width: min(80%, 90rem);
+  /* Phones: 80% left ~39px dead space per side on a 390px screen; use a 20px gutter instead. */
+  @media (width < 40rem) {
+    width: calc(100% - 2.5rem);
+  }
+  /* Tablets (640–1023px): 80% left ~86px per side at 864px; use a 32px gutter. Desktop (1024+) keeps 80%. */
+  @media (40rem <= width < 64rem) {
+    width: calc(100% - 4rem);
+  }
 }
 
 .filters-sidebar {
@@ -2615,5 +2623,52 @@ body.rs-cal-dragging [data-cal-overlay] {
 @media (prefers-reduced-motion: reduce) {
   .bot-panel {
     transition: none;
+  }
+}
+
+/* Page-header actions on phones (components/portal/mobile-actions-menu.tsx). */
+@media (width < 40rem) {
+  /* "Close" isn't offered on phones (back arrow / menu instead). */
+  [data-mobile-actions] [data-mobile-hide] {
+    display: none !important;
+  }
+  /* Header has "More actions": only that button shows; the others are listed inside its menu. */
+  [data-mobile-actions="more"] :is(button, a[href]):not([aria-haspopup="menu"], [aria-haspopup="listbox"]) {
+    display: none !important;
+  }
+  /* ⋮ menu: the actions read as a plain menu list, not stacked buttons. */
+  [data-mobile-actions="kebab"] :is(button, a[href]) {
+    width: 100%;
+    height: auto;
+    min-height: 2.25rem;
+    justify-content: flex-start;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    color: var(--foreground);
+    font-weight: 500;
+    padding-inline: 0.625rem;
+  }
+  [data-mobile-actions="kebab"] :is(button, a[href]):hover {
+    background: var(--accent);
+  }
+}
+
+/*
+ * Dashboards on phones (< 640 px): slightly smaller type everywhere — labels, tabs, headings,
+ * badges — so pages are less crowded. Only on portal pages (customer / Pro / technician /
+ * contractor): `:root:has(.portal-app)` also reaches dialogs, sheets and menus portalled to <body>.
+ * Tailwind's text-* utilities read these variables; line heights are ratios, so they follow.
+ * --text-base stays 16px on purpose: inputs use it on phones and iOS zooms the page into
+ * fields under 16px. Tablet / desktop and the public site are unchanged.
+ */
+@media (width < 40rem) {
+  :root:has(.portal-app) {
+    --text-xs: 0.6875rem; /* 12 → 11px */
+    --text-sm: 0.8125rem; /* 14 → 13px */
+    --text-lg: 1.0625rem; /* 18 → 17px */
+    --text-xl: 1.125rem; /* 20 → 18px */
+    --text-2xl: 1.3125rem; /* 24 → 21px */
+    --text-3xl: 1.5rem; /* 30 → 24px */
   }
 }

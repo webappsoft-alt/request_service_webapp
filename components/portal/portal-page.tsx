@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { MobileActionsMenu } from "@/components/portal/mobile-actions-menu";
 
 export function PortalPage({
   eyebrow,
@@ -28,15 +28,15 @@ export function PortalPage({
 }) {
   if (headerless) {
     return (
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-4 sm:gap-5">
         <h1 className="sr-only">{title}</h1>
         {children}
       </div>
     );
   }
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-3 rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-4 sm:gap-5">
+      <div className="relative flex flex-col gap-3 rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card px-4 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4 max-sm:has-[[data-collapsed-actions]]:pr-14">
         <div className="flex min-w-0 items-start gap-3">
         {backHref ? (
           <Link
@@ -65,7 +65,16 @@ export function PortalPage({
           ) : null}
         </div>
         </div>
-        {actions ? <div className={cn("flex flex-wrap gap-2 print:hidden")}>{actions}</div> : null}
+        {/* Phones with 2+ actions: a ⋮ menu pinned to the card corner. */}
+        {actions ? (
+          <MobileActionsMenu
+            label="Page actions"
+            className="flex flex-wrap gap-2 print:hidden"
+            collapsedRootClassName="max-sm:absolute max-sm:top-3 max-sm:right-3"
+          >
+            {actions}
+          </MobileActionsMenu>
+        ) : null}
       </div>
       {children}
     </div>

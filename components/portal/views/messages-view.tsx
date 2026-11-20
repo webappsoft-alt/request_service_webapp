@@ -14,7 +14,6 @@ import {
   MessageSquare,
   Paperclip,
   Phone,
-  RotateCw,
   Search,
   Sparkles,
   User,
@@ -63,6 +62,7 @@ export function MessagesView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const technicians = searchParams.get("tab") === "technicians";
+  const [customerChatOpen, setCustomerChatOpen] = useState(false);
   const customerUnread = usePortalInbox().unreadChats;
   const technicianUnread = useTechChatUnread("provider");
   // Size the chat workspace to the real space left under the portal header.
@@ -102,7 +102,15 @@ export function MessagesView() {
       style={frameHeight ? { height: frameHeight } : undefined}
       className="-m-3 sm:-m-4 flex h-[calc(100vh-93px)] min-h-[520px] flex-col overflow-hidden bg-background"
     >
-      <div className="flex shrink-0 items-center gap-1 border-b border-border bg-card px-3 py-2 sm:px-4" role="tablist" aria-label="Conversations">
+      {/* Phones: hidden while a conversation is open (its header has the back arrow). */}
+      <div
+        className={cn(
+          "flex shrink-0 items-center gap-1 border-b border-border bg-card px-3 py-2 sm:px-4",
+          (technicians ? Boolean(searchParams.get("thread")) : customerChatOpen) && "max-md:hidden",
+        )}
+        role="tablist"
+        aria-label="Conversations"
+      >
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -173,13 +181,14 @@ export function MessagesView() {
           />
         </div>
       ) : (
-        <CustomerMessages />
+        <CustomerMessages onChatOpenChange={setCustomerChatOpen} />
       )}
     </div>
   );
 }
 
-function CustomerMessages() {
+/** `onChatOpenChange`: phones — true while a conversation fills the screen (the parent hides its tab switch). */
+function CustomerMessages({ onChatOpenChange }: { onChatOpenChange?: (open: boolean) => void } = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const directAdmin = searchParams.get("direct") === "admin";
@@ -204,7 +213,6 @@ function CustomerMessages() {
     send,
     markRead,
     loading,
-    refresh,
     loadMore,
     loadingMore,
     hasMore,
@@ -286,6 +294,11 @@ function CustomerMessages() {
       null
     );
   }, [filtered, selectedId, threads]);
+
+  const chatOpenOnPhone = mobileChatOpen && Boolean(selected);
+  useEffect(() => {
+    onChatOpenChange?.(chatOpenOnPhone);
+  }, [chatOpenOnPhone, onChatOpenChange]);
 
   viewingThreadIdRef.current = selected?.id ?? null;
   providerActiveThreadIdRef.current = selected?.id ?? null;
@@ -457,15 +470,7 @@ function CustomerMessages() {
                     <span className="inline-flex h-5 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground">
                       {allCount}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => void refresh({ force: true, silent: false })}
-                      title="Refresh messages"
-                      aria-label="Refresh messages"
-                      className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                    >
-                      <RotateCw className="size-3.5" />
-                    </button>
+                    {/* Client: refresh icon removed — new messages arrive live. */}
                   </div>
                 {unreadCount > 0 ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
@@ -904,14 +909,6 @@ function CustomerMessages() {
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => void refresh({ force: true, silent: false })}
-              className="gap-1.5"
-            >
-              <RotateCw className="size-3.5" />
-              Refresh messages
-            </Button>
             <Button variant="outline" asChild>
               <Link href="/pro/dashboard/requests">View incoming leads</Link>
             </Button>

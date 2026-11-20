@@ -181,7 +181,10 @@ export function ProjectLifecycleNav({
       <ul
         ref={stripRef}
         aria-label="Project sections"
-        className="flex snap-x gap-1.5 overflow-x-auto px-2.5 py-2.5 [scrollbar-width:none] lg:hidden [&::-webkit-scrollbar]:hidden"
+        // Same underline tabs as the rest of the portal (was rounded pills); the scroll box is inset with margin (not padding)
+        // so swiped tabs stop short of the card border; pb-1 keeps the active underline
+        // off the card edge (the header divider above already separates the strip).
+        className="mx-3.5 flex snap-x gap-x-5 overflow-x-auto pb-1 [scrollbar-width:none] lg:hidden [&::-webkit-scrollbar]:hidden"
       >
         {allGroups.flatMap((group) => group.items).map((item) => {
           const isActive = view === item.id;
@@ -192,10 +195,10 @@ export function ProjectLifecycleNav({
                 type="button"
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                  "flex items-center gap-1.5 border-b-2 py-2.5 text-[13px] whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                   isActive
-                    ? "border-primary bg-primary font-semibold text-primary-foreground"
-                    : "border-slate-200 bg-white text-slate-700 dark:border-border dark:bg-card dark:text-foreground",
+                    ? "border-primary font-semibold text-primary"
+                    : "border-transparent font-medium text-slate-500 hover:text-foreground dark:text-muted-foreground",
                 )}
                 title={item.hint}
                 onClick={() => onView(item.id)}
@@ -206,7 +209,7 @@ export function ProjectLifecycleNav({
                   <span
                     className={cn(
                       "rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
-                      isActive ? "bg-white/20" : "bg-slate-100 text-slate-500 dark:bg-muted",
+                      isActive ? "bg-primary/10 text-primary" : "bg-slate-100 text-slate-500 dark:bg-muted",
                       item.metaTone === "attention" && !isActive && "bg-primary text-primary-foreground",
                       item.metaPulse && "animate-pulse",
                     )}

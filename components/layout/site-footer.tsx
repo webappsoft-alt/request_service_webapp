@@ -176,7 +176,8 @@ export function SiteFooter() {
       </div>
 
       <div className="border-t border-white/15">
-        <div className="container-site flex flex-col gap-3 py-5 text-sm text-white/80 md:flex-row md:items-center md:justify-between">
+        {/* Phones only: extra bottom room so the floating RS button never covers these links. */}
+        <div className="container-site flex flex-col gap-3 pt-5 pb-20 text-sm text-white/80 sm:pb-5 md:flex-row md:items-center md:justify-between">
           <p>
             © {new Date().getFullYear()} {siteConfig.name}. All rights reserved.
           </p>
@@ -229,7 +230,7 @@ function AppDownloadBlock() {
         Download the app
       </p>
       <div className="flex items-center gap-3 lg:flex-col lg:items-stretch">
-        <div className="flex flex-1 flex-col gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:w-60 sm:flex-none lg:w-auto">
           <StoreBadge href={appStore} store="App Store" eyebrow="Download on the" icon={<AppleIcon />} />
           <StoreBadge href={googlePlay} store="Google Play" eyebrow="Get it on" icon={<GooglePlayIcon />} />
         </div>

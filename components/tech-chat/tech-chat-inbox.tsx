@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Briefcase, FileText, MessageSquare, Search, Wallet } from "lucide-react";
+import { Briefcase, FileText, MessageSquare, Search, Wallet } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { onSocketEvent } from "@/components/socket/socket-api";
 import { TechChatConversation } from "@/components/tech-chat/tech-chat-conversation";
@@ -344,12 +343,7 @@ export function TechChatInbox({
       <div className={cn("flex min-h-0 min-w-0 flex-col", !selectedId && "hidden md:flex")}>
         {selectedId ? (
           <>
-            <div className="border-b border-input px-2 py-1.5 md:hidden">
-              <Button variant="ghost" size="sm" onClick={() => select(null)}>
-                <ArrowLeft /> All conversations
-              </Button>
-            </div>
-            <TechChatConversation key={selectedId} side={side} threadId={selectedId} className="flex-1" />
+            <TechChatConversation key={selectedId} side={side} threadId={selectedId} className="flex-1" onBack={() => select(null)} />
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">

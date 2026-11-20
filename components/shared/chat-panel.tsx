@@ -338,19 +338,30 @@ export function ChatPanel({
       recipientUnreadCount,
     );
 
+    // WhatsApp-style: ✓ grey = sent (their app isn't connected) · ✓✓ grey = delivered to their app ·
+    // ✓✓ blue = seen. `deliveredAt` comes from the API / CHAT_THREAD_UPDATED (utils/chatDelivery.js).
+    // Previous: a single grey ✓ until read.
     if (read) {
       return (
-        <span title="Read">
+        <span title="Seen">
           <CheckCheck
-            className="size-3.5 text-[#003F7D] dark:text-sky-400"
-            aria-label="Read"
+            className="size-3.5 text-sky-600 dark:text-sky-400"
+            aria-label="Seen"
           />
         </span>
       );
     }
 
+    if (message.deliveredAt || message.status === "delivered") {
+      return (
+        <span title="Delivered">
+          <CheckCheck className="size-3.5 text-muted-foreground/80" aria-label="Delivered" />
+        </span>
+      );
+    }
+
     return (
-      <span title="Sent (Delivered)">
+      <span title="Sent">
         <Check
           className="size-3.5 text-muted-foreground/80"
           aria-label="Sent"

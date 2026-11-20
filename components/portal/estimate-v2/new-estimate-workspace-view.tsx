@@ -5,12 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { AiGeneratedBadge, isAiGenerated } from "@/components/portal/estimate-v2/ai-generated-badge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Handshake, HardHat, LayoutTemplate, Link2, Loader2, MapPin, MoreHorizontal, Pencil, Presentation, Printer, Route, Trash2, FileText, ExternalLink, History, MessageSquareText, UserRound } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Handshake, HardHat, LayoutTemplate, Link2, Loader2, MapPin, Pencil, Presentation, Printer, Route, Trash2, FileText, ExternalLink, History, MessageSquareText, UserRound } from "lucide-react";
 import { ProjectLifecycleNav, projectNavGroups } from "@/components/portal/estimate-v2/project-lifecycle-nav";
 import { ApprovalStatus, isProjectPanelView, ProjectPanel, projectFiles, useProjectData } from "@/components/portal/estimate-v2/project-panels";
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -19,6 +18,7 @@ import { RouteLocationMapDialog } from "@/components/portal/route-location-map-d
 import { defaultAddressFirst, locationCoords, locationText } from "@/components/portal/location-cell";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { MobileActionsMenu, MoreActionsMenuContent } from "@/components/portal/mobile-actions-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -2879,7 +2879,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     Create invoice (or Open job / invoice) after they accept. The rest is under "More". An accepted
                     estimate is locked (signed), so it can't be saved or sent again.
                   */}
-                  <div className="flex flex-wrap items-center justify-end gap-2">
+                  {/* Phones: only "More actions" shows; the other buttons are listed at the top of its menu (MobileActionsMenu). */}
+                  <MobileActionsMenu className="flex flex-wrap items-center justify-end gap-2">
                     {(!estimate || estimate.id === autoCreatedEstimateId) && !showVisits && !estimateLocked ? (
                       <Button size="sm" disabled={saving} onClick={() => void buildEstimateNow()}>
                         Build estimate
@@ -2941,12 +2942,13 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                     {/* Client: Print is in More; New estimate only in the app sidebar (Estimate → Create estimate). */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button size="sm" variant="outline" className="gap-1.5" aria-label="More actions">
-                          <MoreHorizontal className="size-4" />
-                          More
+                        {/* Same label as every other "More actions" menu (was "⋯ More"). */}
+                        <Button size="sm" variant="outline" className="gap-1.5">
+                          More actions
+                          <ChevronDown className="size-3.5" aria-hidden="true" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-56">
+                      <MoreActionsMenuContent align="end" className="w-56">
                         {crewLocked ? null : (
                           <>
                             <DropdownMenuItem onSelect={() => setCrewMode("contractor")}>
@@ -2980,9 +2982,9 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                           <Link2 className="size-4" />
                           Copy share link
                         </DropdownMenuItem>
-                      </DropdownMenuContent>
+                      </MoreActionsMenuContent>
                     </DropdownMenu>
-                  </div>
+                  </MobileActionsMenu>
                 </div>
 
                 <div className={cn("space-y-5", !partsView && "mt-5")}>

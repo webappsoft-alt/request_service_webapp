@@ -89,7 +89,7 @@ export function ContractorChangeRequestsView() {
                 setPage(1);
               }}
             >
-              <SelectTrigger id="contractor-requests-status" aria-label="Filter by status" size="sm" className="h-8 w-full border-border-soft text-xs">
+              <SelectTrigger id="contractor-requests-status" aria-label="Filter by status" size="sm" className="h-8 w-full text-xs">
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent position="popper" align="end" className="z-[100] w-[var(--radix-select-trigger-width)] min-w-[160px]">

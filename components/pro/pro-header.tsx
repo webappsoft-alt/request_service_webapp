@@ -124,7 +124,7 @@ export function ProHeader() {
               <Menu />
             </Button>
           </SheetTrigger>
-          <SheetContent side="right" className="w-80">
+          <SheetContent side="right" className="w-80 data-[side=right]:w-80 data-[side=right]:max-w-[85vw]">
             <SheetHeader>
               <SheetTitle>For professionals</SheetTitle>
             </SheetHeader>

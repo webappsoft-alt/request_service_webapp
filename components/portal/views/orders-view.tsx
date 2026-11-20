@@ -12,7 +12,6 @@ import {
   FileCheck,
   FileEdit,
   MoreHorizontal,
-  RefreshCw,
   Search,
   Wrench,
   UserPlus,
@@ -260,11 +259,6 @@ export function OrdersView({ viewer = "provider" }: { viewer?: OrderApiScope } =
       dispatch(clearProviderOrdersError());
     }
   }, [dispatch, error, loading, mutating]);
-
-  const handleRefresh = () => {
-    void refreshOrders({ showLoading: !hasCache && items.length === 0 });
-    toast.success("Orders refreshed.");
-  };
 
   function onSearchChange(value: string) {
     setSearchInput(value);
@@ -704,20 +698,7 @@ export function OrdersView({ viewer = "provider" }: { viewer?: OrderApiScope } =
           ? "Accept bookings, assign an employee or contractor, and follow each order through to completion."
           : "Fixed-price orders the office assigned to you. Depart, check in on site, raise change orders and submit completion proof."
       }
-      actions={
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={actionLoadingState && items.length === 0}
-          className="gap-1.5 h-8 text-xs"
-        >
-          <RefreshCw
-            className={`size-3.5 ${actionLoadingState && items.length === 0 ? "animate-spin" : ""}`}
-          />
-          Refresh
-        </Button>
-      }
+      // Client: no Refresh button — the list updates live, and the browser can reload the page.
     >
       {/* Rest-of-app Standard Filter Tabs */}
       <FilterTabs

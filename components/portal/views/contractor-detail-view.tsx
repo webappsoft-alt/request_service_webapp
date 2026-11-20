@@ -1,5 +1,6 @@
 "use client";
 
+import { MoreActionsMenuContent } from "@/components/portal/mobile-actions-menu";
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { TimeTrackingPanel } from "@/components/time-tracking/time-tracking-panel";
 import { TimeStat } from "@/components/time-tracking/time-tracking-ui";
@@ -55,7 +56,6 @@ import {
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -508,12 +508,12 @@ export function ContractorDetailView({ id }: { id: string }) {
                   <ChevronDown className="size-3.5" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-44">
+              <MoreActionsMenuContent align="end" className="min-w-44">
                 <DropdownMenuItem onSelect={() => setTaskOpen(true)}>Create task</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setNoteOpen(true)}>Add note</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setReminderOpen(true)}>Set reminder</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setRemoveOpen(true)}>Remove</DropdownMenuItem>
-              </DropdownMenuContent>
+              </MoreActionsMenuContent>
             </DropdownMenu>
           </>
         }

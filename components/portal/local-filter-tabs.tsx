@@ -30,7 +30,7 @@ export function LocalFilterTabs({
       )}
     >
       <div
-        className="flex flex-wrap items-center gap-0.5"
+        className="no-scrollbar flex max-w-full min-w-0 items-center gap-0.5 overflow-x-auto *:shrink-0 sm:flex-wrap sm:overflow-visible"
         role="tablist"
       >
         {options.map((option) => {

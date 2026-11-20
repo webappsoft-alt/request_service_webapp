@@ -38,6 +38,8 @@ export type ChatMessage = {
   status?: "pending" | "sent" | "delivered" | "read" | "failed";
   isRead?: boolean;
   readAt?: string;
+  /** Reached the recipient's app (✓✓ grey); unset = sent only (✓). */
+  deliveredAt?: string;
 };
 
 export type ChatThread = {
@@ -252,4 +254,23 @@ export function subscribeChat(onStoreChange: () => void) {
     window.removeEventListener(CHAT_EVENT, onStoreChange);
     window.removeEventListener("storage", onStoreChange);
   };
+}
+
+/**
+ * Keep the messages already on screen but take the latest receipts (✓✓ delivered / seen) from the
+ * server copy of the same messages — thread merges otherwise only append new messages, so a
+ * delivered / read update to an existing message would be dropped.
+ */
+export function withLatestReceipts(current: ChatMessage[], incoming: ChatMessage[] | undefined): ChatMessage[] {
+  if (!incoming?.length) return current;
+  const byId = new Map(incoming.map((message) => [message.id, message]));
+  return current.map((message) => {
+    const server = byId.get(message.id);
+    if (!server) return message;
+    const deliveredAt = message.deliveredAt || server.deliveredAt;
+    const isRead = Boolean(message.isRead || server.isRead);
+    const readAt = message.readAt || server.readAt;
+    if (deliveredAt === message.deliveredAt && isRead === Boolean(message.isRead) && readAt === message.readAt) return message;
+    return { ...message, deliveredAt, isRead, readAt, ...(isRead ? { status: "read" as const } : {}) };
+  });
 }

@@ -741,7 +741,7 @@ export function RemindersView() {
         }
         toolbar={
           <Select value={filterSelectValue} onValueChange={onStatusFilterChange}>
-            <SelectTrigger className="h-8 w-[9.5rem] text-xs border-border-soft" size="sm">
+            <SelectTrigger className="h-8 w-[9.5rem] text-xs" size="sm">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent position="popper" className="z-[100]">

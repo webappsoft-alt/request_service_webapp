@@ -180,7 +180,7 @@ export function JobRequestsTab({
                   setPage(1);
                 }}
               >
-                <SelectTrigger aria-label="Filter by type" size="sm" className="h-8 w-full border-border-soft text-xs">
+                <SelectTrigger aria-label="Filter by type" size="sm" className="h-8 w-full text-xs">
                   <SelectValue placeholder="All types" />
                 </SelectTrigger>
                 <SelectContent position="popper" align="end" className="z-[100] w-[var(--radix-select-trigger-width)]">
@@ -200,7 +200,7 @@ export function JobRequestsTab({
                   setPage(1);
                 }}
               >
-                <SelectTrigger aria-label="Filter by status" size="sm" className="h-8 w-full border-border-soft text-xs">
+                <SelectTrigger aria-label="Filter by status" size="sm" className="h-8 w-full text-xs">
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent position="popper" align="end" className="z-[100] w-[var(--radix-select-trigger-width)]">

@@ -1,5 +1,6 @@
 "use client";
 
+import { MoreActionsMenuContent } from "@/components/portal/mobile-actions-menu";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -13,6 +14,7 @@ import {
   Pencil,
   Printer,
   Share2,
+  Lock,
 } from "lucide-react";
 import { RouteLocationMapDialog } from "@/components/portal/route-location-map-dialog";
 import { defaultAddressFirst, locationCoords, locationText } from "@/components/portal/location-cell";
@@ -180,7 +182,6 @@ import { TimeTrackingPanel } from "@/components/time-tracking/time-tracking-pane
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -1156,7 +1157,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                   <ChevronDown className="size-3.5" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-44">
+              <MoreActionsMenuContent align="end" className="min-w-44">
                 {!job ? (
                   <>
                     <DropdownMenuItem onSelect={() => setChangeAssignOpen(true)}>
@@ -1217,7 +1218,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                     Archive estimate
                   </DropdownMenuItem>
                 )}
-              </DropdownMenuContent>
+              </MoreActionsMenuContent>
             </DropdownMenu>
           </>
         }
@@ -2784,7 +2785,7 @@ export function JobDetailView({ id }: { id: string }) {
                   <ChevronDown className="size-3.5" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-44">
+              <MoreActionsMenuContent align="end" className="min-w-44">
                 <DropdownMenuItem asChild>
                   <Link href="/pro/dashboard/schedule">Open calendar</Link>
                 </DropdownMenuItem>
@@ -2818,7 +2819,7 @@ export function JobDetailView({ id }: { id: string }) {
                 >
                   {deleting ? "Deleting…" : "Delete job"}
                 </DropdownMenuItem>
-              </DropdownMenuContent>
+              </MoreActionsMenuContent>
             </DropdownMenu>
           </>
         }
@@ -2873,7 +2874,8 @@ export function JobDetailView({ id }: { id: string }) {
                           ) : null}
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
+                      {/* Phones: equal-width Chat / Change / Remove; the lock reason shows as text (no tooltips on touch). */}
+                      <div className="grid w-full auto-cols-fr grid-flow-col items-center gap-2 *:w-full sm:flex sm:w-auto sm:flex-wrap sm:*:w-auto">
                         {technician && resolvedEmployeeId ? (
                           <TechChatButton
                             side="provider"
@@ -2898,8 +2900,8 @@ export function JobDetailView({ id }: { id: string }) {
                         {technician ? (
                           <Button
                             size="sm"
-                            variant="ghost"
-                            className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            variant="outline"
+                            className="h-8 border-destructive/30 bg-background text-destructive hover:bg-destructive/10 hover:text-destructive"
                             disabled={removingAssignee || crewLocked}
                             title={crewHint}
                             onClick={() => void removeJobAssignee()}
@@ -2908,6 +2910,12 @@ export function JobDetailView({ id }: { id: string }) {
                           </Button>
                         ) : null}
                       </div>
+                      {crewLocked && crewHint ? (
+                        <p className="flex basis-full items-center gap-1.5 text-xs text-muted-foreground sm:hidden">
+                          <Lock className="size-3.5 shrink-0" aria-hidden />
+                          {crewHint}
+                        </p>
+                      ) : null}
                       {resolvedEmployeeId ? (
                         <div className="basis-full">
                           <JobTechnicianCrew

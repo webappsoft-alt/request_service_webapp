@@ -190,8 +190,9 @@ export function BotWidget() {
             )}
           />
         </span>
-        {/* Always visible so visitors can tell what the button is. */}
-        <span className={cn("flex min-w-0 flex-col leading-tight", left ? "pr-4 pl-2 text-left" : "pr-2 pl-4 text-right")}>
+        {/* Visible from sm up so visitors can tell what the button is; on phones the launcher is just
+            the round RS badge so it doesn't cover cards/text (aria-label + title still name it). */}
+        <span className={cn("hidden min-w-0 flex-col leading-tight sm:flex", left ? "pr-4 pl-2 text-left" : "pr-2 pl-4 text-right")}>
           <span className="truncate text-sm font-bold whitespace-nowrap">RS AI Assistant</span>
           <span className="truncate text-[11px] font-medium whitespace-nowrap text-primary-foreground/80">
             {resumable ? "Continue your chat" : "Chat with us · Online"}

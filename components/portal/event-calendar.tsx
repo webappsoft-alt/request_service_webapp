@@ -804,7 +804,7 @@ export function EventCalendar({
             setKindFilter(next);
           }}
         >
-          <SelectTrigger size="sm" className="h-8 w-40 border-border-soft bg-card">
+          <SelectTrigger size="sm" className="h-8 w-40 bg-card">
             <SelectValue placeholder="All work" />
           </SelectTrigger>
           <SelectContent position="popper" align="end">
@@ -821,7 +821,7 @@ export function EventCalendar({
             value={employeeFilter || "__all__"}
             onValueChange={(value) => setEmployeeFilter(value === "__all__" ? "" : value)}
           >
-            <SelectTrigger size="sm" className="h-8 w-52 border-border-soft bg-card">
+            <SelectTrigger size="sm" className="h-8 w-52 bg-card">
               <SelectValue placeholder="Everyone" />
             </SelectTrigger>
             <SelectContent position="popper" align="end">

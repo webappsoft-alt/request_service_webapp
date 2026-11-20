@@ -419,7 +419,7 @@ export function TechnicianShell({ children }: { children: ReactNode }) {
                   <Menu />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="technician-theme flex w-72 flex-col border-0 bg-gradient-to-b from-[var(--tech-sidebar)] to-[var(--tech-sidebar-2)] p-0 text-white">
+              <SheetContent side="left" className="technician-theme flex w-72 flex-col data-[side=left]:w-72 data-[side=left]:max-w-[85vw] border-0 bg-gradient-to-b from-[var(--tech-sidebar)] to-[var(--tech-sidebar-2)] p-0 text-white">
                 <SheetHeader className="border-b border-[var(--tech-sidebar-border)] px-4 py-3">
                   <SheetTitle className="sr-only">Technician portal menu</SheetTitle>
                   <SidebarBrand company={company} />

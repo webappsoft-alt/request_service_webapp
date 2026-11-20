@@ -1,5 +1,6 @@
 "use client";
 
+import { MoreActionsMenuContent } from "@/components/portal/mobile-actions-menu";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -43,7 +44,6 @@ import { usePortalRecords } from "@/components/portal/use-portal-records";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -435,7 +435,7 @@ export function TasksView() {
             >
               <SelectTrigger
                 size="sm"
-                className="h-8 w-full text-xs bg-card border-border-soft"
+                className="h-8 w-full text-xs bg-card"
               >
                 <SelectValue placeholder="All priorities" />
               </SelectTrigger>
@@ -1018,9 +1018,6 @@ export function TaskDetailView({ id }: { id: string }) {
         }
         actions={
           <>
-            <Button asChild variant="outline" size="sm" className="h-8">
-              <Link href="/pro/dashboard/tasks">Close</Link>
-            </Button>
             <Button size="sm" className="h-8" onClick={() => setEditOpen(true)}>
               Edit
             </Button>
@@ -1031,7 +1028,7 @@ export function TaskDetailView({ id }: { id: string }) {
                   <ChevronDown className="size-3.5" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-44">
+              <MoreActionsMenuContent align="end" className="min-w-44">
                 {task.status !== "done" ? (
                   <DropdownMenuItem
                     onSelect={() => void handleSetStatus("done")}
@@ -1099,7 +1096,7 @@ export function TaskDetailView({ id }: { id: string }) {
                 >
                   Delete task
                 </DropdownMenuItem>
-              </DropdownMenuContent>
+              </MoreActionsMenuContent>
             </DropdownMenu>
           </>
         }

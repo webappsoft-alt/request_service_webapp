@@ -229,12 +229,12 @@ export function CustomerChangeOrderDetailView({
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
             <div className="rounded-xl border border-input bg-card px-4 py-3 shadow-xs">
               <p className="text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
                 Change order total
               </p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums text-[#003F7D]">
+              <p className="mt-1 text-xl font-semibold tabular-nums break-words text-[#003F7D] sm:text-2xl">
                 {formatMoney(item.amount)}
               </p>
             </div>

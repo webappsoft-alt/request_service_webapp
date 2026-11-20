@@ -829,7 +829,7 @@ export function OrderDetailPageView({ id, viewer = "provider" }: { id: string; v
         // Crew: job-style status (Scheduled / In progress / Completed / Paid), like their jobs.
         badge={isPro ? <OrderStatusPill status={order.displayStatus || order.status} full /> : <JobStatusPill status={orderStatusAsJob(order.status)} />}
         actions={
-          <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+          <div className="ml-auto flex w-full flex-wrap items-center justify-start gap-2 max-sm:*:flex-auto sm:w-auto sm:justify-end">
             {/* Pro: assign crew (same buttons as a job). Crew: on-site check in / out. */}
             {isPro ? (
               <>

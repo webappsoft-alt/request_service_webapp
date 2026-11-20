@@ -137,7 +137,7 @@ export function ContractorJobsView() {
         toolbar={
           <div className="h-8 w-40 sm:w-48">
             <Select value={status || ALL} onValueChange={(value) => setStatus(value === ALL ? "" : value)}>
-              <SelectTrigger id="contractor-jobs-status" aria-label="Filter by status" size="sm" className="h-8 w-full border-border-soft text-xs">
+              <SelectTrigger id="contractor-jobs-status" aria-label="Filter by status" size="sm" className="h-8 w-full text-xs">
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent position="popper" align="end" className="z-[100] w-[var(--radix-select-trigger-width)] min-w-[160px]">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ChevronRight, Headphones, Loader2, PhoneIncoming, RefreshCw } from "lucide-react";
+import { AlertCircle, ChevronRight, Headphones, PhoneIncoming } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -156,10 +156,7 @@ export function AiCallHistory({ compact = false, limit }: { compact?: boolean; l
               </button>
             ))}
           </div>
-          <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={reload} disabled={loading}>
-            {loading ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <RefreshCw className="size-3.5" aria-hidden="true" />}
-            Refresh
-          </Button>
+          {/* Client: Refresh button removed (reload the page instead). */}
         </div>
       ) : null}
 

@@ -693,7 +693,7 @@ export function CustomerShell({ children }: { children: ReactNode }) {
               </SheetTrigger>
               <SheetContent
                 side="left"
-                className="flex w-72 flex-col border-0 bg-[#003F7D] dark:bg-slate-900 dark:border-r dark:border-border p-0 text-white"
+                className="flex w-72 flex-col border-0 data-[side=left]:w-72 data-[side=left]:max-w-[85vw] bg-[#003F7D] dark:bg-slate-900 dark:border-r dark:border-border p-0 text-white"
               >
                 <SheetHeader className="border-b border-white/10 px-4 py-3">
                   <SheetTitle className="text-white">

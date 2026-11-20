@@ -1231,7 +1231,7 @@ export function JobsView() {
                 id="jobs-status-filter"
                 aria-label="Filter by status"
                 size="sm"
-                className="h-8 w-full text-xs border-border-soft"
+                className="h-8 w-full text-xs"
               >
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
@@ -1787,7 +1787,7 @@ export function InvoicesView() {
                 id="invoices-status-filter"
                 aria-label="Filter by status"
                 size="sm"
-                className="h-8 w-full text-xs border-border-soft"
+                className="h-8 w-full text-xs"
               >
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>

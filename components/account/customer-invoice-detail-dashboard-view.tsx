@@ -65,13 +65,13 @@ function StatCard({
   tone?: "emerald" | "primary" | "amber" | "default";
 }) {
   return (
-    <div className="rounded-xl border border-input bg-card px-5 py-5 shadow-xs transition-colors hover:bg-muted/40">
+    <div className="min-w-0 rounded-xl border border-input bg-card px-4 py-4 shadow-xs transition-colors hover:bg-muted/40 sm:px-5 sm:py-5">
       <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
         {label}
       </p>
       <p
         className={cn(
-          "mt-3 text-[1.75rem] leading-none font-semibold tracking-tight tabular-nums",
+          "mt-3 text-xl leading-tight font-semibold tracking-tight tabular-nums break-words sm:text-[1.75rem] sm:leading-none",
           tone === "emerald" && "text-emerald-600",
           tone === "primary" && "text-primary",
           tone === "amber" && "text-amber-600",
@@ -326,7 +326,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
       }
     >
       {/* 4 KPI Metric Cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
         <StatCard
           label="Total amount"
           value={formatMoney(invoice.total)}

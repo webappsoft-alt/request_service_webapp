@@ -12,7 +12,8 @@ const trustMarkers = [
 export function HeroSection() {
   return (
     <section className="relative isolate">
-      <div className="relative h-[18rem] w-full sm:h-[20rem] lg:h-[22rem] xl:h-[24rem]">
+      {/* Phones: content-sized (min 18rem) so the eyebrow/headline never clip under the header. */}
+      <div className="relative min-h-72 w-full sm:h-[20rem] lg:h-[22rem] xl:h-[24rem]">
         <Image
           src={HERO_HOME_IMAGE}
           alt=""
@@ -39,7 +40,7 @@ export function HeroSection() {
           aria-hidden="true"
         />
 
-        <Container className="relative flex h-full items-center pb-16 lg:pb-18">
+        <Container className="relative flex min-h-72 items-center pt-8 pb-20 sm:h-full sm:min-h-0 sm:pt-0 sm:pb-16 lg:pb-18">
           <div className="enter-stagger flex max-w-3xl flex-col items-start gap-3 text-white">
             <span className="flex items-center gap-3">
               <span className="h-px w-8 bg-white/50" aria-hidden="true" />

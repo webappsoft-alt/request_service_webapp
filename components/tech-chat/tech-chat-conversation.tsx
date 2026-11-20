@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Briefcase, Check, CheckCheck, FileText, Loader2, MessageSquare, SendHorizontal, ShieldCheck, Wallet } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowUpRight, Briefcase, Check, CheckCheck, Clock3, FileText, Loader2, MessageSquare, SendHorizontal, ShieldCheck, Wallet } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { emitTechChatTyping, onSocketEvent } from "@/components/socket/socket-api";
@@ -53,6 +54,25 @@ const SUGGESTIONS: Record<TechChatSide, Record<string, string[]>> = {
   },
 };
 
+function contextHeading(contextType: string | null | undefined) {
+  return contextType === "job"
+    ? "About this job"
+    : contextType === "estimate"
+      ? "About this estimate"
+      : contextType === "payment"
+        ? "About pay"
+        : "General";
+}
+
+function initialsOf(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const letters = parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : (parts[0] ?? "?").slice(0, 2);
+  return letters.toUpperCase();
+}
+
+/** A message shown before / without the server's copy (optimistic send). */
+type LocalMessage = TechChatMessage & { pending?: boolean; failed?: boolean };
+
 function timeLabel(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -74,6 +94,7 @@ export function TechChatConversation({
   initial,
   className,
   showHeader = true,
+  onBack,
 }: {
   side: TechChatSide;
   threadId: string;
@@ -81,12 +102,13 @@ export function TechChatConversation({
   initial?: TechChatThreadDetail | null;
   className?: string;
   showHeader?: boolean;
+  /** Phones (inbox): a back arrow in the header row instead of a separate "All conversations" bar. */
+  onBack?: () => void;
 }) {
   const [thread, setThread] = useState<TechChatThreadDetail | null>(initial && initial.id === threadId ? initial : null);
   const [loading, setLoading] = useState(!thread);
   const [error, setError] = useState("");
   const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
   const [otherTyping, setOtherTyping] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -125,12 +147,36 @@ export function TechChatConversation({
       if (payload?.threadId !== threadId || !payload.message) return;
       setThread((current) => {
         if (!current || current.messages.some((msg) => msg.id === payload.message.id)) return current;
-        return { ...current, ...payload.thread, messages: [...current.messages, payload.message] };
+        // Our own message echoed back before the POST answered: it replaces the pending bubble.
+        const pendingIndex = current.messages.findIndex(
+          (msg) => (msg as LocalMessage).pending && msg.from === payload.message.from && msg.text === payload.message.text,
+        );
+        const messages =
+          pendingIndex >= 0
+            ? current.messages.map((msg, index) => (index === pendingIndex ? payload.message : msg))
+            : [...current.messages, payload.message];
+        return { ...current, ...payload.thread, messages };
       });
       if (payload.message.from !== side) {
         setOtherTyping(false);
         markRead();
       }
+    });
+    // The other side's app just connected: our messages to them are delivered (✓ → ✓✓).
+    const offDelivered = onSocketEvent("techchat:delivered", (payload) => {
+      if (payload?.threadId !== threadId || payload.deliveredTo === side) return;
+      setThread((current) =>
+        current
+          ? {
+              ...current,
+              messages: current.messages.map((msg) =>
+                msg.from === side && !msg.deliveredAt && !(msg as LocalMessage).pending
+                  ? { ...msg, deliveredAt: payload.deliveredAt }
+                  : msg,
+              ),
+            }
+          : current,
+      );
     });
     const offRead = onSocketEvent("techchat:read", (payload) => {
       if (payload?.threadId !== threadId || payload.reader === side) return;
@@ -154,6 +200,7 @@ export function TechChatConversation({
     return () => {
       offMessage();
       offRead();
+      offDelivered();
       offTyping();
     };
   }, [threadId, side, markRead]);
@@ -185,25 +232,63 @@ export function TechChatConversation({
     }, 3000);
   }
 
-  async function send() {
-    const text = draft.trim();
-    if (!text || sending) return;
-    setSending(true);
+  /**
+   * Optimistic send: the bubble shows at once (clock icon) and the box clears, so several messages
+   * can go out back-to-back; the POST /…/messages result (or its socket echo) swaps in the saved
+   * message with the ✓ / ✓✓ ticks. A failed send stays as a red bubble — tap it to retry.
+   * Previous: waited for the API before showing anything (draft kept, send button spinning).
+   */
+  async function send(retry?: LocalMessage) {
+    const text = (retry?.text ?? draft).trim();
+    if (!text) return;
+    const tempId = retry?.id ?? `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimistic: LocalMessage = {
+      id: tempId,
+      from: side,
+      senderName: "",
+      text,
+      at: new Date().toISOString(),
+      isRead: false,
+      readAt: null,
+      pending: true,
+    };
     setError("");
+    if (!retry) setDraft("");
+    setThread((current) =>
+      current
+        ? {
+            ...current,
+            messages: retry
+              ? current.messages.map((msg) => (msg.id === tempId ? optimistic : msg))
+              : [...current.messages, optimistic],
+          }
+        : current,
+    );
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    typingSent.current = 0;
+    emitTechChatTyping(threadId, false);
     try {
       const result = await sendTechChatMessage(side, threadId, text);
-      setDraft("");
-      if (typingTimer.current) clearTimeout(typingTimer.current);
-      typingSent.current = 0;
-      emitTechChatTyping(threadId, false);
       setThread((current) => {
-        if (!current || current.messages.some((msg) => msg.id === result.message.id)) return current;
-        return { ...current, ...result.thread, messages: [...current.messages, result.message] };
+        if (!current) return current;
+        const echoed = current.messages.some((msg) => msg.id === result.message.id);
+        const messages = echoed
+          ? current.messages.filter((msg) => msg.id !== tempId)
+          : current.messages.map((msg) => (msg.id === tempId ? result.message : msg));
+        return { ...current, ...result.thread, messages };
       });
     } catch {
-      setError("Message not sent. Try again.");
-    } finally {
-      setSending(false);
+      setThread((current) =>
+        current
+          ? {
+              ...current,
+              messages: current.messages.map((msg) =>
+                msg.id === tempId ? ({ ...msg, pending: false, failed: true } as LocalMessage) : msg,
+              ),
+            }
+          : current,
+      );
+      setError("Message not sent. Tap it to try again.");
     }
   }
 
@@ -211,6 +296,7 @@ export function TechChatConversation({
     side === "technician"
       ? thread?.providerName || "Office"
       : thread?.technicianName || (thread?.participantType === "contractor" ? "Contractor" : "Technician");
+  const otherAvatar = (side === "technician" ? thread?.providerAvatar : thread?.technicianAvatar) || "";
   const contextLink = thread ? techChatContextHref(thread, side) : null;
   const ContextIcon =
     thread?.contextType === "job"
@@ -223,30 +309,56 @@ export function TechChatConversation({
 
   return (
     <div className={cn("flex min-h-0 flex-col bg-white", className)}>
+      {/* One app-style header: back · avatar · name + badge / "About … · record" (or typing…) · open record.
+          Previous: a name bar plus a separate "About pay" context bar (and on phones an "All conversations" bar). */}
       {showHeader ? (
-        <div className="border-b border-input px-4 py-2.5">
-          <p className="flex min-w-0 items-center gap-2 truncate text-sm font-semibold text-foreground">
-            <span className="truncate">{otherName}</span>
-            {side === "provider" && thread ? <ParticipantBadge thread={thread} /> : null}
-            {otherTyping ? <span className="ml-1.5 text-xs font-medium text-emerald-700">typing…</span> : null}
-          </p>
+        <div className={cn("flex items-center gap-2.5 border-b border-input bg-white py-2 pr-3", onBack ? "pl-1 md:pl-4" : "pl-4")}>
+          {onBack ? (
+            <Button type="button" variant="ghost" size="icon" className="size-9 shrink-0 rounded-full md:hidden" aria-label="All conversations" onClick={onBack}>
+              <ArrowLeft className="size-5" />
+            </Button>
+          ) : null}
+          {/* Their profile photo, or the blue initials circle when they have none. */}
+          <Avatar className="size-10 shrink-0">
+            {otherAvatar ? <AvatarImage src={otherAvatar} alt="" className="object-cover" /> : null}
+            <AvatarFallback className="bg-(--chat-accent) text-sm font-semibold text-white">{initialsOf(otherName)}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="flex min-w-0 items-center gap-1.5 text-[15px] leading-tight font-semibold text-foreground">
+              <span className="truncate">{otherName}</span>
+              {side === "provider" && thread ? <ParticipantBadge thread={thread} /> : null}
+            </p>
+            {otherTyping ? (
+              <p className="mt-0.5 text-xs font-medium text-emerald-600">typing…</p>
+            ) : thread ? (
+              <p className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground" title={techChatContextLabel(thread)}>
+                <ContextIcon className="size-3 shrink-0" aria-hidden />
+                {/* The icon shows the kind (job / estimate / pay); the label names the record. */}
+                <span className="truncate">{techChatContextLabel(thread)}</span>
+              </p>
+            ) : null}
+          </div>
+          {thread && contextLink ? (
+            <Button asChild variant="outline" size="sm" className="h-8 shrink-0 gap-1 rounded-full px-2.5 text-xs">
+              <Link href={contextLink.href} aria-label={contextLink.label} title={contextLink.label}>
+                <span className="hidden sm:inline">{contextLink.label}</span>
+                <span className="sm:hidden">Open</span>
+                <ArrowUpRight className="size-3.5" aria-hidden />
+              </Link>
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
-      {thread ? (
+      {/* Embedded without a header (showHeader={false}): the context bar stays as before. */}
+      {thread && !showHeader ? (
         <div className="flex items-center gap-2 border-b border-input bg-(color:--chat-accent-faint) px-3 py-2">
           <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-(color:--chat-accent)/10 text-(color:--chat-accent)">
             <ContextIcon className="size-3.5" aria-hidden />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
-              {thread.contextType === "job"
-                ? "About this job"
-                : thread.contextType === "estimate"
-                  ? "About this estimate"
-                  : thread.contextType === "payment"
-                    ? "About pay"
-                    : "General"}
+              {contextHeading(thread.contextType)}
             </span>
             <span className="block truncate text-xs font-semibold text-foreground" title={techChatContextLabel(thread)}>
               {techChatContextLabel(thread)}
@@ -285,7 +397,9 @@ export function TechChatConversation({
             </div>
           </div>
         ) : (
-          thread.messages.map((msg) => <Bubble key={msg.id} msg={msg} mine={msg.from === side} />)
+          thread.messages.map((msg) => (
+            <Bubble key={msg.id} msg={msg} mine={msg.from === side} onRetry={(failed) => void send(failed)} />
+          ))
         )}
         {otherTyping ? (
           <div className="flex items-center gap-1 px-1 text-xs text-muted-foreground" aria-live="polite">
@@ -318,7 +432,7 @@ export function TechChatConversation({
       ) : null}
 
       <form
-        className={cn("flex items-end gap-2 bg-white p-2.5", !thread && "border-t border-input")}
+        className={cn("flex items-end gap-2 bg-white px-2.5 pt-2 pb-[max(0.625rem,env(safe-area-inset-bottom))]", !thread && "border-t border-input")}
         onSubmit={(event) => {
           event.preventDefault();
           void send();
@@ -333,7 +447,7 @@ export function TechChatConversation({
             maxLength={4000}
             placeholder={`Message ${otherName}…`}
             aria-label="Message"
-            className="max-h-32 min-h-10 resize-none bg-white text-sm shadow-none"
+            className="max-h-32 min-h-10 resize-none rounded-[1.25rem] border-input bg-[#f6f8fb] px-4 py-2.5 text-sm shadow-none focus-visible:bg-white"
             onChange={(event) => {
               setDraft(event.target.value);
               if (event.target.value.trim()) pulseTyping();
@@ -347,15 +461,15 @@ export function TechChatConversation({
           />
           {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
         </div>
-        <Button type="submit" size="icon" className="size-10 shrink-0" disabled={!draft.trim() || sending} aria-label="Send">
-          {sending ? <Loader2 className="animate-spin" /> : <SendHorizontal />}
+        <Button type="submit" size="icon" className="size-10 shrink-0 rounded-full" disabled={!draft.trim()} aria-label="Send">
+          <SendHorizontal />
         </Button>
       </form>
     </div>
   );
 }
 
-function Bubble({ msg, mine }: { msg: TechChatMessage; mine: boolean }) {
+function Bubble({ msg, mine, onRetry }: { msg: LocalMessage; mine: boolean; onRetry: (msg: LocalMessage) => void }) {
   if (msg.from === "admin") {
     return (
       <div className="flex justify-start">
@@ -369,12 +483,29 @@ function Bubble({ msg, mine }: { msg: TechChatMessage; mine: boolean }) {
       </div>
     );
   }
+  if (msg.failed) {
+    return (
+      <div className="flex flex-col items-end gap-0.5">
+        <button
+          type="button"
+          onClick={() => onRetry(msg)}
+          className="max-w-[85%] rounded-2xl rounded-br-sm border border-destructive/40 bg-destructive/5 px-3 py-2 text-left text-sm text-foreground sm:max-w-[80%]"
+        >
+          <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+        </button>
+        <span className="flex items-center gap-1 text-[11px] font-medium text-destructive">
+          <AlertCircle className="size-3.5" aria-hidden /> Not sent · Tap to retry
+        </span>
+      </div>
+    );
+  }
   return (
     <div className={cn("flex", mine ? "justify-end" : "justify-start")}>
       <div
         className={cn(
-          "max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-xs",
+          "max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-xs transition-opacity sm:max-w-[80%]",
           mine ? "rounded-br-sm bg-(color:--chat-accent) text-white" : "rounded-bl-sm border border-input bg-white text-foreground",
+          msg.pending && "opacity-80",
         )}
       >
         {!mine && msg.senderName ? (
@@ -389,8 +520,13 @@ function Bubble({ msg, mine }: { msg: TechChatMessage; mine: boolean }) {
         >
           {timeLabel(msg.at)}
           {mine ? (
-            msg.isRead ? (
-              <CheckCheck className="size-3.5 text-sky-300" aria-label="Read" />
+            msg.pending ? (
+              <Clock3 className="size-3" aria-label="Sending" />
+            ) : msg.isRead ? (
+              // ✓✓ blue = seen · ✓✓ = delivered to their app · ✓ = sent (they're offline). Previous: ✓ until read.
+              <CheckCheck className="size-3.5 text-sky-300" aria-label="Seen" />
+            ) : msg.deliveredAt ? (
+              <CheckCheck className="size-3.5" aria-label="Delivered" />
             ) : (
               <Check className="size-3.5" aria-label="Sent" />
             )

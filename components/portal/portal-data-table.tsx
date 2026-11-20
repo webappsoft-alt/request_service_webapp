@@ -269,13 +269,19 @@ export function PortalDataTable<T>({
           </p>
         </div>
 
-        <div className="flex h-8 items-center gap-2">
-          {toolbar}
+        {/* Phones / tablets: one full-width row — filter(s) on the left, Export always on the right.
+            sm+: unchanged (the group sits on the right of the search). */}
+        <div className="flex h-8 w-full items-center justify-end gap-2 sm:w-auto">
+          {toolbar ? (
+            <div className="flex min-w-0 flex-1 items-center gap-2 max-sm:*:w-full max-sm:*:max-w-none sm:flex-none">
+              {toolbar}
+            </div>
+          ) : null}
           <Button
             variant="outline"
             size="sm"
             onClick={exportCsv}
-            className="h-8 text-xs"
+            className="h-8 shrink-0 text-xs"
           >
             <Download className="size-3.5" />
             Export
@@ -284,7 +290,7 @@ export function PortalDataTable<T>({
       </div>
 
       {letters ? (
-        <div className="flex flex-wrap items-center gap-1 border-y border-border-soft py-1.5 text-xs">
+        <div className="no-scrollbar flex items-center gap-1 overflow-x-auto border-y border-border-soft py-1.5 text-xs *:shrink-0 sm:flex-wrap sm:overflow-visible">
           <button
             type="button"
             onClick={() => applyLetter("")}
@@ -352,7 +358,7 @@ export function PortalDataTable<T>({
                 );
               })}
               {actions ? (
-                <TableHead className="h-8 min-w-[4.5rem] bg-[#f7f8fa] dark:bg-slate-800/90 px-2.5 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                <TableHead className="h-8 min-w-[4.5rem] bg-[#f7f8fa] dark:bg-slate-800/90 px-2.5 text-right max-sm:sticky max-sm:right-0 max-sm:z-1 max-sm:shadow-[-6px_0_8px_-6px_rgba(15,23,42,0.18)] text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   Options
                 </TableHead>
               ) : null}
@@ -396,7 +402,8 @@ export function PortalDataTable<T>({
                     ))}
                     {actions ? (
                       <TableCell
-                        className="px-2.5 py-1.5 text-right whitespace-nowrap"
+                        // Phones: the table scrolls sideways, so the Options column stays pinned on the right.
+                        className="px-2.5 py-1.5 text-right whitespace-nowrap max-sm:sticky max-sm:right-0 max-sm:z-1 max-sm:bg-card max-sm:shadow-[-6px_0_8px_-6px_rgba(15,23,42,0.18)]"
                         onClick={(event) => event.stopPropagation()}
                       >
                         <RowActions

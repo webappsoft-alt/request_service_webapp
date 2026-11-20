@@ -353,11 +353,11 @@ function StatCard({
   icon?: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="rounded-xl border border-input bg-card px-5 py-5 transition-colors hover:bg-muted/40">
+    <div className="min-w-0 rounded-xl border border-input bg-card px-4 py-4 transition-colors hover:bg-muted/40 sm:px-5 sm:py-5">
       <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
         {label}
       </p>
-      <p className="mt-3 text-[1.75rem] leading-none font-semibold tracking-tight tabular-nums text-foreground">
+      <p className="mt-3 text-xl leading-tight font-semibold tracking-tight tabular-nums break-words text-foreground sm:text-[1.75rem] sm:leading-none">
         {value}
       </p>
       <p className="mt-2 text-xs text-muted-foreground">{hint}</p>
@@ -665,7 +665,7 @@ export function CustomerQuoteRequestDetailView() {
       }
     >
       {/* KPI Metric Cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
         <StatCard
           label="Request status"
           value={

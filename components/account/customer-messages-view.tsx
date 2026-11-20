@@ -38,6 +38,7 @@ import {
 import { mapAdminDirectChat } from "@/lib/api/crm-mappers";
 import {
   readChatGuest,
+  withLatestReceipts,
   type ChatAttachment,
   type ChatThread,
 } from "@/lib/booking/chat-store";
@@ -201,7 +202,7 @@ function upsertThread(threads: ChatThread[], updated: ChatThread) {
     providerAvatar: updated.providerAvatar || existing.providerAvatar,
     providerPhone: updated.providerPhone || existing.providerPhone,
     providerSlug: updated.providerSlug || existing.providerSlug,
-    messages: [...existing.messages, ...newFromServer],
+    messages: [...withLatestReceipts(existing.messages, updated.messages), ...newFromServer],
   };
   return sortChatThreadsByUnreadThenRecent(
     [...threads.filter((item) => item.id !== updated.id), merged],

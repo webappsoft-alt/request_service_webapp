@@ -114,7 +114,7 @@ function CustomerSiteHeader({ pathname }: { pathname: string }) {
               <MobileMenuPendingDot />
             </Button>
           </SheetTrigger>
-          <SheetContent side="right" className="w-80">
+          <SheetContent side="right" className="w-80 data-[side=right]:w-80 data-[side=right]:max-w-[85vw]">
             <SheetHeader>
               <SheetTitle>Menu</SheetTitle>
             </SheetHeader>
@@ -222,11 +222,12 @@ function HeaderActions({
             : (
                 <>
                   {wrap(
-                    <Button asChild className="relative justify-between">
+                    // Label centred like Messages / Settings; the count badge sits on the right edge.
+                    <Button asChild className="relative justify-center">
                       <Link href={customerPaths.dashboard}>
                         <span>Dashboard</span>
                         {pendingCount > 0 ? (
-                          <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-bold text-white">
+                          <span className="absolute top-1/2 right-3 inline-flex h-5 -translate-y-1/2 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-bold text-white">
                             {formatPendingBadgeCount(pendingCount)}
                           </span>
                         ) : null}

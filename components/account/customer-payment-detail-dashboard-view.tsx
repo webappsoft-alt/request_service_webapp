@@ -205,8 +205,8 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
         </div>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <div className="relative overflow-hidden rounded-xl border border-input bg-card px-5 py-5 shadow-xs">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="relative col-span-2 min-w-0 overflow-hidden rounded-xl border border-input bg-card px-4 py-4 shadow-xs sm:col-span-1 sm:px-5 sm:py-5">
           {isPaid ? <PaidStamp size="sm" company={companyName} date={payment.paidAt} className="absolute top-2 right-2" /> : null}
           <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Amount
@@ -216,7 +216,7 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
           </p>
           <p className="mt-2 text-xs text-muted-foreground">Recorded payment</p>
         </div>
-        <div className="rounded-xl border border-input bg-card px-5 py-5 shadow-xs">
+        <div className="min-w-0 rounded-xl border border-input bg-card px-4 py-4 shadow-xs sm:px-5 sm:py-5">
           <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Status
           </p>
@@ -228,7 +228,7 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
           </div>
           <p className="mt-2 text-xs text-muted-foreground">Settlement state</p>
         </div>
-        <div className="rounded-xl border border-input bg-card px-5 py-5 shadow-xs">
+        <div className="min-w-0 rounded-xl border border-input bg-card px-4 py-4 shadow-xs sm:px-5 sm:py-5">
           <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Method
           </p>
@@ -237,7 +237,7 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
           </p>
           <p className="mt-2 text-xs text-muted-foreground">How it was paid</p>
         </div>
-        <div className="rounded-xl border border-input bg-card px-5 py-5 shadow-xs">
+        <div className="min-w-0 rounded-xl border border-input bg-card px-4 py-4 shadow-xs sm:px-5 sm:py-5">
           <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Paid on
           </p>
@@ -248,7 +248,7 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
           </p>
           <p className="mt-2 text-xs text-muted-foreground">Payment date</p>
         </div>
-        <div className="rounded-xl border border-input bg-card px-5 py-5 shadow-xs">
+        <div className="min-w-0 rounded-xl border border-input bg-card px-4 py-4 shadow-xs sm:px-5 sm:py-5">
           <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Due date
           </p>

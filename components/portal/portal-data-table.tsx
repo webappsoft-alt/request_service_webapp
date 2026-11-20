@@ -238,8 +238,10 @@ export function PortalDataTable<T>({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-h-8 flex-wrap items-center gap-2">
+      {/* Phones: search and Export share the first line (Export top-aligned with the search); with a
+          filter, filter + Export move to their own full-width line. sm+: unchanged. */}
+      <div className="flex flex-wrap items-start gap-2 sm:flex-nowrap sm:items-center sm:justify-between">
+        <div className="flex min-h-8 min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none">
           <div className={cn("relative w-full sm:w-72", hideSearch && "hidden")}>
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -271,7 +273,7 @@ export function PortalDataTable<T>({
 
         {/* Phones / tablets: one full-width row — filter(s) on the left, Export always on the right.
             sm+: unchanged (the group sits on the right of the search). */}
-        <div className="flex h-8 w-full items-center justify-end gap-2 sm:w-auto">
+        <div className={cn("flex h-8 items-center justify-end gap-2 sm:w-auto", toolbar ? "w-full" : "shrink-0")}>
           {toolbar ? (
             <div className="flex min-w-0 flex-1 items-center gap-2 max-sm:*:w-full max-sm:*:max-w-none sm:flex-none">
               {toolbar}

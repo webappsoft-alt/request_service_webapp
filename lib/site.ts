@@ -1,6 +1,12 @@
 /** Marketing heroes that stay as local assets. Everything else comes from the API. */
 export const HERO_HOME_IMAGE = "/images/home/hero-home.jpg";
 export const HERO_PRO_IMAGE = "/images/home/split-provider.jpg";
+/**
+ * Customer landing page hero banner only (components/home/hero-section.tsx): a natural daylight
+ * photo of a family home, 3200×2133, stored locally (Unsplash photo 1570129477492, Unsplash License).
+ * HERO_HOME_IMAGE stays the fallback for categories / provider media / auth screens.
+ */
+export const HERO_BANNER_IMAGE = "/images/home/hero-banner.jpg";
 
 const DEFAULT_SITE_URL = "https://requestservice.com";
 

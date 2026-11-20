@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { PaidStamp } from "@/components/print/paid-stamp";
 
 export type InvoicePrintLine = {
   description: string;
@@ -247,8 +248,11 @@ export function InvoicePrintDocument({
         </tbody>
       </table>
 
-      {/* Totals */}
-      <section className="mt-4 flex break-inside-avoid justify-end">
+      {/* Totals — paid in full gets a PAID stamp beside them. */}
+      <section className="mt-4 flex break-inside-avoid items-center justify-end gap-10">
+        {data.total > 0 && data.balanceDue <= 0 ? (
+          <PaidStamp size="lg" company={data.company.name} date={[...payments].reverse().find((p) => p.date)?.date || null} />
+        ) : null}
         <div className="w-64">
           <TotalRow label="Subtotal" value={formatMoney(data.subtotal)} />
           {data.discount > 0 ? <TotalRow label="Discount" value={`-${formatMoney(data.discount)}`} /> : null}

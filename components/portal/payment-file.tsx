@@ -134,6 +134,7 @@ export function PaymentSummaryTab({
   customerLabel,
   service,
   job,
+  stamp,
 }: {
   payment: Payment;
   invoice?: Invoice;
@@ -141,6 +142,8 @@ export function PaymentSummaryTab({
   customerLabel: string;
   service: string;
   job?: Job;
+  /** PAID seal shown in the header, between the title and the amount (paid payments). */
+  stamp?: ReactNode;
 }) {
   const kind = paymentKindLabel(paymentKind(payment));
   const address = job?.address;
@@ -191,13 +194,16 @@ export function PaymentSummaryTab({
             {formatDate(payment.paidAt ?? payment.createdAt)}
           </p>
         </div>
-        <div className="rounded-md bg-secondary px-3 py-2 text-right">
-          <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-            Amount
-          </p>
-          <p className="text-lg font-semibold tabular-nums text-primary">
-            {formatMoney(payment.amount)}
-          </p>
+        <div className="flex items-center gap-6">
+          {stamp}
+          <div className="rounded-md bg-secondary px-3 py-2 text-right">
+            <p className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
+              Amount
+            </p>
+            <p className="text-lg font-semibold tabular-nums text-primary">
+              {formatMoney(payment.amount)}
+            </p>
+          </div>
         </div>
       </div>
 

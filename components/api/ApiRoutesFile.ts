@@ -139,6 +139,11 @@ export const providerOrdersApi = {
   /** Pro reviews the crew's "Mark complete" (approve → customer; reject → re-work). */
   completionApprove: (id: string) => `provider/orders/${id}/completion/approve`,
   completionReject: (id: string) => `provider/orders/${id}/completion/reject`,
+  /** Crew scope request (job-style) → the Pro approves it with lines (crew accepts) or declines it. */
+  scopeRequestApprove: (id: string, changeOrderId: string) => `provider/orders/${id}/change-orders/${changeOrderId}/approve`,
+  /** Pro → customer change order (separate from crew requests). */
+  customerChangeOrder: (id: string) => `provider/orders/${id}/change-order`,
+  scopeRequestDecline: (id: string, changeOrderId: string) => `provider/orders/${id}/change-orders/${changeOrderId}/decline`,
   /** Completed order → draft invoice (like a job's Convert to invoice). */
   convertToInvoice: (id: string) => `provider/orders/${id}/convert-to-invoice`,
 };
@@ -159,6 +164,10 @@ export function crewOrdersApi(portal: "technician" | "contractor") {
     arrive: (id: string) => `${base}/${id}/arrive`,
     startWork: (id: string) => `${base}/${id}/start-work`,
     changeOrder: (id: string) => `${base}/${id}/change-order`,
+    /** Request scope change like a job: reason + description, no price. */
+    scopeRequest: (id: string) => `${base}/${id}/scope-request`,
+    /** Accept the scope the office added for my request. */
+    scopeAccept: (id: string, changeOrderId: string) => `${base}/${id}/change-orders/${changeOrderId}/accept`,
     complete: (id: string) => `${base}/${id}/complete`,
     checkIn: (id: string) => `${base}/${id}/check-in`,
     checkOut: (id: string) => `${base}/${id}/check-out`,
@@ -200,6 +209,8 @@ export const providerCrmApi = {
   /** POST assign / update one contractor on a job; DELETE …/:contractorId removes them. */
   jobContractors: (id: string) => `provider/jobs/${id}/contractors`,
   jobContractor: (id: string, contractorId: string) => `provider/jobs/${id}/contractors/${contractorId}`,
+  /** Crew clocked in on the job now (locks Assign / Change / Remove until they check out). */
+  jobCrewStatus: (id: string) => `provider/jobs/${id}/crew-status`,
   /** Contractor payouts: GET ?contractorId (history), POST (pay approved work) */
   contractorPayments: "provider/contractor-payments",
   contractorPaymentLedger: "provider/contractor-payments/ledger",
@@ -435,6 +446,8 @@ export const technicianApi = {
   /** POST — position while on the clock; leaving the site clocks out automatically */
   reportLocation: "technician/time-entries/location",
   payments: "technician/payments",
+  /** One payout received: its job / order, clock-in sessions and balance. */
+  payment: (id: string) => `technician/payments/${id}`,
   /** PUT { section } — mark a nav section's notifications read (persists badge reset) */
   sectionRead: "technician/notifications/read-section",
   badges: "technician/notifications/badges",
@@ -466,6 +479,8 @@ export const contractorPortalApi = {
   schedule: "contractor/schedule",
   changeRequests: "contractor/change-requests",
   payouts: "contractor/payouts",
+  /** One payout: its job / order, balance, sessions and every payout on that work. */
+  payout: (id: string) => `contractor/payouts/${id}`,
   badges: "contractor/notifications/badges",
   /** PUT { section } — reset a nav section's sidebar badge */
   sectionRead: "contractor/notifications/read-section",

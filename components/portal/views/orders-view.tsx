@@ -225,6 +225,9 @@ export function OrdersView({ viewer = "provider" }: { viewer?: OrderApiScope } =
   // Cache-aware refresh: silent when returning with data; loading on first visit /
   // empty cache / search-filter-page changes. (Same pattern as Leads.)
   useEffect(() => {
+    // Wait until the URL tab is synced into Redux — fetching the old filter first
+    // raced the new one (two lists answering each other in a loop).
+    if (urlStatus !== statusFilter) return;
     const prev = prevQueryRef.current;
     const queryChanged =
       !isFirstMountRef.current &&
@@ -242,7 +245,7 @@ export function OrdersView({ viewer = "provider" }: { viewer?: OrderApiScope } =
 
     void refreshOrders({ showLoading });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when query identity changes
-  }, [page, limit, statusFilter, search, cacheKey, refreshOrders]);
+  }, [page, limit, statusFilter, search, cacheKey, refreshOrders, urlStatus]);
 
   useEffect(() => {
     return () => {
@@ -529,7 +532,7 @@ export function OrdersView({ viewer = "provider" }: { viewer?: OrderApiScope } =
       header: "Status",
       sortValue: (row) => row.status,
       cell: (row) => (
-        <OrderStatusPill status={row.status} />
+        <OrderStatusPill status={row.displayStatus || row.status} />
       ),
     },
     {
@@ -614,10 +617,27 @@ export function OrdersView({ viewer = "provider" }: { viewer?: OrderApiScope } =
               </span>
             );
 
+          // Completed → invoice → paid → customer sign-off (like a job). Previous: always "Awaiting Sign-off".
           case "WORK_COMPLETED":
+            if (!row.invoice) {
+              return (
+                <div onClick={(e) => e.stopPropagation()}>
+                  <Button size="sm" asChild className="h-7 gap-1 bg-[#003F7D] px-2.5 text-xs text-white hover:bg-[#003F7D]/90">
+                    <Link href={`${basePath}/${row.id}`}>
+                      <FileCheck className="size-3" /> Convert to invoice
+                    </Link>
+                  </Button>
+                </div>
+              );
+            }
             return (
               <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-medium">
-                <CheckCircle2 className="size-3" /> Awaiting Sign-off
+                <CheckCircle2 className="size-3" />{" "}
+                {row.invoice.status === "paid"
+                  ? "Awaiting sign-off"
+                  : row.invoice.status === "draft"
+                    ? "Invoice draft — send it"
+                    : "Awaiting payment"}
               </span>
             );
 

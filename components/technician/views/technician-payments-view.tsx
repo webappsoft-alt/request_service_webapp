@@ -22,6 +22,8 @@ export function TechnicianPaymentsView() {
   const timeVersion = useAppSelector((state) => state.timeTracking.version);
   const paymentVersion = useAppSelector((state) => state.timeTracking.paymentVersion);
   const { summary, payments, paymentsPagination } = ledger.data;
+  // Business name for payout receipts (PAID seal + "Paid by").
+  const company = useAppSelector((state) => state.technician.profile.data?.provider?.name || "");
   const [page, setPage] = useState(1);
   const query = useMemo(() => ({ technician: true, paymentsPage: page, paymentsLimit: PAGE_SIZE }), [page]);
 
@@ -32,8 +34,8 @@ export function TechnicianPaymentsView() {
     void dispatch(fetchLedger({ scopeKey: "tech", query, force: true }));
   }, [dispatch, query, timeVersion, paymentVersion]);
 
-  const hrefFor = (kind: "job" | "estimate", id: string) =>
-    kind === "job" ? technicianPaths.job(id) : technicianPaths.estimate(id);
+  const hrefFor = (kind: "job" | "estimate" | "order", id: string) =>
+    kind === "order" ? `/technical/orders/${id}` : kind === "job" ? technicianPaths.job(id) : technicianPaths.estimate(id);
 
   const tiles = [
     { label: "Total earned", value: formatMoney(summary.earned), hint: `${formatExactDuration(summary.totalSeconds)} · ${summary.sessions} sessions` },
@@ -70,6 +72,8 @@ export function TechnicianPaymentsView() {
         <PaymentHistoryTable
           payments={payments}
           hrefFor={hrefFor}
+          receiptIssuer={company || undefined}
+          rowHref={(row) => technicianPaths.payment(row.id)}
           loading={ledger.loading}
           pagination={{
             page: paymentsPagination.page,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Handshake, Loader2, Pencil, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
@@ -8,6 +8,7 @@ import { PaginatedEntitySelect } from "@/components/portal/paginated-entity-sele
 import { StatusPill } from "@/components/portal/status-pill";
 import { usePaginatedCrmOptions } from "@/components/portal/use-paginated-crm-options";
 import { TechChatButton } from "@/components/tech-chat/tech-chat-button";
+import { subscribeRealtime } from "@/components/realtime/realtime-provider";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,6 +25,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   assignJobContractor,
   getJobContractorPay,
+  getJobCrewStatus,
+  type JobCrewOnClock,
   recordContractorPayout,
   removeJobContractor,
   type ContractorPayRow,
@@ -48,10 +51,12 @@ export type AssignContractorFn = (input: {
   endAt: string;
 }) => Promise<unknown>;
 import { ADD_CONTRACTOR_HREF } from "@/lib/crew-links";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 
 function errorText(error: unknown, fallback: string) {
-  const message = error && typeof error === "object" && "message" in error ? String(error.message) : "";
-  return message || fallback;
+  // Previous: error.message only ("Request failed with status code 400").
+  const message = extractErrorMessage(error);
+  return message && message !== "Something went wrong. Please try again." ? message : fallback;
 }
 
 function termsLabel(row: Pick<JobContractorAssignment, "payType" | "payRate">) {
@@ -84,6 +89,45 @@ function windowLabel(row: Pick<JobContractorAssignment, "startAt" | "endAt">) {
   return row.endAt ? `${fmt(row.startAt)} → ${fmt(row.endAt)}` : fmt(row.startAt);
 }
 
+/* ───────────────────────────── Crew on the clock ───────────────────────────── */
+
+/**
+ * Who is clocked in on the job right now. While anyone is, the crew can't be assigned, changed or
+ * removed; once they clock out it can be changed again. Reloads live on TIME_ENTRY_UPDATED.
+ */
+export function useJobCrewOnClock(jobId: string | undefined) {
+  const [onClock, setOnClock] = useState<JobCrewOnClock[]>([]);
+  const load = useCallback(async () => {
+    if (!jobId) return;
+    try {
+      setOnClock(await getJobCrewStatus(jobId));
+    } catch {
+      // Lock state is advisory here — the API still blocks crew changes while someone is clocked in.
+    }
+  }, [jobId]);
+  useEffect(() => {
+    void load();
+    return subscribeRealtime((detail) => {
+      if (String(detail?.type || "") !== "TIME_ENTRY_UPDATED") return;
+      const entry = ((detail.payload || {}) as {
+        entry?: { job?: { id?: string } | null; order?: { id?: string } | null };
+      }).entry;
+      // This job's clock-in / out (entries for orders or other jobs are ignored).
+      if (entry?.job?.id ? entry.job.id === jobId : !entry?.order?.id) void load();
+    });
+  }, [jobId, load]);
+  return onClock;
+}
+
+/**
+ * Lock hint for one crew member: set while that person is clocked in (they can't be removed or
+ * replaced until they check out). Adding more crew is never blocked.
+ */
+export function onClockHintFor(onClock: JobCrewOnClock[], workerId: string | undefined) {
+  const row = workerId ? onClock.find((item) => item.id === workerId) : undefined;
+  return row ? `${row.name} is checked in right now. You can remove or replace them after they check out.` : undefined;
+}
+
 /* ───────────────────────────── Assign contractor dialog ───────────────────────────── */
 
 /**
@@ -99,6 +143,7 @@ export function AssignContractorDialog({
   onSaved,
   assign,
   recordLabel = "job",
+  changing = false,
 }: {
   job: ContractorAssignTarget;
   open: boolean;
@@ -109,6 +154,8 @@ export function AssignContractorDialog({
   assign?: AssignContractorFn;
   /** "job" / "order" — used in the dialog copy. */
   recordLabel?: string;
+  /** "Change contractor": the picked contractor replaces the current one (the caller's assign swaps them). */
+  changing?: boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -121,6 +168,7 @@ export function AssignContractorDialog({
           onSaved={onSaved}
           assign={assign}
           recordLabel={recordLabel}
+          changing={changing}
         />
       ) : null}
     </Dialog>
@@ -134,6 +182,7 @@ function AssignContractorForm({
   onSaved,
   assign,
   recordLabel = "job",
+  changing = false,
 }: {
   job: ContractorAssignTarget;
   existing: JobContractorAssignment | null;
@@ -141,6 +190,7 @@ function AssignContractorForm({
   onSaved: () => void | Promise<void>;
   assign?: AssignContractorFn;
   recordLabel?: string;
+  changing?: boolean;
 }) {
   const paging = usePaginatedCrmOptions(existing ? null : "contractor", !existing);
   const initial = existing?.startAt
@@ -177,7 +227,11 @@ function AssignContractorForm({
         endAt: new Date(endAt).toISOString(),
       };
       await (assign ? assign(input) : assignJobContractor(job.id, input));
-      toast.success(existing ? `${contractorLabel || "Contractor"} updated.` : `${contractorLabel || "Contractor"} assigned to ${job.number}.`);
+      toast.success(
+        existing
+          ? `${contractorLabel || "Contractor"} updated.`
+          : `${contractorLabel || "Contractor"} ${changing ? "now works on" : "assigned to"} ${job.number}.`,
+      );
       await onSaved();
       onOpenChange(false);
     } catch (error) {
@@ -190,7 +244,7 @@ function AssignContractorForm({
   return (
     <DialogContent className="sm:max-w-lg" data-lenis-prevent onInteractOutside={(event) => saving && event.preventDefault()}>
       <DialogHeader>
-        <DialogTitle>{existing ? "Edit contractor" : "Assign contractor"} · {job.number}</DialogTitle>
+        <DialogTitle>{existing ? "Edit contractor" : changing ? "Change contractor" : "Assign contractor"} · {job.number}</DialogTitle>
         <DialogDescription>
           Outside contractors are assigned separately from your technicians. They see this title, scope and time in their portal. Pay uses the rate on the contractor&apos;s profile.
         </DialogDescription>
@@ -280,7 +334,7 @@ function AssignContractorForm({
         </Button>
         <Button onClick={() => void save()} disabled={saving}>
           {saving ? <Loader2 className="animate-spin" /> : <Handshake />}
-          {existing ? "Save changes" : "Assign contractor"}
+          {existing ? "Save changes" : changing ? "Change contractor" : "Assign contractor"}
         </Button>
       </DialogFooter>
     </DialogContent>
@@ -360,7 +414,8 @@ function PayForm({
     try {
       await recordContractorPayout({
         contractorId,
-        jobId: row.jobId,
+        // Fixed service order rows pay by orderId (was always jobId → refused for orders).
+        ...(row.kind === "order" ? { orderId: row.orderId || row.jobId } : { jobId: row.jobId }),
         amount: Math.round(value * 100) / 100,
         method,
         paidAt: new Date(`${paidAt}T12:00:00`).toISOString(),
@@ -464,11 +519,14 @@ export function JobContractorsCard({
   job,
   onChanged,
   locked = false,
+  onClock = [],
 }: {
   job: Job;
   onChanged: () => void | Promise<void>;
   /** Completed job — the crew can no longer be edited or removed (paying still works). */
   locked?: boolean;
+  /** Who is clocked in now — that contractor's Remove waits until they check out (edit terms still works). */
+  onClock?: JobCrewOnClock[];
 }) {
   const contractors = job.crewContractors || [];
   const [editing, setEditing] = useState<JobContractorAssignment | null>(null);
@@ -523,6 +581,7 @@ export function JobContractorsCard({
       <ul className="mt-2 flex flex-col divide-y divide-border-soft">
         {contractors.map((row) => {
           const pay = payRows.find((item) => item.contractorId === row.contractorId);
+          const clockHint = onClockHintFor(onClock, row.contractorId);
           return (
             <li key={row.contractorId} className="flex flex-col gap-1 py-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -548,8 +607,8 @@ export function JobContractorsCard({
                     variant="ghost"
                     className="size-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
                     aria-label={`Remove ${row.name}`}
-                    disabled={locked || removing === row.contractorId}
-                    title={locked ? "This job is completed" : undefined}
+                    disabled={locked || Boolean(clockHint) || removing === row.contractorId}
+                    title={locked ? "This job is completed" : clockHint}
                     onClick={() => void remove(row)}
                   >
                     {removing === row.contractorId ? <Loader2 className="animate-spin" /> : <Trash2 />}

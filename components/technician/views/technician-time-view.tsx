@@ -24,7 +24,7 @@ export function TechnicianTimeView() {
         technician
         defaultRange={{ preset: "week" }}
         payRate={payRate}
-        hrefFor={(kind, id) => (kind === "job" ? technicianPaths.job(id) : technicianPaths.estimate(id))}
+        hrefFor={(kind, id) => (kind === "order" ? `/technical/orders/${id}` : kind === "job" ? technicianPaths.job(id) : technicianPaths.estimate(id))}
       />
     </PortalPage>
   );

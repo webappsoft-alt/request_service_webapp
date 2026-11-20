@@ -18,6 +18,8 @@ import { CenteredSpinner } from "@/components/ui/spinner";
 import { StatusPill, moneyTone } from "@/components/portal/status-pill";
 import { customerPaths } from "@/lib/customer-paths";
 import { formatDate, formatMoney } from "@/lib/format";
+import { PaidStamp } from "@/components/print/paid-stamp";
+import { PrintReceiptButton, type PaymentReceiptData } from "@/components/print/payment-receipt";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectIsAuthenticated } from "@/store/authSlice";
 import {
@@ -131,6 +133,28 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
   }
 
   const companyName = payment.provider?.companyName || "Service Professional";
+  // Paid → PAID stamp on the amount card and the printed receipt.
+  const isPaid = ["succeeded", "completed", "paid", "settled"].includes(String(payment.status || "").toLowerCase());
+  const me = (auth.user || null) as { name?: string; firstName?: string; lastName?: string; email?: string } | null;
+  const payerName = me?.name || [me?.firstName, me?.lastName].filter(Boolean).join(" ") || "Customer";
+  const receipt: PaymentReceiptData = {
+    number: paymentNumber(payment.id),
+    title: "Payment receipt",
+    amount: payment.amount,
+    paid: isPaid,
+    statusLabel: statusLabel(payment.status),
+    method: methodLabel(payment.method),
+    paidAt: payment.paidAt,
+    reference: payment.transactionReference || undefined,
+    invoiceNumber: payment.invoiceNumber || undefined,
+    from: {
+      label: "Received by",
+      name: companyName,
+      lines: [payment.provider?.phone, payment.provider?.email].filter(Boolean) as string[],
+    },
+    to: { label: "Paid by", name: payerName, lines: me?.email ? [me.email] : [] },
+    notes: payment.notes || undefined,
+  };
 
   return (
     <PortalPage
@@ -171,6 +195,7 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
               </Link>
             </Button>
           ) : null}
+          <PrintReceiptButton data={receipt} />
           <Button asChild size="sm">
             <Link href={customerPaths.messages}>
               <MessageSquare className="size-3.5" />
@@ -181,7 +206,8 @@ export function CustomerPaymentDetailDashboardView({ id }: { id: string }) {
       }
     >
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <div className="rounded-xl border border-input bg-card px-5 py-5 shadow-xs">
+        <div className="relative overflow-hidden rounded-xl border border-input bg-card px-5 py-5 shadow-xs">
+          {isPaid ? <PaidStamp size="sm" company={companyName} date={payment.paidAt} className="absolute top-2 right-2" /> : null}
           <p className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
             Amount
           </p>

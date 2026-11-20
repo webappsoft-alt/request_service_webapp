@@ -557,7 +557,7 @@ export function ContractorDetailView({ id }: { id: string }) {
                   canPay
                   allowStop
                   hrefFor={(kind, recordId) =>
-                    kind === "job" ? `/pro/dashboard/jobs/${recordId}` : `/pro/dashboard/estimates/${recordId}`
+                    kind === "order" ? `/pro/dashboard/orders/${recordId}` : kind === "job" ? `/pro/dashboard/jobs/${recordId}` : `/pro/dashboard/estimates/${recordId}`
                   }
                   header={
                     <div>

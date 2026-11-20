@@ -576,10 +576,10 @@ export function CustomerOrderDetailView({
               </p>
               <div className="mt-2 flex items-center gap-2">
                 <Badge
-                  variant={orderStatusBadgeVariant(activeOrder.status)}
+                  variant={orderStatusBadgeVariant(activeOrder.displayStatus || activeOrder.status)}
                   className="px-2.5 py-1 text-xs font-semibold"
                 >
-                  {formatOrderStatus(activeOrder.status)}
+                  {formatOrderStatus(activeOrder.displayStatus || activeOrder.status)}
                 </Badge>
               </div>
               <p className="mt-1.5 text-xs text-muted-foreground capitalize">
@@ -935,9 +935,10 @@ export function CustomerOrderDetailView({
                   </div>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {activeOrder.assignedEmployees?.map((emp) => (
+                    {activeOrder.assignedEmployees?.map((emp, index) => (
                       <div
-                        key={emp.id || emp._id}
+                        // Unpopulated rows have no id / _id — fall back so the key is never undefined.
+                        key={String(emp.id || emp._id || `employee-${index}`)}
                         className="flex items-start gap-3 rounded-lg border border-input bg-muted/20 p-3.5"
                       >
                         <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-sm">
@@ -963,9 +964,9 @@ export function CustomerOrderDetailView({
                       </div>
                     ))}
 
-                    {activeOrder.assignedContractors?.map((con) => (
+                    {activeOrder.assignedContractors?.map((con, index) => (
                       <div
-                        key={con.id || con._id}
+                        key={String(con.id || con._id || `contractor-${index}`)}
                         className="flex items-start gap-3 rounded-lg border border-input bg-muted/20 p-3.5"
                       >
                         <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground font-semibold text-sm">

@@ -54,6 +54,7 @@ function asCrew(value: unknown): OrderCrew | undefined {
   const rec = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
   if (!rec) return undefined;
   return {
+    onClock: rec.onClock === true,
     employees: Array.isArray(rec.employees) ? (rec.employees as OrderCrew["employees"]) : [],
     contractors: Array.isArray(rec.contractors) ? (rec.contractors as OrderCrew["contractors"]) : [],
     lastActor: asActor(rec.lastActor),
@@ -356,6 +357,40 @@ function normalizeOrder(raw: unknown): ProviderOrder {
         additionalAmount: toNumber(coRec.additionalAmount, 0),
         evidencePhotos,
         status: typeof coRec.status === "string" ? coRec.status : "PENDING",
+        declinedByOffice: coRec.declinedByOffice === true,
+        customerNote: typeof coRec.customerNote === "string" && coRec.customerNote ? coRec.customerNote : undefined,
+        audience: coRec.audience === "crew" ? ("crew" as const) : ("customer" as const),
+        title: typeof coRec.title === "string" ? coRec.title : undefined,
+        items: Array.isArray(coRec.items)
+          ? coRec.items.map((raw, lineIndex) => {
+              const line = asRecord(raw) ?? {};
+              const kind = line.kind === "labor" || line.kind === "equipment" ? line.kind : ("material" as const);
+              return {
+                id: pickId(line) || `line-${lineIndex}`,
+                description: typeof line.description === "string" ? line.description : "",
+                kind,
+                quantity: toNumber(line.quantity, 1),
+                unitPrice: toNumber(line.unitPrice, 0),
+                unit: typeof line.unit === "string" ? line.unit : undefined,
+              };
+            })
+          : [],
+        acceptance: (() => {
+          const fa = asRecord(coRec.fieldAcceptance);
+          return fa?.status === "pending" || fa?.status === "accepted" ? fa.status : ("" as const);
+        })(),
+        acceptedAt: (() => {
+          const at = asRecord(coRec.fieldAcceptance)?.acceptedAt;
+          return typeof at === "string" ? at : null;
+        })(),
+        acceptedBy: (() => {
+          const by = asRecord(coRec.fieldAcceptance)?.acceptedBy;
+          return typeof by === "string" ? by : undefined;
+        })(),
+        requestedByMe: coRec.requestedByMe === true,
+        customerChangeOrderId: coRec.customerChangeOrderId ? String(coRec.customerChangeOrderId) : undefined,
+        fromRequestId: coRec.fromRequestId ? String(coRec.fromRequestId) : undefined,
+        officeNote: typeof coRec.officeNote === "string" ? coRec.officeNote : undefined,
         createdAt,
         respondedAt:
           typeof coRec.respondedAt === "string"
@@ -365,6 +400,7 @@ function normalizeOrder(raw: unknown): ProviderOrder {
       };
     }),
     invoice: parseOrderInvoice(record.invoice),
+    displayStatus: typeof record.displayStatus === "string" ? record.displayStatus : undefined,
     crewCompletion: (() => {
       const cc = asRecord(record.crewCompletion);
       if (!cc) return undefined;
@@ -949,6 +985,22 @@ const providerOrdersSlice = createSlice({
         }
       })
       .addCase(fetchProviderOrders.fulfilled, (state, action) => {
+        // A late response for an older query (e.g. "All" landing after the tab switched
+        // to "Requested") only fills its cache page — it must not overwrite the current
+        // filter, or the URL sync flips it back and the list refetches in a loop.
+        const currentKey = providerOrdersPageCacheKey(
+          state.statusFilter,
+          state.search,
+          state.page,
+          state.limit,
+        );
+        if (action.payload.cacheKey && action.payload.cacheKey !== currentKey) {
+          state.pagesCache[action.payload.cacheKey] = action.payload.orders;
+          for (const order of action.payload.orders) {
+            if (order?.id) state.detailsCache[order.id] = order;
+          }
+          return;
+        }
         state.loading = false;
         state.items = action.payload.orders;
         state.page = action.payload.page;

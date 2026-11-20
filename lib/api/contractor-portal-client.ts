@@ -134,6 +134,9 @@ export type ContractorAssignmentTerms = {
 
 /** Earned / paid / balance for one job (see backend contractor/ledger.js). */
 export type ContractorPayRow = {
+  /** "order" = a fixed service order (then `jobId` = `orderId` = the order id). */
+  kind?: "job" | "order";
+  orderId?: string | null;
   jobId: string;
   number: string;
   title: string;
@@ -166,6 +169,9 @@ export type ContractorPaymentRecord = {
   notes: string;
   jobId: string;
   job: { id: string; number: string; title: string } | null;
+  /** Payout for a fixed service order. */
+  orderId?: string | null;
+  order?: { id: string; number: string; title: string } | null;
 };
 
 export type ContractorJobDetail = {
@@ -337,6 +343,8 @@ function mapRequirements(value: unknown): ContractorJob["requirements"] {
 function mapPayRow(value: unknown): ContractorPayRow {
   const row = asRecord(value);
   return {
+    kind: row.kind === "order" ? "order" : "job",
+    orderId: row.orderId ? str(row.orderId) : null,
     jobId: str(row.jobId),
     number: str(row.number),
     title: str(row.title),
@@ -381,6 +389,10 @@ function mapPaymentRecord(value: unknown): ContractorPaymentRecord {
     notes: str(row.notes),
     jobId: str(row.jobId),
     job: job ? { id: str(job.id), number: str(job.number), title: str(job.title) } : null,
+    orderId: row.orderId ? str(row.orderId) : null,
+    order: row.order
+      ? { id: str(asRecord(row.order).id), number: str(asRecord(row.order).number), title: str(asRecord(row.order).title) }
+      : null,
   };
 }
 
@@ -799,6 +811,14 @@ export async function removeJobContractor(jobId: string, contractorId: string): 
   return dataOf(await deleteData(providerCrmApi.jobContractor(jobId, contractorId), { silent: true }));
 }
 
+export type JobCrewOnClock = { id: string; type: "technician" | "contractor"; name: string; since: string };
+
+/** Who is clocked in on the job right now — while anyone is, the crew can't be changed. */
+export async function getJobCrewStatus(jobId: string): Promise<JobCrewOnClock[]> {
+  const data = asRecord(dataOf(await getData(providerCrmApi.jobCrewStatus(jobId), undefined, quiet)));
+  return Array.isArray(data.onClock) ? (data.onClock as JobCrewOnClock[]) : [];
+}
+
 export async function getContractorLedger(contractorId: string) {
   const data = asRecord(dataOf(await getData(providerCrmApi.contractorPaymentLedger, { contractorId }, quiet)));
   return {
@@ -820,9 +840,63 @@ export async function listContractorPaymentHistory(contractorId: string): Promis
   return (Array.isArray(data) ? data : []).map(mapPaymentRecord);
 }
 
+/** One payout the contractor received, with the work it paid for. */
+export type ContractorPayoutDetail = {
+  payment: ContractorPaymentRecord;
+  company: { name: string; phone: string; email: string } | null;
+  record: {
+    kind: "job" | "order";
+    number: string;
+    title: string;
+    status: string;
+    payType: "hourly" | "fixed";
+    payRate: number;
+    hours: number;
+    labor: number;
+    extras: number;
+    earned: number;
+    paid: number;
+    remaining: number;
+  } | null;
+  sessions: TimeEntry[];
+  payments: ContractorPaymentRecord[];
+};
+
+export async function getContractorPayoutDetail(id: string): Promise<ContractorPayoutDetail> {
+  const data = asRecord(dataOf(await getData(contractorPortalApi.payout(id), undefined, { silent: true, force: true })));
+  const company = data.company ? asRecord(data.company) : null;
+  const record = data.record ? asRecord(data.record) : null;
+  return {
+    payment: mapPaymentRecord(data.payment),
+    company: company ? { name: str(company.name), phone: str(company.phone), email: str(company.email) } : null,
+    record: record
+      ? {
+          kind: record.kind === "order" ? "order" : "job",
+          number: str(record.number),
+          title: str(record.title),
+          status: str(record.status),
+          payType: record.payType === "fixed" ? "fixed" : "hourly",
+          payRate: Number(record.payRate) || 0,
+          hours: Number(record.hours) || 0,
+          labor: Number(record.labor) || 0,
+          extras: Number(record.extras) || 0,
+          earned: Number(record.earned) || 0,
+          paid: Number(record.paid) || 0,
+          remaining: Number(record.remaining) || 0,
+        }
+      : null,
+    sessions: (Array.isArray(data.sessions) ? data.sessions : [])
+      .map(mapTimeEntry)
+      .filter((entry): entry is TimeEntry => Boolean(entry)),
+    payments: (Array.isArray(data.payments) ? data.payments : []).map(mapPaymentRecord),
+  };
+}
+
 export type ContractorPayoutInput = {
   contractorId: string;
-  jobId: string;
+  /** A job — or `orderId` for a fixed service order (one of the two). */
+  jobId?: string;
+  orderId?: string;
   amount: number;
   method: "card" | "ach" | "check" | "cash";
   paidAt?: string;
@@ -854,10 +928,15 @@ export async function getContractorTimesheetLedger(
     employeeId: contractorId,
     employeeName: contractorName,
     payRate: row.payRate,
-    jobId: row.jobId,
+    jobId: row.kind === "order" ? null : row.jobId,
     estimateId: null,
-    job: { id: row.jobId, number: row.number, title: row.title, status: row.status },
+    orderId: row.kind === "order" ? row.orderId || row.jobId : null,
+    job: row.kind === "order" ? null : { id: row.jobId, number: row.number, title: row.title, status: row.status },
     estimate: null,
+    order:
+      row.kind === "order"
+        ? { id: row.orderId || row.jobId, number: row.number, title: row.title, status: row.status }
+        : null,
     seconds: Math.round(row.hours * 3600),
     sessions: 0,
     earned: row.earned,
@@ -885,6 +964,7 @@ export async function getContractorTimesheetLedger(
       employeeId: contractorId,
       employeeName: contractorName,
       job: payment.job ? { id: payment.job.id || payment.jobId, number: payment.job.number, title: payment.job.title } : null,
+      order: payment.order ? { id: payment.order.id, number: payment.order.number, title: payment.order.title } : null,
       estimate: null,
       amount: payment.amount,
       method: methods.has(payment.method as TechnicianPaymentMethod) ? (payment.method as TechnicianPaymentMethod) : "cash",

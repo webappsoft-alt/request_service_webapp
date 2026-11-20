@@ -34,6 +34,7 @@ export function JobTechnicianCrew({
   employees,
   locked = false,
   lockedHint,
+  lockedIds = {},
   onChanged,
 }: {
   job: Job;
@@ -42,6 +43,8 @@ export function JobTechnicianCrew({
   employees: PortalEmployee[];
   locked?: boolean;
   lockedHint?: string;
+  /** Per technician: why they can't be removed right now (e.g. clocked in). Adding is unaffected. */
+  lockedIds?: Record<string, string>;
   onChanged?: () => void;
 }) {
   const dispatch = useAppDispatch();
@@ -106,8 +109,8 @@ export function JobTechnicianCrew({
               variant="ghost"
               className="size-6 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               aria-label={`Remove ${nameOf(id)}`}
-              disabled={locked || removing === id}
-              title={locked ? lockedHint : undefined}
+              disabled={locked || Boolean(lockedIds[id]) || removing === id}
+              title={locked ? lockedHint : lockedIds[id]}
               onClick={() => void remove(id)}
             >
               {removing === id ? <Loader2 className="size-3 animate-spin" /> : <X className="size-3" />}

@@ -29,10 +29,15 @@ export function CompleteJobDialog({
   job,
   open,
   onOpenChange,
+  submit,
 }: {
-  job: ContractorJob;
+  job: Pick<ContractorJob, "id" | "number" | "title"> & {
+    completion?: { status: string; reviewNote?: string } | null;
+  };
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Override the contractor-job submit (fixed service orders pass theirs). Throw to show an error. */
+  submit?: (input: { photos: string[]; notes: string }) => Promise<void>;
 }) {
   const dispatch = useAppDispatch();
   const [photos, setPhotos] = useState<string[]>([]);
@@ -55,6 +60,19 @@ export function CompleteJobDialog({
     setTouched(true);
     if (missingPhotos || uploading) return;
     setSubmitting(true);
+    if (submit) {
+      try {
+        await submit({ photos, notes: notes.trim() });
+        toast.success("Sent for approval. We'll let you know when the office reviews it.");
+        reset();
+        onOpenChange(false);
+      } catch (error) {
+        toast.error(error instanceof Error && error.message ? error.message : "Could not submit your completion.");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     const result = await dispatch(submitJobCompletion({ jobId: job.id, photos, notes: notes.trim() }));
     setSubmitting(false);
     if (submitJobCompletion.fulfilled.match(result)) {

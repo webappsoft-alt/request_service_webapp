@@ -14,6 +14,8 @@ const STATUS_LABELS: Record<string, string> = {
   IN_PROGRESS: "In progress",
   CHANGE_ORDER_PENDING: "Change order pending",
   WORK_COMPLETED: "Work completed",
+  INVOICED: "Invoiced",
+  PAID: "Paid",
   SETTLED: "Settled",
   CANCELLED: "Cancelled",
   DISPUTED: "Disputed",

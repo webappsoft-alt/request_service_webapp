@@ -595,7 +595,7 @@ export function TeamMemberView({ id }: { id: string }) {
                   canPay
                   allowStop
                   hrefFor={(kind, recordId) =>
-                    kind === "job" ? `/pro/dashboard/jobs/${recordId}?tab=time` : `/pro/dashboard/estimates/${recordId}`
+                    kind === "order" ? `/pro/dashboard/orders/${recordId}` : kind === "job" ? `/pro/dashboard/jobs/${recordId}?tab=time` : `/pro/dashboard/estimates/${recordId}`
                   }
                   header={
                     <div>

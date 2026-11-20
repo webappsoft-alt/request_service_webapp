@@ -16,6 +16,7 @@ function dataOf(response: unknown) {
 function asCrew(value: unknown): OrderCrew {
   const rec = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   return {
+    onClock: rec.onClock === true,
     employees: Array.isArray(rec.employees) ? (rec.employees as OrderCrew["employees"]) : [],
     contractors: Array.isArray(rec.contractors) ? (rec.contractors as OrderCrew["contractors"]) : [],
     lastActor: (rec.lastActor as OrderCrew["lastActor"]) ?? null,
@@ -26,7 +27,7 @@ export async function getOrderCrew(orderId: string): Promise<OrderCrew> {
   return asCrew(dataOf(await getData(providerOrdersApi.crew(orderId), undefined, { silent: true, force: true })));
 }
 
-/** Set the order's employees (adds and removes; the API refuses to remove anyone who started). */
+/** Set the order's employees (adds and removes; refused while anyone is clocked in on the order). */
 export async function setOrderEmployees(orderId: string, employeeIds: string[]): Promise<OrderCrew> {
   return asCrew(dataOf(await putData(providerOrdersApi.crewEmployees(orderId), { employeeIds }, { silent: true })));
 }
@@ -56,6 +57,39 @@ export async function rejectOrderCompletion(orderId: string, note = "") {
   return dataOf(await postData(providerOrdersApi.completionReject(orderId), { note }, { silent: true }));
 }
 
+export type ScopeLineInput = {
+  description: string;
+  kind: "labor" | "material" | "equipment";
+  quantity: number;
+  unitPrice: number;
+  unit?: string;
+};
+
+/** Pro: approve the crew's scope request by adding lines (like a job) — the requester then accepts it. Internal only. */
+export async function approveOrderScopeRequest(
+  orderId: string,
+  changeOrderId: string,
+  input: { title?: string; note?: string; items: ScopeLineInput[] },
+) {
+  return dataOf(await postData(providerOrdersApi.scopeRequestApprove(orderId, changeOrderId), input, { silent: true }));
+}
+
+/**
+ * Pro → customer change order (separate from crew requests). Pass `fromRequestId` to build it from a
+ * crew scope request — only when the Pro chooses to.
+ */
+export async function sendOrderChangeOrderToCustomer(
+  orderId: string,
+  input: { description: string; reason?: string; additionalAmount: number; fromRequestId?: string },
+) {
+  return dataOf(await postData(providerOrdersApi.customerChangeOrder(orderId), input, { silent: true }));
+}
+
+/** Pro: decline the crew's scope request (it never reaches the customer). */
+export async function declineOrderScopeRequest(orderId: string, changeOrderId: string, note = "") {
+  return dataOf(await postData(providerOrdersApi.scopeRequestDecline(orderId, changeOrderId), { note }, { silent: true }));
+}
+
 /** Pro: completed order → draft invoice; returns the new invoice's id. */
 export async function convertOrderToInvoice(orderId: string): Promise<{ id: string; number: string }> {
   const data = dataOf(await postData(providerOrdersApi.convertToInvoice(orderId), {}, { silent: true }));
@@ -69,6 +103,27 @@ export type CrewPortal = "technician" | "contractor";
 export async function crewOrderCheckIn(portal: CrewPortal, orderId: string, location: DeviceLocation | null, notes = "") {
   return dataOf(
     await postData(crewOrdersApi(portal).checkIn(orderId), { ...(location || {}), notes }, { silent: true }),
+  );
+}
+
+/** Crew: request a scope change exactly like a job (reason + description; the office prices it). */
+export async function crewOrderScopeRequest(portal: CrewPortal, orderId: string, input: { reason: string; description: string }) {
+  return dataOf(await postData(crewOrdersApi(portal).scopeRequest(orderId), input, { silent: true }));
+}
+
+/** Crew: accept the scope the office added for my request (job-style "Accept updated scope"). */
+export async function crewAcceptOrderScope(portal: CrewPortal, orderId: string, changeOrderId: string) {
+  return dataOf(await postData(crewOrdersApi(portal).scopeAccept(orderId, changeOrderId), {}, { silent: true }));
+}
+
+/** Crew: "Mark as complete" like a job — proof photos + optional notes; goes to the office for approval. */
+export async function crewCompleteOrder(portal: CrewPortal, orderId: string, input: { photos: string[]; notes: string }) {
+  return dataOf(
+    await putData(
+      crewOrdersApi(portal).complete(orderId),
+      { proofOfWorkImages: input.photos, afterPhotos: input.photos, beforePhotos: [], completionNotes: input.notes, notes: input.notes },
+      { silent: true },
+    ),
   );
 }
 

@@ -69,7 +69,7 @@ export function panelListQuery(
     employeeIds: scope.employeeId || !scope.employeeKey ? undefined : scope.employeeKey.split(","),
     jobId: scope.jobId,
     estimateId: scope.estimateId,
-    kinds: scope.kindsKey.split(",") as RecordKind[],
+    kinds: scope.kindsKey.split(",") as ("job" | "estimate")[],
     from: range.from,
     to: range.to,
     page: view === "sessions" ? page : 1,
@@ -89,7 +89,7 @@ export function panelLedgerQuery(scope: PanelScope, paymentsPage: number): Ledge
     estimateId: scope.estimateId,
     paymentsPage,
     paymentsLimit: PAGE_SIZE,
-    kinds: scope.kindsKey.split(",") as RecordKind[],
+    kinds: scope.kindsKey.split(",") as ("job" | "estimate")[],
   };
 }
 
@@ -241,12 +241,12 @@ export function TimeTrackingPanel({
 
   // Ledger rows follow the Jobs / Estimates toggles; totals are re-added from the visible rows.
   const ledgerRows = useMemo(
-    () => ledgerState.data.byJob.filter((row) => kinds.includes(ledgerRowKind(row))),
+    () => ledgerState.data.byJob.filter((row) => kinds.includes(ledgerRowKind(row) === "order" ? "job" : ledgerRowKind(row))),
     [ledgerState.data.byJob, kinds],
   );
   const ledgerSummary = useMemo(() => sumLedger(ledgerRows), [ledgerRows]);
   const ledgerByKey = useMemo(
-    () => new Map<string, LedgerRow>(ledgerRows.map((row) => [ledgerRowKey(row.employeeId, row.jobId, row.estimateId), row])),
+    () => new Map<string, LedgerRow>(ledgerRows.map((row) => [ledgerRowKey(row.employeeId, row.jobId, row.estimateId, row.orderId), row])),
     [ledgerRows],
   );
   const payments = ledgerState.data.payments;
@@ -290,9 +290,13 @@ export function TimeTrackingPanel({
     if (!contractorId || !row.jobId) return;
     try {
       const { rows } = await getContractorLedger(contractorId);
-      const match = rows.find((item) => item.jobId === row.jobId);
+      // Order rows: the adapter puts the order id in orderId (the API row keeps it in jobId too).
+      const match = rows.find((item) => item.jobId === (row.jobId || row.orderId));
       if (match?.payable) setContractorPaying(match);
-      else toast.error("This job can be paid once the contractor's completed work is approved.");
+      else
+        toast.error(
+          `This ${row.orderId ? "order" : "job"} can be paid once the contractor's completed work is approved.`,
+        );
     } catch (error) {
       toast.error(error instanceof Error && error.message ? error.message : "Could not load the balance.");
     }

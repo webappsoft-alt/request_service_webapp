@@ -66,13 +66,44 @@ export interface ProviderOrderCustomerSnapshot {
   avatarUrl?: string;
 }
 
+/** A line the office added for a crew scope request (prices hidden from the crew). */
+export interface OrderScopeLine {
+  id?: string;
+  description: string;
+  kind: "labor" | "material" | "equipment";
+  quantity: number;
+  unitPrice: number;
+  unit?: string;
+}
+
 export interface ProviderChangeOrderItem {
   id?: string;
+  /** "crew" = internal crew ↔ office scope request (job-style); "customer" = customer approves. */
+  audience?: "crew" | "customer";
+  title?: string;
+  /** Crew requests: lines the office added. */
+  items?: OrderScopeLine[];
+  /** Crew requests: "" / "pending" (waiting for the requester) / "accepted". */
+  acceptance?: "" | "pending" | "accepted";
+  acceptedAt?: string | null;
+  acceptedBy?: string;
+  /** Crew view: I sent this request. */
+  requestedByMe?: boolean;
+  /** Crew request → the customer change order the Pro sent for it (separate step). */
+  customerChangeOrderId?: string;
+  /** Customer change order built from this crew request. */
+  fromRequestId?: string;
   description: string;
   reason?: string;
   additionalAmount: number;
   evidencePhotos?: string[];
-  status?: "PENDING" | "APPROVED" | "REJECTED" | string;
+  /** Crew: REQUESTED → SCOPE_ADDED → ACCEPTED / REJECTED. Customer: PENDING → APPROVED / REJECTED. */
+  status?: "REQUESTED" | "SCOPE_ADDED" | "ACCEPTED" | "PENDING" | "APPROVED" | "REJECTED" | string;
+  /** The office declined the crew's request (never reached the customer). */
+  declinedByOffice?: boolean;
+  /** Customer's note when approving / declining a customer change order. */
+  customerNote?: string;
+  officeNote?: string;
   createdAt?: string;
   respondedAt?: string;
   /** Who raised it: the Pro, or an assigned employee / contractor. */
@@ -145,6 +176,8 @@ export interface OrderCrewContractor extends OrderCrewMemberBase {
 }
 
 export interface OrderCrew {
+  /** Someone is clocked in now — crew can't be assigned, changed or removed until they check out. */
+  onClock?: boolean;
   employees: OrderCrewEmployee[];
   contractors: OrderCrewContractor[];
   lastActor?: OrderActor | null;
@@ -190,6 +223,8 @@ export function parseOrderInvoice(raw: unknown): OrderInvoiceSummary | null {
 }
 
 export interface ProviderOrder {
+  /** Shown status — follows the invoice like a job: "INVOICED" once sent, "PAID" once paid (else = status). */
+  displayStatus?: string;
   /** Invoice created from this order (Pro view; customer once sent). */
   invoice?: OrderInvoiceSummary | null;
   /** Assigned employees / contractors (Pro + crew views; absent for customers). */

@@ -12,6 +12,7 @@ export const technicianPaths = {
   schedule: "/technical/schedule",
   time: "/technical/time-tracking",
   payments: "/technical/payments",
+  payment: (id: string) => `/technical/payments/${id}`,
   messages: "/technical/messages",
   message: (threadId: string) => `/technical/messages?thread=${threadId}`,
   profile: "/technical/profile",

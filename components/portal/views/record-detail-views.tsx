@@ -28,7 +28,7 @@ import {
 } from "@/components/portal/create-person-dialogs";
 import { FileNotices } from "@/components/portal/task-banner";
 import { AssignEventDialog } from "@/components/portal/assign-event-dialog";
-import { AssignContractorDialog, JobContractorsCard } from "@/components/portal/job-crew";
+import { AssignContractorDialog, JobContractorsCard, onClockHintFor, useJobCrewOnClock } from "@/components/portal/job-crew";
 import { JobNotCompleteDialog, jobCompletionBlockers, type CompletionBlocker } from "@/components/portal/job-not-complete-dialog";
 import { JobRequestsTab } from "@/components/portal/job-requests-tab";
 import { listContractorReviewRequests } from "@/lib/api/contractor-portal-client";
@@ -170,6 +170,8 @@ import { crmCustomerName } from "@/lib/data/crm-people";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
 import { formatTaxRatePercent, storedInvoiceMoney } from "@/lib/tax/state-tax";
 import { paymentMethodLabel } from "@/lib/data/portal";
+import { PaidStamp } from "@/components/print/paid-stamp";
+import { PrintReceiptButton } from "@/components/print/payment-receipt";
 import {
   InvoicePrintDocument,
   type InvoicePrintData,
@@ -2005,6 +2007,8 @@ export function JobDetailView({ id }: { id: string }) {
   const records = usePortalRecords();
   const settings = useJobSettings(id);
   const [assignOpen, setAssignOpen] = useState(false);
+  // Crew clocked in now → Assign / Change / Remove wait until they check out (same as fixed orders).
+  const crewOnClock = useJobCrewOnClock(id);
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
@@ -2552,6 +2556,14 @@ export function JobDetailView({ id }: { id: string }) {
   /** Completed (or invoiced) jobs are closed: no crew changes or new change orders, only invoicing. */
   const jobClosed = alreadyInvoiced || currentJob.status === "completed";
   const closedHint = "This job is completed";
+  // Only the person clocked in now is locked (remove / replace); adding crew is never blocked.
+  const leadClockHint = onClockHintFor(crewOnClock, resolvedEmployeeId);
+  const crewLocked = jobClosed || Boolean(leadClockHint);
+  const crewHint = jobClosed ? closedHint : leadClockHint;
+  const extraTechLocks = Object.fromEntries(
+    crewOnClock.filter((row) => row.type === "technician").map((row) => [row.id, onClockHintFor(crewOnClock, row.id) || ""]),
+  );
+  const jobContractorRows = job.crewContractors || [];
   const relatedPayments = invoice
     ? records
         .mergePayments(payments)
@@ -2750,12 +2762,14 @@ export function JobDetailView({ id }: { id: string }) {
                   onClick={() => setContractorOpen(true)}
                 >
                   <Handshake className="size-3.5 text-primary" />
-                  Assign contractor
+                  {jobContractorRows.length ? "Add contractor" : "Assign contractor"}
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
                   className="h-8 gap-1.5"
+                  disabled={Boolean(leadClockHint)}
+                  title={leadClockHint}
                   onClick={() => setAssignOpen(true)}
                 >
                   <HardHat className="size-3.5 text-primary" />
@@ -2875,8 +2889,8 @@ export function JobDetailView({ id }: { id: string }) {
                           size="sm"
                           variant="outline"
                           className="h-8 bg-background"
-                          disabled={jobClosed}
-                          title={jobClosed ? closedHint : undefined}
+                          disabled={crewLocked}
+                          title={crewHint}
                           onClick={() => setAssignOpen(true)}
                         >
                           {technician ? "Change" : "Assign"}
@@ -2886,8 +2900,8 @@ export function JobDetailView({ id }: { id: string }) {
                             size="sm"
                             variant="ghost"
                             className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            disabled={removingAssignee || jobClosed}
-                            title={jobClosed ? closedHint : undefined}
+                            disabled={removingAssignee || crewLocked}
+                            title={crewHint}
                             onClick={() => void removeJobAssignee()}
                           >
                             {removingAssignee ? "Removing…" : "Remove"}
@@ -2902,6 +2916,7 @@ export function JobDetailView({ id }: { id: string }) {
                             employees={employees}
                             locked={jobClosed}
                             lockedHint={closedHint}
+                            lockedIds={extraTechLocks}
                             onChanged={() => {
                               if (crm.ready) void crm.refresh({ silent: true });
                             }}
@@ -2910,7 +2925,7 @@ export function JobDetailView({ id }: { id: string }) {
                       ) : null}
                     </div>
                     ) : null}
-                  <JobContractorsCard job={job} onChanged={reloadJobContractors} locked={jobClosed} />
+                  <JobContractorsCard job={job} onChanged={reloadJobContractors} locked={jobClosed} onClock={crewOnClock} />
                   <JobSummaryTab
                     job={job}
                     estimate={estimate}
@@ -3020,7 +3035,7 @@ export function JobDetailView({ id }: { id: string }) {
                   canPay
                   allowStop
                   hrefFor={(kind, recordId) =>
-                    kind === "job" ? `/pro/dashboard/jobs/${recordId}` : `/pro/dashboard/estimates/${recordId}`
+                    kind === "order" ? `/pro/dashboard/orders/${recordId}` : kind === "job" ? `/pro/dashboard/jobs/${recordId}` : `/pro/dashboard/estimates/${recordId}`
                   }
                   header={
                     <div>
@@ -3363,6 +3378,11 @@ export function InvoiceDetailView({ id }: { id: string }) {
 
   const { session, invoices, jobs, estimates, requests, payments, provider } =
     usePortalWorkspace();
+  /** Business name for the PAID seal. */
+  const proCompanyName = (() => {
+    const p = (provider || {}) as { companyName?: string; name?: string };
+    return p.companyName || p.name || "";
+  })();
   const { customers } = useCrmDirectory();
   const records = usePortalRecords();
   const settings = useInvoiceSettings(invoiceRef);
@@ -3873,7 +3893,8 @@ export function InvoiceDetailView({ id }: { id: string }) {
         switch (tab) {
           case "summary":
             return (
-              <>
+              <div>
+                {/* PAID stamp sits beside the totals (InvoiceSummaryTab), not over the header. */}
                 {useApi ? (
                   <PaymentReviewCard
                     className="mx-5 mt-5"
@@ -3882,6 +3903,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
                   />
                 ) : null}
                 <InvoiceSummaryTab
+                  companyName={proCompanyName}
                   invoice={shownInvoice}
                   customer={customer}
                   customerLabel={customerLabel}
@@ -3891,7 +3913,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
                   payments={relatedPayments}
                   onPaid={handlePaymentApplied}
                 />
-              </>
+              </div>
             );
           case "materials":
             return (
@@ -3994,6 +4016,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
           default:
             return (
               <InvoiceSummaryTab
+                companyName={proCompanyName}
                 invoice={invoice}
                 customer={customer}
                 customerLabel={customerLabel}
@@ -4172,6 +4195,29 @@ export function PaymentDetailView({ id }: { id: string }) {
     );
   }
 
+  // Succeeded (and confirmed) → PAID stamp + printable receipt.
+  const paymentPaid = payment.status === "succeeded" && !awaitingConfirmation;
+  const company = (provider || {}) as { companyName?: string; name?: string; phone?: string; email?: string };
+  const receiptData = {
+    number: paymentNumber(payment),
+    title: "Payment receipt",
+    amount: payment.amount,
+    paid: paymentPaid,
+    statusLabel: awaitingConfirmation ? "Awaiting confirmation" : paymentStatusLabel(payment.status),
+    method: paymentMethodLabel(payment.method),
+    paidAt: payment.paidAt || null,
+    reference: payment.transactionReference || undefined,
+    invoiceNumber: invoice?.number || payment.invoiceNumber || undefined,
+    recordLabel: job ? `${job.number} · ${service}` : service,
+    from: {
+      label: "Received by",
+      name: company.companyName || company.name || "Your business",
+      lines: [company.phone, company.email].filter(Boolean) as string[],
+    },
+    to: { label: "Paid by", name: customerLabel, lines: [customerPhone, customerEmail].filter(Boolean) },
+    notes: payment.notes || undefined,
+  };
+
   return (
     <RecordWorkspace
       href={`/pro/dashboard/payments/${payment.id}`}
@@ -4202,6 +4248,7 @@ export function PaymentDetailView({ id }: { id: string }) {
       actions={
         <>
           {/* Confirm received / Not received live in the summary card only (client: no duplicates). */}
+          <PrintReceiptButton data={receiptData} className="h-8" />
           {payment.invoiceId ? (
             <Button size="sm" variant="outline" className="h-8" asChild>
               <Link href={`/pro/dashboard/invoices/${payment.invoiceId}`}>
@@ -4252,7 +4299,7 @@ export function PaymentDetailView({ id }: { id: string }) {
           case "summary":
           default:
             return (
-              <>
+              <div>
                 {awaitingConfirmation ? (
                   <PaymentReviewCard
                     className="mx-5 mt-5"
@@ -4261,6 +4308,8 @@ export function PaymentDetailView({ id }: { id: string }) {
                   />
                 ) : null}
                 <PaymentSummaryTab
+                  // PAID seal in the summary header, between the title and the amount.
+                  stamp={paymentPaid ? <PaidStamp size="md" date={payment.paidAt || null} company={company.companyName || company.name || null} /> : null}
                   // Body shows "Pending" (not "Succeeded") until the Pro confirms.
                   payment={awaitingConfirmation ? { ...payment, status: "pending" } : payment}
                   invoice={invoice}
@@ -4269,7 +4318,7 @@ export function PaymentDetailView({ id }: { id: string }) {
                   service={service}
                   job={job}
                 />
-              </>
+              </div>
             );
         }
       }}

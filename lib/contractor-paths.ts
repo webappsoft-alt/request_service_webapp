@@ -10,6 +10,7 @@ export const contractorPaths = {
   changeRequests: "/contractor/change-requests",
   schedule: "/contractor/schedule",
   payouts: "/contractor/payouts",
+  payout: (id: string) => `/contractor/payouts/${id}`,
   messages: "/contractor/messages",
   profile: "/contractor/profile",
   message: (threadId: string) => `/contractor/messages?thread=${threadId}`,

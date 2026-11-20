@@ -1,4 +1,5 @@
 "use client";
+import { PaidStamp } from "@/components/print/paid-stamp";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
@@ -502,6 +503,7 @@ export function InvoiceSummaryTab({
   estimate,
   payments,
   onPaid,
+  companyName,
 }: {
   invoice: Invoice;
   customer?: PortalCustomerCrm;
@@ -511,6 +513,8 @@ export function InvoiceSummaryTab({
   estimate?: Estimate;
   payments: Payment[];
   onPaid?: (result: { invoice: Invoice | null; payment: Payment | null }) => void;
+  /** Business name shown on the PAID seal. */
+  companyName?: string;
 }) {
   const [summaryTab, setSummaryTab] = useState<"overview" | "payments">("overview");
   const address = job?.address;
@@ -898,7 +902,14 @@ export function InvoiceSummaryTab({
             </TableBody>
           </Table>
         </div>
-        <dl className="ml-auto grid max-w-xs grid-cols-2 gap-y-1.5 border-t border-input px-4 py-3 text-sm">
+        {/* Paid in full → PAID seal in the free space beside the totals. */}
+        <div className="flex flex-wrap items-center justify-end gap-x-6 border-t border-input">
+        {money.total > 0 && money.balanceDue <= 0 ? (
+          <div className="flex flex-1 justify-center py-3">
+            <PaidStamp size="md" company={companyName} />
+          </div>
+        ) : null}
+        <dl className="grid w-full max-w-xs grid-cols-2 gap-y-1.5 px-4 py-3 text-sm">
           <dt className="text-muted-foreground">Subtotal</dt>
           <dd className="text-right tabular-nums">{formatMoney(money.subtotal)}</dd>
           {money.discount ? (
@@ -920,6 +931,7 @@ export function InvoiceSummaryTab({
             {formatMoney(money.balanceDue)}
           </dd>
         </dl>
+        </div>
       </section>
         </>
       )}

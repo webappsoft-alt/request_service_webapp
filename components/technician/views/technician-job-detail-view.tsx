@@ -289,7 +289,7 @@ export function TechnicianJobDetailView({ id }: { id: string }) {
                 jobId={job.id}
                 defaultRange={{ preset: "all" }}
                 defaultView="sessions"
-                hrefFor={(kind, recordId) => (kind === "job" ? technicianPaths.job(recordId) : technicianPaths.estimate(recordId))}
+                hrefFor={(kind, recordId) => (kind === "order" ? `/technical/orders/${recordId}` : kind === "job" ? technicianPaths.job(recordId) : technicianPaths.estimate(recordId))}
               />
             );
           }

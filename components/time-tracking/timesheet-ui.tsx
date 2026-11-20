@@ -3,7 +3,9 @@
 import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowUpRight, CalendarX2, Check, ChevronDown, Loader2, Users } from "lucide-react";
+import { ArrowUpRight, CalendarX2, Check, ChevronDown, Loader2, Printer, Users } from "lucide-react";
+import { PrintPortal } from "@/components/print/print-portal";
+import { PaymentReceiptDocument } from "@/components/print/payment-receipt";
 import { PortalDataTable, type PortalTableColumn } from "@/components/portal/portal-data-table";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -54,22 +56,33 @@ import { recordTechnicianPaymentThunk } from "@/store/timeTrackingSlice";
 import { fetchProviderWallet } from "@/store/providerWalletSlice";
 import { insufficientBalanceText, useProviderWallet } from "@/components/portal/wallet-balance-card";
 
-export type RecordKind = "job" | "estimate";
+export type RecordKind = "job" | "estimate" | "order";
 export type HrefFor = (kind: RecordKind, id: string) => string;
 
 /* ───────────────────────────── Ledger helpers ───────────────────────────── */
 
-/** Same key the backend ledger groups by: technician + job (or estimate when no job). */
-export function ledgerRowKey(employeeId: string, jobId?: string | null, estimateId?: string | null) {
-  return `${employeeId}|${jobId || ""}|${jobId ? "" : estimateId || ""}`;
+/** Same key the backend ledger groups by: technician + job (or estimate when no job, or order when neither). */
+export function ledgerRowKey(
+  employeeId: string,
+  jobId?: string | null,
+  estimateId?: string | null,
+  orderId?: string | null,
+) {
+  return `${employeeId}|${jobId || ""}|${jobId ? "" : estimateId || ""}|${jobId || estimateId ? "" : orderId || ""}`;
 }
 
 export function entryLedgerKey(entry: TimeEntry) {
-  return ledgerRowKey(entry.employeeId, entry.job?.id, entry.estimate?.id);
+  return ledgerRowKey(entry.employeeId, entry.job?.id, entry.estimate?.id, entry.order?.id);
 }
 
-export function ledgerRowKind(row: Pick<LedgerRow, "jobId">): RecordKind {
-  return row.jobId ? "job" : "estimate";
+export function ledgerRowKind(row: Pick<LedgerRow, "jobId"> & { orderId?: string | null }): RecordKind {
+  return row.jobId ? "job" : row.orderId ? "order" : "estimate";
+}
+
+/** The job / estimate / order a ledger row is for. */
+export function ledgerRowRecord(row: LedgerRow) {
+  const kind = ledgerRowKind(row);
+  return kind === "job" ? row.job : kind === "order" ? row.order : row.estimate;
 }
 
 export function sumLedger(rows: LedgerRow[]): LedgerSummary {
@@ -144,7 +157,7 @@ function RecordLink({
   hrefFor?: HrefFor;
 }) {
   if (!record) return <span className="text-muted-foreground">—</span>;
-  const label = record.number || (kind === "job" ? "Job" : "Estimate");
+  const label = record.number || (kind === "job" ? "Job" : kind === "order" ? "Order" : "Estimate");
   const href = hrefFor?.(kind, record.id);
   return (
     <div className="min-w-0">
@@ -641,7 +654,7 @@ export function LedgerTable({
   loading?: boolean;
   empty?: string;
 }) {
-  const recordOf = (row: LedgerRow) => (ledgerRowKind(row) === "job" ? row.job : row.estimate);
+  const recordOf = (row: LedgerRow) => ledgerRowRecord(row);
   const columns: PortalTableColumn<LedgerRow>[] = [
     ...(showEmployee
       ? [
@@ -743,7 +756,7 @@ export function LedgerTable({
       countLabel="Jobs"
       hideSearch
       rows={rows}
-      rowKey={(row) => ledgerRowKey(row.employeeId, row.jobId, row.estimateId)}
+      rowKey={(row) => ledgerRowKey(row.employeeId, row.jobId, row.estimateId, row.orderId)}
       columns={columns}
       loading={Boolean(loading)}
       empty={loading ? "Loading pay…" : empty}
@@ -759,6 +772,8 @@ export function PaymentHistoryTable({
   loading,
   pagination,
   empty = "No payments recorded yet.",
+  receiptIssuer,
+  rowHref,
 }: {
   payments: TechnicianPaymentRecord[];
   showEmployee?: boolean;
@@ -767,9 +782,16 @@ export function PaymentHistoryTable({
   /** Server pagination; without it the rows page locally, 10 per page. */
   pagination?: { page: number; pageSize: number; total: number; totalPages: number; onPageChange: (page: number) => void };
   empty?: string;
+  /** Business name printed on the payout receipt. */
+  receiptIssuer?: string;
+  /** Row click → payment detail page (technician portal). */
+  rowHref?: (row: TechnicianPaymentRecord) => string;
 }) {
-  const kindOf = (payment: TechnicianPaymentRecord): RecordKind => (payment.job ? "job" : "estimate");
-  const recordOf = (payment: TechnicianPaymentRecord) => payment.job ?? payment.estimate;
+  /** Row being printed as a payout receipt (Print / save as PDF), with a PAID stamp. */
+  const [printing, setPrinting] = useState<TechnicianPaymentRecord | null>(null);
+  const kindOf = (payment: TechnicianPaymentRecord): RecordKind =>
+    payment.job ? "job" : payment.order ? "order" : "estimate";
+  const recordOf = (payment: TechnicianPaymentRecord) => payment.job ?? payment.order ?? payment.estimate;
   const columns: PortalTableColumn<TechnicianPaymentRecord>[] = [
     {
       id: "number",
@@ -842,7 +864,29 @@ export function PaymentHistoryTable({
     },
   ];
 
+  const printed = printing ? recordOf(printing) : null;
   return (
+    <>
+    {printing ? (
+      <PrintPortal onDone={() => setPrinting(null)}>
+        <PaymentReceiptDocument
+          data={{
+            number: printing.number || "Payment",
+            title: "Payout receipt",
+            amount: printing.amount,
+            paid: true,
+            statusLabel: "Paid",
+            method: METHOD_LABEL[printing.method] ?? printing.method,
+            paidAt: printing.paidAt,
+            reference: printing.reference || undefined,
+            recordLabel: printed ? [printed.number, printed.title].filter(Boolean).join(" · ") : undefined,
+            from: { label: "Paid by", name: receiptIssuer || "The business" },
+            to: { label: "Paid to", name: printing.employeeName || "Technician" },
+            notes: printing.notes || undefined,
+          }}
+        />
+      </PrintPortal>
+    ) : null}
     <PortalDataTable
       filename="technician-payments"
       countLabel="Payments"
@@ -850,6 +894,11 @@ export function PaymentHistoryTable({
       rows={payments}
       rowKey={(row) => row.id}
       columns={columns}
+      rowHref={rowHref}
+      actions={(row) => [
+        ...(rowHref ? [{ label: "View details", href: rowHref(row) }] : []),
+        { label: "Receipt (print / PDF)", icon: <Printer />, onSelect: (item: TechnicianPaymentRecord) => setPrinting(item) },
+      ]}
       loading={Boolean(loading)}
       empty={empty}
       pageSize={pagination?.pageSize ?? 10}
@@ -867,6 +916,7 @@ export function PaymentHistoryTable({
           : undefined
       }
     />
+    </>
   );
 }
 
@@ -906,7 +956,7 @@ export function PayTechnicianDialog({
   const overWallet = !tooMuch && walletBalance != null && value > walletBalance + 0.004;
   const invalid = !row || !Number.isFinite(value) || value <= 0 || tooMuch || overWallet;
   const kind = row ? ledgerRowKind(row) : "job";
-  const record = row ? (kind === "job" ? row.job : row.estimate) : null;
+  const record = row ? ledgerRowRecord(row) : null;
 
   async function save() {
     if (!row || invalid) return;
@@ -915,6 +965,8 @@ export function PayTechnicianDialog({
         employeeId: row.employeeId,
         jobId: row.jobId,
         estimateId: row.jobId ? null : row.estimateId,
+        // Fixed service order time (was missing → "A job or estimate is required").
+        orderId: row.jobId || row.estimateId ? null : row.orderId,
         amount: Math.round(value * 100) / 100,
         method,
         paidAt: paidAt ? new Date(`${paidAt}T12:00:00`).toISOString() : undefined,
@@ -1043,7 +1095,7 @@ export function usePayDialog() {
     row,
     open,
     /** Remount key so the form resets for each payout. */
-    key: `${row ? ledgerRowKey(row.employeeId, row.jobId, row.estimateId) : "none"}:${nonce}`,
+    key: `${row ? ledgerRowKey(row.employeeId, row.jobId, row.estimateId, row.orderId) : "none"}:${nonce}`,
     start(next: LedgerRow) {
       setRow(next);
       setNonce((value) => value + 1);

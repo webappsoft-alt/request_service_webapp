@@ -42,7 +42,15 @@ import {
   OrderInvoiceAction,
 } from "@/components/portal/orders/order-crew";
 import { TechChatButton } from "@/components/tech-chat/tech-chat-button";
+import { ChangeOrderRequestDialog } from "@/components/contractor/change-order-request-dialog";
+import { extractErrorMessage } from "@/components/api/extractErrorMessage";
+import { crewAcceptOrderScope, crewCompleteOrder, crewOrderScopeRequest } from "@/lib/api/order-crew-client";
+import { CompleteJobDialog } from "@/components/contractor/complete-job-dialog";
+import { FieldExtraWork } from "@/components/contractor/field-change-orders";
+import type { ContractorJobChangeOrder } from "@/lib/api/contractor-portal-client";
+import type { ProviderChangeOrderItem } from "@/lib/types/provider-order";
 import { OrderRequestsTab, orderPendingRequests } from "@/components/portal/orders/order-requests-tab";
+import { OrderChangeOrdersTable } from "@/components/portal/orders/order-change-orders-table";
 import { RecordWorkspace, type RecordTab } from "@/components/portal/record-workspace";
 import { subscribeRealtime } from "@/components/realtime/realtime-provider";
 import { StatusPill } from "@/components/portal/status-pill";
@@ -119,19 +127,22 @@ function SoftPanel({
 /** Change Orders tab: always shows loading, list, or empty — never a blank panel. */
 function ChangeOrdersTabPanel({
   order,
+  rows,
   loading,
   onPropose,
+  proposeLabel = "+ Propose Change Order",
   proposeDisabled,
 }: {
   order: ProviderOrder;
+  /** Rows to list (Pro: customer change orders; crew: theirs + customer ones). Defaults to all. */
+  rows?: ProviderChangeOrderItem[];
   loading: boolean;
-  /** Omitted on the Pro's page — only the assigned crew proposes change orders in the field. */
+  /** Pro: new customer change order. Crew: request a scope change (job-style). */
   onPropose?: () => void;
+  proposeLabel?: string;
   proposeDisabled: boolean;
 }) {
-  const changeOrders = Array.isArray(order.changeOrders)
-    ? order.changeOrders
-    : [];
+  const changeOrders = rows ?? (Array.isArray(order.changeOrders) ? order.changeOrders : []);
   const inField = order.status === "IN_PROGRESS" || order.status === "ARRIVED";
   const canPropose = inField && Boolean(onPropose);
 
@@ -159,9 +170,16 @@ function ChangeOrdersTabPanel({
                 {co.description || `Change Order #${index + 1}`}
               </span>
               <span className="font-mono text-sm font-semibold text-foreground">
-                +${Number(co.additionalAmount || 0).toFixed(2)}
+                {co.status === "REQUESTED" || co.declinedByOffice
+                  ? "—"
+                  : `+$${Number(co.additionalAmount || 0).toFixed(2)}`}
               </span>
             </div>
+            {co.officeNote ? (
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Office:</span> {co.officeNote}
+              </p>
+            ) : null}
             {co.reason ? (
               <p className="text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">Reason:</span>{" "}
@@ -170,7 +188,13 @@ function ChangeOrdersTabPanel({
             ) : null}
             <div className="flex items-center gap-3 pt-1 text-xs">
               <StatusPill
-                label={formatOrderStatus(co.status || "PENDING")}
+                label={
+                  co.status === "REQUESTED"
+                    ? "Awaiting office"
+                    : co.declinedByOffice
+                      ? "Declined by office"
+                      : formatOrderStatus(co.status || "PENDING")
+                }
                 tone={
                   co.status === "APPROVED"
                     ? "success"
@@ -221,9 +245,9 @@ function ChangeOrdersTabPanel({
       </p>
       <p className="mx-auto max-w-md text-xs text-muted-foreground">
         {canPropose
-          ? "In-field scope changes and extra parts will appear here after you propose them."
+          ? "Change orders and scope requests for this order appear here."
           : !onPropose && order.status !== "SETTLED" && order.status !== "CANCELLED"
-            ? "Change orders raised by the assigned employee or contractor in the field will appear here."
+            ? "Customer change orders appear here. Crew scope requests are on the Requests tab."
             : order.status === "BOOKING_REQUESTED" ||
               order.status === "CONFIRMED" ||
               order.status === "IN_TRANSIT"
@@ -238,11 +262,31 @@ function ChangeOrdersTabPanel({
           disabled={proposeDisabled}
         >
           <FileEdit className="size-3.5" />
-          + Propose Change Order
+          {proposeLabel}
         </Button>
       ) : null}
     </div>
   );
+}
+
+/** A crew scope request in the job "Accept updated scope" card's shape. */
+function toFieldOrder(co: ProviderChangeOrderItem, index: number): ContractorJobChangeOrder {
+  return {
+    id: co.id || `scope-${index}`,
+    number: "",
+    title: co.title || "",
+    description: co.description,
+    status: co.status === "ACCEPTED" ? "approved" : "",
+    requestedByMe: true,
+    acceptance: co.status === "ACCEPTED" ? "accepted" : co.acceptance || "pending",
+    acceptedAt: co.acceptedAt || null,
+    items: (co.items || []).map((item, lineIndex) => ({
+      id: item.id || `${co.id}-${lineIndex}`,
+      description: item.description,
+      kind: item.kind,
+      quantity: item.quantity,
+    })),
+  };
 }
 
 function formatSlotWindow(
@@ -418,6 +462,9 @@ export function OrderDetailPageView({ id, viewer = "provider" }: { id: string; v
     | "cancel"
     | null
   >(null);
+  /** Crew "Request scope change" — the same dialog as a job (reason + description, no price). */
+  const [scopeOpen, setScopeOpen] = useState(false);
+  const crewPortal = viewer === "contractor" ? "contractor" : "technician";
   /** idle → loading → ready. Change Orders shows spinner until ready when empty. */
   const [detailLoadState, setDetailLoadState] = useState<
     "idle" | "loading" | "ready" | "error"
@@ -459,7 +506,14 @@ export function OrderDetailPageView({ id, viewer = "provider" }: { id: string; v
   });
   useEffect(() => {
     return subscribeRealtime((detail) => {
-      if (String(detail?.type || "") !== "ORDER_UPDATED") return;
+      const type = String(detail?.type || "");
+      // Crew clocked in / out on this order → reload so the crew lock (Assign / Change / Remove) follows.
+      if (type === "TIME_ENTRY_UPDATED") {
+        const entry = ((detail.payload || {}) as { entry?: { order?: { id?: string } | null } }).entry;
+        if (String(entry?.order?.id || "") === id) void refreshRef.current();
+        return;
+      }
+      if (type !== "ORDER_UPDATED") return;
       const payload = (detail.payload || {}) as { id?: string; orderId?: string };
       if (String(payload.id || payload.orderId || "") === id) void refreshRef.current();
     });
@@ -635,13 +689,34 @@ export function OrderDetailPageView({ id, viewer = "provider" }: { id: string; v
       )
     : null;
 
+  // Change orders split like a job: crew ↔ office scope requests are internal (Pro: Requests tab;
+  // crew: "Accept updated scope" cards); customer change orders are a separate Pro ↔ customer flow.
+  const allChangeOrders = Array.isArray(order.changeOrders) ? order.changeOrders : [];
+  const changeOrderRows = isPro
+    ? allChangeOrders.filter((co) => co.audience !== "crew")
+    : allChangeOrders.filter((co) => co.audience !== "crew" || (co.requestedByMe && !co.items?.length));
+  const myScopeUpdates = isPro
+    ? []
+    : allChangeOrders.filter((co) => co.audience === "crew" && co.requestedByMe && Boolean(co.items?.length));
+  const myPendingScope = myScopeUpdates.filter((co) => co.status === "SCOPE_ADDED");
+  // Pro → customer change order: only while the work is on site / in progress (same rule as the API).
+  const proCanSendChangeOrder = isPro && ["ARRIVED", "IN_PROGRESS"].includes(order.status);
+  const acceptScope = async (field: ContractorJobChangeOrder) => {
+    try {
+      await crewAcceptOrderScope(crewPortal, order.id, field.id);
+    } catch (err) {
+      throw new Error(extractErrorMessage(err) || "Could not accept this scope update.");
+    }
+    await refreshOrder();
+  };
+
   const tabs: RecordTab[] = [
     { id: "summary", label: "Summary" },
     { id: "service", label: "Service Scope" },
     { id: "customer", label: "Customer" },
     {
       id: "change_orders",
-      label: `Change Orders (${order.changeOrders?.length || 0})`,
+      label: `Change Orders (${changeOrderRows.length + myScopeUpdates.length})`,
     },
     { id: "completion", label: "Completion & Proof" },
     // Pro: crew completion requests, same tab + badge as a job's Requests.
@@ -704,11 +779,21 @@ export function OrderDetailPageView({ id, viewer = "provider" }: { id: string; v
                   <Button
                     size="sm"
                     className="h-8 shrink-0 gap-1.5"
+                    onClick={() => setScopeOpen(true)}
+                    disabled={isActionLoading}
+                  >
+                    <FilePlus2 className="size-3.5" />
+                    Request scope change
+                  </Button>
+                ) : proCanSendChangeOrder ? (
+                  <Button
+                    size="sm"
+                    className="h-8 shrink-0 gap-1.5"
                     onClick={() => setActiveModal("changeOrder")}
                     disabled={isActionLoading}
                   >
-                    <FileEdit className="size-3.5" />
-                    + Propose Change Order
+                    <FilePlus2 className="size-3.5" />
+                    New change order for customer
                   </Button>
                 ) : null}
               </div>
@@ -742,7 +827,7 @@ export function OrderDetailPageView({ id, viewer = "provider" }: { id: string; v
           return null;
         }}
         // Crew: job-style status (Scheduled / In progress / Completed / Paid), like their jobs.
-        badge={isPro ? <OrderStatusPill status={order.status} full /> : <JobStatusPill status={orderStatusAsJob(order.status)} />}
+        badge={isPro ? <OrderStatusPill status={order.displayStatus || order.status} full /> : <JobStatusPill status={orderStatusAsJob(order.status)} />}
         actions={
           <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
             {/* Pro: assign crew (same buttons as a job). Crew: on-site check in / out. */}
@@ -778,7 +863,7 @@ export function OrderDetailPageView({ id, viewer = "provider" }: { id: string; v
                   className="h-8 gap-1.5 text-xs"
                   disabled={!crewWorking || isActionLoading}
                   title={crewWorking ? undefined : crewClosed ? "This job is closed." : "Clock in on site to start the work first."}
-                  onClick={() => setActiveModal("changeOrder")}
+                  onClick={() => setScopeOpen(true)}
                 >
                   <FilePlus2 className="size-3.5" /> Request scope change
                 </Button>
@@ -900,6 +985,9 @@ export function OrderDetailPageView({ id, viewer = "provider" }: { id: string; v
                     // Crew: "Time on this job" card, same as a job (Clock In starts the work).
                     <CrewOrderClockCard order={order} portal={viewer} onChanged={refreshOrder} />
                   )}
+                  {myPendingScope.length ? (
+                    <FieldExtraWork orders={myPendingScope.map(toFieldOrder)} onAccept={acceptScope} />
+                  ) : null}
 
                   {/* Assigned employees / contractors (Pro: edit; crew: who else is on it). */}
                   <OrderCrewCard order={order} onChanged={refreshOrder} viewer={viewer} />
@@ -1183,20 +1271,41 @@ export function OrderDetailPageView({ id, viewer = "provider" }: { id: string; v
               );
 
             case "change_orders": {
-              const changeOrders = Array.isArray(order.changeOrders)
-                ? order.changeOrders
-                : [];
               const showLoading =
                 detailLoadState !== "ready" &&
                 detailLoadState !== "error" &&
-                changeOrders.length === 0;
+                allChangeOrders.length === 0;
+              // Pro: change orders sent to the customer as a table → row opens its detail page.
+              // Previous: one card per change order.
+              if (isPro) {
+                return showLoading ? (
+                  <ChangeOrdersTabPanel order={order} rows={[]} loading proposeDisabled />
+                ) : (
+                  <OrderChangeOrdersTable order={order} basePath={listHref} />
+                );
+              }
               return (
-                <ChangeOrdersTabPanel
-                  order={order}
-                  loading={showLoading}
-                  onPropose={crewWorking ? () => setActiveModal("changeOrder") : undefined}
-                  proposeDisabled={isActionLoading}
-                />
+                <div className="flex flex-col gap-4">
+                  {myScopeUpdates.length ? (
+                    <FieldExtraWork orders={myScopeUpdates.map(toFieldOrder)} onAccept={acceptScope} />
+                  ) : null}
+                  <ChangeOrdersTabPanel
+                    order={order}
+                    rows={changeOrderRows}
+                    loading={showLoading}
+                    onPropose={
+                      isPro
+                        ? proCanSendChangeOrder
+                          ? () => setActiveModal("changeOrder")
+                          : undefined
+                        : crewWorking
+                          ? () => setScopeOpen(true)
+                          : undefined
+                    }
+                    proposeLabel={isPro ? "New change order for customer" : "Request scope change"}
+                    proposeDisabled={isActionLoading}
+                  />
+                </div>
               );
             }
 
@@ -1453,6 +1562,21 @@ export function OrderDetailPageView({ id, viewer = "provider" }: { id: string; v
         loading={isActionLoading}
       />
 
+      {!isPro ? (
+        <ChangeOrderRequestDialog
+          job={{ id: order.id, number: order.orderNumber || "", title: serviceTitle }}
+          open={scopeOpen}
+          onOpenChange={setScopeOpen}
+          submit={async (input) => {
+            try {
+              await crewOrderScopeRequest(viewer === "contractor" ? "contractor" : "technician", order.id, input);
+            } catch (err) {
+              throw new Error(extractErrorMessage(err) || "Could not send your request.");
+            }
+            await refreshOrder();
+          }}
+        />
+      ) : null}
       <ChangeOrderModal
         order={order}
         isOpen={activeModal === "changeOrder"}
@@ -1461,9 +1585,33 @@ export function OrderDetailPageView({ id, viewer = "provider" }: { id: string; v
         loading={isActionLoading}
       />
 
+      {!isPro ? (
+        // Crew: the same "Mark as complete" dialog as a job (proof photos + notes for the office).
+        // Previous: the Pro-style "Submit Work Completion" modal (notes required, before/after photos).
+        <CompleteJobDialog
+          job={{
+            id: order.id,
+            number: order.orderNumber || "",
+            title: serviceTitle,
+            completion: order.crewCompletion
+              ? { status: order.crewCompletion.status, reviewNote: order.crewCompletion.reviewNote || "" }
+              : null,
+          }}
+          open={activeModal === "complete"}
+          onOpenChange={(next) => !next && setActiveModal(null)}
+          submit={async (input) => {
+            try {
+              await crewCompleteOrder(crewPortal, order.id, input);
+            } catch (err) {
+              throw new Error(extractErrorMessage(err) || "Could not submit your completion.");
+            }
+            await refreshOrder();
+          }}
+        />
+      ) : null}
       <CompleteWorkModal
         order={order}
-        isOpen={activeModal === "complete"}
+        isOpen={isPro && activeModal === "complete"}
         onClose={() => setActiveModal(null)}
         onConfirm={handleComplete}
         loading={isActionLoading}

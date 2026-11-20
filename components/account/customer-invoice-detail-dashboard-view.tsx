@@ -27,6 +27,7 @@ import { paymentMethodLabel } from "@/lib/data/portal";
 import { customerPaths } from "@/lib/customer-paths";
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { PaidStamp } from "@/components/print/paid-stamp";
 import type { PaymentMethodType } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { selectAuth, selectAuthUser, selectIsAuthenticated } from "@/store/authSlice";
@@ -467,7 +468,13 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
             </div>
 
             {/* Financial Totals Summary */}
-            <div className="border-t border-input bg-muted/10 p-5 sm:p-6">
+            <div className="relative border-t border-input bg-muted/10 p-5 sm:p-6">
+              {/* Paid in full → PAID stamp in the space beside the totals (print has its own). */}
+              {invoice.total > 0 && invoice.balanceDue <= 0 ? (
+                <div className="mb-4 flex justify-center sm:absolute sm:top-1/2 sm:left-[22%] sm:mb-0 sm:-translate-y-1/2">
+                  <PaidStamp size="lg" company={companyName} />
+                </div>
+              ) : null}
               <div className="ml-auto w-full max-w-sm space-y-2.5 text-sm">
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span>Subtotal</span>

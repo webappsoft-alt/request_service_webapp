@@ -24,6 +24,8 @@ export function formatOrderStatus(status?: string | null): string {
     IN_PROGRESS: "In Progress",
     CHANGE_ORDER_PENDING: "Change Order Pending",
     WORK_COMPLETED: "Completed",
+    INVOICED: "Invoiced",
+    PAID: "Paid",
     SETTLED: "Settled",
     CANCELLED: "Cancelled",
     DISPUTED: "Disputed",
@@ -128,6 +130,21 @@ export function getOrderStatusConfig(status?: string | null) {
         fullLabel: "Work Completed",
         pillClass: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60",
         dotClass: "bg-emerald-500",
+      };
+    // Shown once the order's invoice is sent / paid (displayStatus), like a job.
+    case "INVOICED":
+      return {
+        label: "Invoiced",
+        fullLabel: "Invoiced",
+        pillClass: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800/60",
+        dotClass: "bg-indigo-500",
+      };
+    case "PAID":
+      return {
+        label: "Paid",
+        fullLabel: "Paid",
+        pillClass: "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60",
+        dotClass: "bg-emerald-600",
       };
     case "SETTLED":
       return {

@@ -208,6 +208,8 @@ export interface OrderScopeItem {
 
 export interface CustomerOrderListItem {
   id: string;
+  /** Shown status — follows the invoice like a job: "INVOICED" once sent, "PAID" once paid (else = status). */
+  displayStatus?: string;
   orderNumber: string;
   status: OrderStatus | string;
   orderType?: "fixed_service" | "pro_service";
@@ -247,6 +249,8 @@ export interface CustomerOrdersListResult {
 /** Detail shape from `GET /api/orders/:id` (populated fields when API returns them). */
 export interface CustomerOrderDetail {
   id: string;
+  /** Shown status — follows the invoice like a job: "INVOICED" once sent, "PAID" once paid (else = status). */
+  displayStatus?: string;
   /** Fixed order invoice once the Pro sent it — pay it, then sign off. */
   orderInvoice?: import("./provider-order").OrderInvoiceSummary | null;
   /** Pro jobs: the estimate's project stages and the updates shared with the customer. */

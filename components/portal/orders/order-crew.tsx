@@ -9,6 +9,7 @@ import {
   Handshake,
   HardHat,
   Loader2,
+  ArrowLeftRight,
   Lock,
   LogIn,
   LogOut,
@@ -108,11 +109,15 @@ function WorkState({ member }: { member: Pick<OrderCrewEmployee, "checkedIn" | "
   return <StatusPill tone="neutral" label="Not started" />;
 }
 
-const removeLockHint = (member: { started: boolean }, locked: boolean) =>
+/**
+ * More crew can always be added. A person can't be removed / replaced while they're clocked in on the
+ * order (unlocked once they check out), or once the order is finished.
+ */
+const removeLockHint = (member: { name: string; checkedIn: boolean }, locked: boolean) =>
   locked
     ? "This order is finished — its crew can no longer be changed."
-    : member.started
-      ? "Already started work on this order — can't be removed."
+    : member.checkedIn
+      ? `${member.name} is checked in right now. You can remove or replace them after they check out.`
       : undefined;
 
 /** The order as the shared assign-contractor dialog expects it. */
@@ -261,15 +266,18 @@ export function AssignOrderEmployeeDialog({
   open,
   onOpenChange,
   onSaved,
+  replacing = null,
 }: {
   order: ProviderOrder;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void | Promise<void>;
+  /** Change: the chosen employee replaces this one; otherwise they're added alongside the crew. */
+  replacing?: OrderCrewEmployee | null;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {open ? <AssignEmployeeForm order={order} onOpenChange={onOpenChange} onSaved={onSaved} /> : null}
+      {open ? <AssignEmployeeForm order={order} onOpenChange={onOpenChange} onSaved={onSaved} replacing={replacing} /> : null}
     </Dialog>
   );
 }
@@ -278,10 +286,12 @@ function AssignEmployeeForm({
   order,
   onOpenChange,
   onSaved,
+  replacing,
 }: {
   order: ProviderOrder;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void | Promise<void>;
+  replacing: OrderCrewEmployee | null;
 }) {
   const paging = usePaginatedCrmOptions("employee", true);
   const current = (order.crew?.employees || []).map((row) => row.employeeId);
@@ -302,8 +312,15 @@ function AssignEmployeeForm({
     if (error || saving) return;
     setSaving(true);
     try {
-      await setOrderEmployees(order.id, [...current, employeeId]);
-      toast.success(`${employeeLabel || "Employee"} assigned to ${label}.`);
+      await setOrderEmployees(
+        order.id,
+        replacing ? [...current.filter((id) => id !== replacing.employeeId), employeeId] : [...current, employeeId],
+      );
+      toast.success(
+        replacing
+          ? `${employeeLabel || "Employee"} replaced ${replacing.name} on ${label}.`
+          : `${employeeLabel || "Employee"} assigned to ${label}.`,
+      );
       await onSaved();
       onOpenChange(false);
     } catch (err) {
@@ -316,7 +333,7 @@ function AssignEmployeeForm({
   return (
     <DialogContent className="sm:max-w-md" data-lenis-prevent onInteractOutside={(event) => saving && event.preventDefault()}>
       <DialogHeader>
-        <DialogTitle>Assign employee · {label}</DialogTitle>
+        <DialogTitle>{replacing ? `Replace ${replacing.name}` : current.length ? "Add employee" : "Assign employee"} · {label}</DialogTitle>
         <DialogDescription>
           They get the order in their technician portal (with a notification and email), and can depart,
           check in on site, raise change orders and submit completion proof.
@@ -355,7 +372,7 @@ function AssignEmployeeForm({
         </Button>
         <Button onClick={() => void save()} disabled={saving}>
           {saving ? <Loader2 className="animate-spin" /> : <UserPlus />}
-          Assign employee
+          {replacing ? "Replace employee" : current.length ? "Add employee" : "Assign employee"}
         </Button>
       </DialogFooter>
     </DialogContent>
@@ -364,20 +381,26 @@ function AssignEmployeeForm({
 
 /* ───────────────────────────── Header buttons (Pro) ───────────────────────────── */
 
-/** "Assign contractor" + "Assign employee" for the order header — same buttons as a job. */
+/**
+ * "Assign / Add contractor" + "Assign / Add employee" for the order header — same as a job. Orders
+ * take several employees and contractors; adding a helper is never blocked (even while someone is
+ * working). Replacing / removing a person is on their row in the crew card.
+ */
 export function OrderCrewActions({ order, onChanged }: { order: ProviderOrder; onChanged: () => void | Promise<void> }) {
   const [employeeOpen, setEmployeeOpen] = useState(false);
   const [contractorOpen, setContractorOpen] = useState(false);
   if (CREW_LOCKED.has(order.status)) return null;
+  const employees = order.crew?.employees || [];
+  const contractors = order.crew?.contractors || [];
   return (
     <>
       <Button size="sm" variant="outline" className="h-8 gap-1.5 border-border-soft text-xs" onClick={() => setContractorOpen(true)}>
         <Handshake className="size-3.5 text-primary" />
-        Assign contractor
+        {contractors.length ? "Add contractor" : "Assign contractor"}
       </Button>
       <Button size="sm" variant="outline" className="h-8 gap-1.5 border-border-soft text-xs" onClick={() => setEmployeeOpen(true)}>
         <HardHat className="size-3.5 text-primary" />
-        Assign employee
+        {employees.length ? "Add employee" : "Assign employee"}
       </Button>
       <AssignOrderEmployeeDialog order={order} open={employeeOpen} onOpenChange={setEmployeeOpen} onSaved={onChanged} />
       <AssignContractorDialog
@@ -414,6 +437,9 @@ export function OrderCrewCard({
   const [removing, setRemoving] = useState<string | null>(null);
   const [editing, setEditing] = useState<OrderCrewContractor | null>(null);
   const [employeeOpen, setEmployeeOpen] = useState(false);
+  /** Change (replace) one specific person — never blocked by someone else working. */
+  const [replacingEmployee, setReplacingEmployee] = useState<OrderCrewEmployee | null>(null);
+  const [replacingContractor, setReplacingContractor] = useState<OrderCrewContractor | null>(null);
   const label = order.orderNumber || "this order";
   const lastActor = order.crew?.lastActor;
 
@@ -506,6 +532,17 @@ export function OrderCrewCard({
               ) : null}
               <Button
                 size="sm"
+                variant="outline"
+                className="h-8 bg-background"
+                disabled={!row.removable || removing === row.employeeId}
+                title={removeLockHint(row, locked)}
+                onClick={() => setReplacingEmployee(row)}
+              >
+                {!row.removable ? <Lock className="size-3.5" /> : null}
+                Change
+              </Button>
+              <Button
+                size="sm"
                 variant="ghost"
                 className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
                 disabled={!row.removable || removing === row.employeeId}
@@ -564,6 +601,17 @@ export function OrderCrewCard({
                       <Button
                         size="icon"
                         variant="ghost"
+                        className="size-7"
+                        aria-label={`Replace ${row.name}`}
+                        disabled={!row.removable}
+                        title={removeLockHint(row, locked) || `Replace ${row.name}`}
+                        onClick={() => setReplacingContractor(row)}
+                      >
+                        <ArrowLeftRight />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
                         className="size-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
                         aria-label={`Remove ${row.name}`}
                         disabled={!row.removable || removing === row.contractorId}
@@ -596,6 +644,33 @@ export function OrderCrewCard({
         </p>
       ) : null}
 
+      {isPro ? (
+        <>
+          <AssignOrderEmployeeDialog
+            order={order}
+            open={Boolean(replacingEmployee)}
+            onOpenChange={(next) => !next && setReplacingEmployee(null)}
+            onSaved={onChanged}
+            replacing={replacingEmployee}
+          />
+          <AssignContractorDialog
+            job={orderAssignTarget(order)}
+            recordLabel="order"
+            changing
+            open={Boolean(replacingContractor)}
+            onOpenChange={(next) => !next && setReplacingContractor(null)}
+            assign={async (input) => {
+              // Replace this one contractor: assign the new one, then take them off.
+              const result = await assignOrderContractor(order.id, input);
+              if (replacingContractor && replacingContractor.contractorId !== input.contractorId) {
+                await removeOrderContractor(order.id, replacingContractor.contractorId);
+              }
+              return result;
+            }}
+            onSaved={onChanged}
+          />
+        </>
+      ) : null}
       {isPro ? (
         <AssignContractorDialog
           job={orderAssignTarget(order)}

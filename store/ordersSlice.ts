@@ -449,6 +449,7 @@ function parseOrderListItem(raw: unknown): CustomerOrderListItem | null {
       typeof record.orderNumber === "string" ? record.orderNumber : "",
     status:
       (typeof record.status === "string" && record.status) || "BOOKING_REQUESTED",
+    displayStatus: typeof record.displayStatus === "string" ? record.displayStatus : undefined,
     orderType:
       record.orderType === "pro_service" ? "pro_service" : "fixed_service",
     jobStatus:
@@ -576,6 +577,7 @@ function parseOrderDetail(response: unknown): CustomerOrderDetail {
   return {
     id: pickId(data),
     orderInvoice: parseOrderInvoice(data.invoice),
+    displayStatus: typeof data.displayStatus === "string" ? data.displayStatus : undefined,
     orderNumber: typeof data.orderNumber === "string" ? data.orderNumber : "",
     status:
       (typeof data.status === "string" && data.status) || "BOOKING_REQUESTED",

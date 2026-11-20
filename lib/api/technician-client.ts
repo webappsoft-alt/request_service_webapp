@@ -716,6 +716,8 @@ export type TechnicianPaymentRecord = {
   employeeName: string;
   job: { id: string; number?: string; title?: string } | null;
   estimate: { id: string; number?: string; title?: string } | null;
+  /** Fixed service order the payout was for. */
+  order: { id: string; number?: string; title?: string } | null;
   amount: number;
   method: TechnicianPaymentMethod;
   paidAt: string;
@@ -729,8 +731,11 @@ export type LedgerRow = {
   payRate: number;
   jobId: string | null;
   estimateId: string | null;
+  /** Fixed service order (crew time clocked on an order — paid like a job). */
+  orderId: string | null;
   job: { id: string; number?: string; title?: string; status?: string } | null;
   estimate: { id: string; number?: string; title?: string; status?: string } | null;
+  order: { id: string; number?: string; title?: string; status?: string } | null;
   seconds: number;
   sessions: number;
   earned: number;
@@ -788,6 +793,19 @@ function mapRef(value: unknown) {
   };
 }
 
+/** Populated Order on a payout: orderNumber + service name. */
+function mapOrderRef(value: unknown) {
+  const row = asRecord(value);
+  const id = idOf(row);
+  if (!id) return null;
+  const service = asRecord(row.serviceSnapshot);
+  return {
+    id,
+    number: row.orderNumber ? String(row.orderNumber) : row.number ? String(row.number) : undefined,
+    title: service.servicesName ? String(service.servicesName) : row.title ? String(row.title) : undefined,
+  };
+}
+
 export function mapLedgerSummary(value: unknown): LedgerSummary {
   const row = asRecord(value);
   return {
@@ -809,6 +827,7 @@ export function mapTechnicianPayment(value: unknown): TechnicianPaymentRecord {
     employeeName: `${employee.firstName || ""} ${employee.lastName || ""}`.trim(),
     job: mapRef(row.jobId),
     estimate: mapRef(row.estimateId),
+    order: mapOrderRef(row.orderId),
     amount: Number(row.amount) || 0,
     method: (String(row.method || "cash") as TechnicianPaymentMethod),
     paidAt: String(row.paidAt || row.createdAt || ""),
@@ -829,8 +848,10 @@ function mapLedger(value: unknown): TechnicianLedger {
         payRate: Number(row.payRate) || 0,
         jobId: row.jobId ? String(row.jobId) : null,
         estimateId: row.estimateId ? String(row.estimateId) : null,
+        orderId: row.orderId ? String(row.orderId) : null,
         job: mapRef(row.job),
         estimate: mapRef(row.estimate),
+        order: mapRef(row.order),
         seconds: Number(row.seconds) || 0,
         sessions: Number(row.sessions) || 0,
         earned: Number(row.earned) || 0,
@@ -890,6 +911,7 @@ export type RecordTechnicianPaymentInput = {
   employeeId: string;
   jobId?: string | null;
   estimateId?: string | null;
+  orderId?: string | null;
   amount: number;
   method: TechnicianPaymentMethod;
   paidAt?: string;
@@ -899,6 +921,43 @@ export type RecordTechnicianPaymentInput = {
 
 export async function recordTechnicianPayment(input: RecordTechnicianPaymentInput) {
   return mapTechnicianPayment(dataOf(await postData(providerCrmApi.technicianPayments, input, { silent: true })));
+}
+
+/** One payout the technician received, with the work it paid for. */
+export type TechnicianPaymentDetail = {
+  payment: TechnicianPaymentRecord;
+  company: { name: string; phone: string; email: string } | null;
+  /** Balance for the job / order / estimate this payment was for. */
+  record: { earned: number; paid: number; remaining: number; seconds: number; sessions: number } | null;
+  /** Completed clock-in sessions on that record (newest first). */
+  sessions: TimeEntry[];
+  /** Every payout on that record. */
+  payments: TechnicianPaymentRecord[];
+};
+
+export async function getTechnicianPaymentDetail(id: string): Promise<TechnicianPaymentDetail> {
+  const data = asRecord(dataOf(await getData(technicianApi.payment(id), undefined, { silent: true, force: true })));
+  const company = data.company ? asRecord(data.company) : null;
+  const record = data.record ? asRecord(data.record) : null;
+  return {
+    payment: mapTechnicianPayment(data.payment),
+    company: company
+      ? { name: String(company.name || ""), phone: String(company.phone || ""), email: String(company.email || "") }
+      : null,
+    record: record
+      ? {
+          earned: Number(record.earned) || 0,
+          paid: Number(record.paid) || 0,
+          remaining: Number(record.remaining) || 0,
+          seconds: Number(record.seconds) || 0,
+          sessions: Number(record.sessions) || 0,
+        }
+      : null,
+    sessions: (Array.isArray(data.sessions) ? data.sessions : [])
+      .map(mapTimeEntry)
+      .filter((entry): entry is TimeEntry => Boolean(entry)),
+    payments: (Array.isArray(data.payments) ? data.payments : []).map(mapTechnicianPayment),
+  };
 }
 
 export type TechBadges = { jobs: number; estimates: number; schedule: number; payments: number };

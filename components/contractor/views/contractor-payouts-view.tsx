@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CircleDollarSign, Hourglass, Wallet } from "lucide-react";
 import { useContractorSectionSeen } from "@/components/contractor/use-contractor-section-seen";
 import { PortalDataTable } from "@/components/portal/portal-data-table";
+import { PrintReceiptButton } from "@/components/print/payment-receipt";
 import { PortalPage } from "@/components/portal/portal-page";
 import { StatusPill } from "@/components/portal/status-pill";
 import { CenteredSpinner } from "@/components/ui/spinner";
@@ -42,6 +43,11 @@ function Tile({ label, value, icon: Icon, tone }: { label: string; value: string
       </span>
     </div>
   );
+}
+
+/** Earnings row link: a job, or the order page for fixed service orders. */
+function recordHref(row: ContractorPayRow) {
+  return row.kind === "order" ? contractorPaths.order(row.orderId || row.jobId) : contractorPaths.job(row.jobId);
 }
 
 /**
@@ -92,7 +98,7 @@ export function ContractorPayoutsView() {
               empty="Nothing earned yet. Fixed-price jobs and logged hours show up here."
               rows={data.jobs}
               rowKey={(row) => row.jobId}
-              rowHref={(row) => contractorPaths.job(row.jobId)}
+              rowHref={(row) => recordHref(row)}
               columns={[
                 {
                   id: "job",
@@ -102,7 +108,7 @@ export function ContractorPayoutsView() {
                   exportValue: (row) => row.number,
                   cell: (row) => (
                     <div className="min-w-0">
-                      <Link href={contractorPaths.job(row.jobId)} className="font-semibold text-primary hover:underline">
+                      <Link href={recordHref(row)} className="font-semibold text-primary hover:underline">
                         {row.number}
                       </Link>
                       {row.title ? <p className="truncate text-xs text-muted-foreground">{row.title}</p> : null}
@@ -151,7 +157,7 @@ export function ContractorPayoutsView() {
                   cell: (row) => <span className="font-semibold tabular-nums">{formatMoney(row.balance)}</span>,
                 },
               ]}
-              actions={(row) => [{ label: "Open job", href: contractorPaths.job(row.jobId) }]}
+              actions={(row) => [{ label: row.kind === "order" ? "Open order" : "Open job", href: recordHref(row) }]}
             />
           </section>
 
@@ -164,6 +170,7 @@ export function ContractorPayoutsView() {
               empty="No payments yet."
               rows={data.payments}
               rowKey={(row) => row.id}
+              rowHref={(row) => contractorPaths.payout(row.id)}
               columns={[
                 {
                   id: "date",
@@ -176,18 +183,22 @@ export function ContractorPayoutsView() {
                   id: "number",
                   header: "Payment #",
                   sortValue: (row) => row.number,
-                  searchValue: (row) => `${row.number} ${row.reference} ${row.job?.number || ""}`,
+                  searchValue: (row) => `${row.number} ${row.reference} ${row.job?.number || row.order?.number || ""}`,
                   exportValue: (row) => row.number,
                   cell: (row) => <span className="font-medium">{row.number}</span>,
                 },
                 {
                   id: "job",
                   header: "Job",
-                  exportValue: (row) => row.job?.number || "",
+                  exportValue: (row) => row.job?.number || row.order?.number || "",
                   cell: (row) =>
                     row.job ? (
                       <Link href={contractorPaths.job(row.jobId)} className="text-primary hover:underline">
                         {row.job.number}
+                      </Link>
+                    ) : row.order ? (
+                      <Link href={contractorPaths.order(row.order.id)} className="text-primary hover:underline">
+                        {row.order.number}
                       </Link>
                     ) : (
                       "—"
@@ -211,6 +222,35 @@ export function ContractorPayoutsView() {
                   sortValue: (row) => row.amount,
                   exportValue: (row) => row.amount.toFixed(2),
                   cell: (row) => <span className="font-semibold tabular-nums">{formatMoney(row.amount)}</span>,
+                },
+                {
+                  // Payout receipt with a PAID stamp — print or "Save as PDF".
+                  id: "receipt",
+                  header: "Receipt",
+                  exportValue: () => "",
+                  cell: (row) => (
+                    <PrintReceiptButton
+                      label="Receipt"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      data={{
+                        number: row.number,
+                        title: "Payout receipt",
+                        amount: row.amount,
+                        paid: true,
+                        statusLabel: "Paid",
+                        method: METHOD_LABEL[row.method] || row.method,
+                        paidAt: row.paidAt,
+                        reference: row.reference || undefined,
+                        recordLabel: (() => {
+                          const record = row.job ?? row.order;
+                          return record ? [record.number, record.title].filter(Boolean).join(" · ") : undefined;
+                        })(),
+                        from: { label: "Paid by", name: company },
+                        to: { label: "Paid to", name: "You" },
+                      }}
+                    />
+                  ),
                 },
               ]}
             />

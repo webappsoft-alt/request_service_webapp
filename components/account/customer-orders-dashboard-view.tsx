@@ -61,7 +61,8 @@ const STATUS_FILTERS = [
 
 function orderTone(status: string) {
   const up = String(status || "").toUpperCase();
-  if (up === "SETTLED" || up === "WORK_COMPLETED") return "success" as const;
+  if (up === "SETTLED" || up === "WORK_COMPLETED" || up === "PAID") return "success" as const;
+  if (up === "INVOICED") return "primary" as const;
   if (up === "CANCELLED" || up === "DISPUTED") return "danger" as const;
   if (up === "IN_PROGRESS" || up === "IN_TRANSIT" || up === "ARRIVED")
     return "warning" as const;
@@ -286,11 +287,11 @@ export function CustomerOrdersDashboardView() {
           {
             id: "status",
             header: "Status",
-            sortValue: (row) => row.status,
+            sortValue: (row) => row.displayStatus || row.status,
             cell: (row) => (
               <StatusPill
-                label={formatOrderStatus(row.status)}
-                tone={orderTone(row.status)}
+                label={formatOrderStatus(row.displayStatus || row.status)}
+                tone={orderTone(row.displayStatus || row.status)}
               />
             ),
           },

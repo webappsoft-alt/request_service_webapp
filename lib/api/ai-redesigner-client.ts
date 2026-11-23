@@ -3,7 +3,8 @@ import { getData, postData } from "@/components/api/apiFuntions";
 import { extractUploadedUrl, uploadFile } from "@/components/api/uploadFile";
 
 /** Customer page for the AI Kitchen & Bath Redesigner. */
-export const AI_DESIGNER_PATH = "/ai-kitchen-bath-designer";
+/** Kitchen & Bath Design page (tool + FAQ). Previous: "/ai-kitchen-redesign", before that "/ai-kitchen-bath-designer" (both redirect here). */
+export const AI_DESIGNER_PATH = "/kitchen-bath-design";
 /**
  * Launch switch for customers. While false, the home banner shows a "coming soon" toast and the
  * designer page shows a placeholder (admins keep testing from the admin panel). Live since launch.
@@ -103,9 +104,12 @@ export async function startRedesign(body: {
   contact: RedesignContact;
   consent: boolean;
 }) {
+  // Needs the customer's login. An expired access token is refreshed and the request retried by the
+  // shared helper (same as every portal call). Previous: `skipLogoutOn401: true`, which also turned
+  // that refresh off, so a stale token failed with "Session expired, please login again" while the
+  // header still showed the user as logged in. Guests never get here (the wizard asks them to log in).
   const response = await postData<Envelope<RedesignGeneration>>(aiRedesignerApi.generations, body, {
     silent: true,
-    skipLogoutOn401: true,
   });
   return unwrap(response);
 }

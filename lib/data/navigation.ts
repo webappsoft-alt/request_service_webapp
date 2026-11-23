@@ -14,9 +14,9 @@ export const primaryNav: NavItem[] = [
     description: "Answer a few job questions, then see matching local pros.",
   },
   {
-    // Client: navbar link to the AI redesign info page (the tool itself needs a login).
-    label: "AI Kitchen Redesign",
-    href: "/ai-kitchen-redesign",
+    // Navbar link to the Kitchen & Bath Design page (the AI designer + FAQ).
+    label: "Kitchen & Bath Design", // Previous: "AI Kitchen Redesign"
+    href: "/kitchen-bath-design", // Previous: "/ai-kitchen-redesign" (redirects)
     description: "See your kitchen or bathroom redesigned by AI from one photo.",
   },
 ];

@@ -411,10 +411,11 @@ export function DetailsStep({
       </div>
 
       <div className="grid gap-3.5 sm:grid-cols-2">
-        {field("name", "Name", { autoComplete: "name", maxLength: 80 })}
-        {field("zip", "ZIP Code", { autoComplete: "postal-code", inputMode: "numeric", maxLength: 10 })}
-        {field("email", "Email", { type: "email", autoComplete: "email", maxLength: 160 })}
-        {field("phone", "Phone (optional)", { type: "tel", autoComplete: "tel", maxLength: 20 })}
+        {/* Placeholders added (previously the fields were empty boxes). */}
+        {field("name", "Name", { autoComplete: "name", maxLength: 80, placeholder: "e.g. Jane Smith" })}
+        {field("zip", "ZIP Code", { autoComplete: "postal-code", inputMode: "numeric", maxLength: 10, placeholder: "e.g. 80202" })}
+        {field("email", "Email", { type: "email", autoComplete: "email", maxLength: 160, placeholder: "you@example.com" })}
+        {field("phone", "Phone (optional)", { type: "tel", autoComplete: "tel", maxLength: 20, placeholder: "(555) 123-4567" })}
       </div>
 
       <div className="flex flex-col gap-1.5">

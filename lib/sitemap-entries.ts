@@ -39,6 +39,7 @@ function corePaths(): Entry[] {
     "/find-a-professional",
     "/get-a-quote",
     "/request-service",
+    "/kitchen-bath-design", // Kitchen & Bath Design (AI designer)
     "/about",
     "/how-it-works",
     "/blog",

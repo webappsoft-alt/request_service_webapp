@@ -9,7 +9,7 @@ import { useAppSelector } from "@/store/hooks";
 import { selectIsAuthenticated } from "@/store/authSlice";
 
 /**
- * Start button(s) on the AI Kitchen Redesign info page: signed-in customers go straight to the
+ * Start button(s) (was used on the old Kitchen & Bath Design info page; unused now): signed-in customers go straight to the
  * tool; guests are asked to log in (or sign up) and come back to the tool afterwards.
  * Buttons keep their own width (client: the full-width button looked wrong) — previous version
  * rendered the signed-in button straight into a flex column, which stretched it.

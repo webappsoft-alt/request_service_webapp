@@ -36,13 +36,14 @@ import { cn } from "@/lib/utils";
 import { selectAuthUser, selectIsAuthenticated } from "@/store/authSlice";
 import { useRouter } from "next/navigation";
 import { showLoginRequired } from "./login-guard";
+import { PICK_STYLE_EVENT, type PickStyleDetail } from "./designer-events";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   fetchRedesignCatalog,
   selectRedesignCatalog,
   selectRedesignCatalogStatus,
 } from "@/store/aiRedesignerSlice";
-// import { BeforeAfterSlider } from "./before-after-slider";
+import { BeforeAfterSlider } from "./before-after-slider";
 import { SwatchDot } from "./finish-swatch";
 import {
   DetailsStep,
@@ -55,6 +56,8 @@ import {
 
 const STEPS = ["Photo", "Style", "Finishes", "Details"] as const;
 const POLL_MS = 3000;
+/** First status check: runs take ~55s, so the first few 3s checks could never succeed. */
+const FIRST_POLL_MS = 10_000;
 /** Give up waiting after this (the server also marks stuck runs as failed). */
 const MAX_WAIT_MS = 6 * 60_000;
 /** Typical run time — drives the progress bar (it eases toward 95% and waits there). */
@@ -180,19 +183,46 @@ function GeneratingOverlay({ startedAt }: { startedAt: number }) {
   );
 }
 
-export function RedesignerWizard() {
+/** Guest's photo + picks, kept across the login round-trip (this tab only). */
+const DRAFT_KEY = "rs-ai-designer:draft:v1";
+type Draft = {
+  roomType: RoomType;
+  styleId: string;
+  picks: FinishPicks;
+  notes: string;
+  photoUrl: string | null;
+  step: number;
+};
+function saveDraft(draft: Draft) {
+  try {
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    /* storage unavailable: they just pick again */
+  }
+}
+function takeDraft(): Draft | null {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    sessionStorage.removeItem(DRAFT_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Draft) : null;
+    return parsed && (parsed.roomType === "kitchen" || parsed.roomType === "bathroom") ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function RedesignerWizard({
+  showHeader = true,
+}: {
+  /** false when the page already has its own <h1> + intro (Kitchen & Bath Design page). */
+  showHeader?: boolean;
+} = {}) {
   const dispatch = useAppDispatch();
   const catalog = useAppSelector(selectRedesignCatalog);
   const status = useAppSelector(selectRedesignCatalogStatus);
   const authUser = useAppSelector(selectAuthUser);
   const isLoggedIn = useAppSelector(selectIsAuthenticated);
   const router = useRouter();
-  /** Guests can look around, but uploading and designing need an account. */
-  const guardLogin = () => {
-    if (isLoggedIn) return true;
-    showLoginRequired((href) => router.push(href));
-    return false;
-  };
 
   const [step, setStep] = useState(0);
   const [photo, setPhoto] = useState<{
@@ -223,12 +253,60 @@ export function RedesignerWizard() {
     startedAt: number;
   } | null>(null);
   const [starting, setStarting] = useState(false);
+  /** Snapshot of the inputs behind the last finished design (null: none yet, or it failed). */
+  const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+  /** Inputs each started run was made from, by run id (read when the run finishes). */
+  const runKeysRef = useRef(new Map<string, string>());
   const previewUrlRef = useRef<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void dispatch(fetchRedesignCatalog());
   }, [dispatch]);
+
+  // Back from logging in: restore the guest's photo and picks (saved by guardLogin).
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const draft = takeDraft();
+      if (!draft) return;
+      setRoomType(draft.roomType);
+      setStyleId(draft.styleId || "");
+      setPicks(draft.picks || emptyPicks());
+      setNotes(draft.notes || "");
+      if (draft.photoUrl) setPhoto({ url: draft.photoUrl, preview: null });
+      setStep(draft.photoUrl ? Math.min(3, Math.max(0, draft.step || 0)) : 0);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  // "Try this style" from the page's styles showcase: select that room + style here.
+  const photoUrl = photo.url;
+  const designing = starting || Boolean(running);
+  useEffect(() => {
+    const onPick = (event: Event) => {
+      const detail = (event as CustomEvent<PickStyleDetail>).detail;
+      if (!detail || designing) return;
+      const next = (catalog?.styles || []).find(
+        (item) => item.id === detail.styleId && item.roomType === detail.roomType,
+      );
+      if (!next) return;
+      setRoomType(next.roomType);
+      setStyleId(next.id);
+      setPicks(picksFromStyle(next));
+      const room = next.roomType === "kitchen" ? "kitchen" : "bathroom";
+      if (photoUrl) {
+        setStep(1);
+        toast.success(`${next.name} ${room} selected`);
+      } else {
+        setStep(0);
+        toast.success(`${next.name} ${room} selected`, {
+          description: `Upload a photo of your ${room} to continue.`,
+        });
+      }
+    };
+    window.addEventListener(PICK_STYLE_EVENT, onPick);
+    return () => window.removeEventListener(PICK_STYLE_EVENT, onPick);
+  }, [catalog, photoUrl, designing]);
 
   useEffect(
     () => () => {
@@ -263,9 +341,23 @@ export function RedesignerWizard() {
   const active = history.find((item) => item.id === activeId) || null;
   const roomWord = roomType === "kitchen" ? "kitchen" : "bathroom";
 
+  /**
+   * Only generating needs an account (the API requires a login and limits runs per person).
+   * Guests upload, pick a room, style and finishes freely; at "Design my kitchen" their draft is
+   * saved and they're asked to log in, then land back here with everything restored.
+   * Previous: the login prompt also blocked the photo upload, so guests couldn't try anything.
+   */
+  const guardLogin = () => {
+    if (isLoggedIn) return true;
+    saveDraft({ roomType, styleId, picks, notes, photoUrl: photo.url, step });
+    showLoginRequired((href) => router.push(href));
+    return false;
+  };
+
   /* ------------------------------------------------------------ photo */
   const pickPhoto = () => {
-    if (guardLogin()) fileRef.current?.click();
+    // Previous: if (guardLogin()) fileRef.current?.click();
+    fileRef.current?.click();
   };
 
   const handleFile = useCallback(async (file: File) => {
@@ -417,7 +509,24 @@ export function RedesignerWizard() {
   ];
 
   /* ------------------------------------------------------------ generation */
+  /**
+   * Everything that changes the generated image: photo, room, style, the four finishes (shape +
+   * colour) and the notes. Contact details and consent are left out on purpose: they don't change
+   * the picture, so editing a phone number shouldn't spend another AI run on an identical design.
+   */
+  const designKey = JSON.stringify({
+    photo: photo.url,
+    roomType,
+    styleId,
+    picks: FINISH_CATEGORIES.map((key) => [key, picks[key]?.style ?? null, picks[key]?.color ?? null]),
+    notes: notes.trim(),
+  });
+  /** The last finished design already matches the current inputs: nothing new to generate. */
+  const upToDate = generatedKey !== null && generatedKey === designKey;
+
   const create = async () => {
+    // Same inputs as the last finished design → no new AI run (the button is disabled too).
+    if (upToDate) return;
     if (!guardLogin()) return;
     if (!photo.url) return setStep(0);
     if (!styleId) return setStep(1);
@@ -440,10 +549,19 @@ export function RedesignerWizard() {
         },
         consent,
       });
+      runKeysRef.current.set(run.id, designKey);
       setHistory((prev) => [run, ...prev]);
       setActiveId(run.id);
       setRunning({ id: run.id, startedAt: Date.now() });
     } catch (error) {
+      // Login really ended (refresh failed, user signed out): keep their picks and ask to log in
+      // again, instead of showing the raw "Session expired" message.
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status === 401) {
+        saveDraft({ roomType, styleId, picks, notes, photoUrl: photo.url, step });
+        showLoginRequired((href) => router.push(href));
+        return;
+      }
       toast.error(
         extractErrorMessage(error) ||
           "Could not start your design. Please try again.",
@@ -453,26 +571,48 @@ export function RedesignerWizard() {
     }
   };
 
-  // Poll the running design until it finishes.
+  /**
+   * Poll the running design until it finishes. One loop per run id: a chained timeout (the next
+   * check is scheduled only after the previous one returns, so checks never overlap), cancelled on
+   * unmount / new run, and stopped on done / failed / the time limit.
+   * Added: the first check waits FIRST_POLL_MS (a run never finishes sooner), and checks pause while
+   * the tab is hidden, then resume at once when it's visible again.
+   * Previous: first check after POLL_MS, and it kept polling in a background tab.
+   */
   const runningId = running?.id;
   useEffect(() => {
     if (!runningId) return;
     let cancelled = false;
+    let paused = false;
     let timer: number | undefined;
     const startedAt = Date.now();
 
     const finish = (run: RedesignGeneration | null, message?: string) => {
       if (cancelled) return;
+      cancelled = true; // nothing else may schedule a check for this run
       if (run)
         setHistory((prev) =>
           prev.map((item) => (item.id === run.id ? run : item)),
         );
+      // The inputs this run was made from are now "up to date" (see generatedKey).
+      if (run?.status === "done") setGeneratedKey(runKeysRef.current.get(run.id) ?? null);
       if (message) toast.error(message);
       else toast.success("Your new room is ready!");
       setRunning(null);
     };
 
+    const schedule = (ms: number) => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(tick, ms);
+    };
+
     const tick = async () => {
+      timer = undefined;
+      if (cancelled) return;
+      if (document.hidden) {
+        paused = true; // resumed by onVisible
+        return;
+      }
       try {
         const run = await getRedesign(runningId);
         if (cancelled) return;
@@ -485,16 +625,25 @@ export function RedesignerWizard() {
       } catch {
         // Network blip: keep polling until the time limit.
       }
+      if (cancelled) return;
       if (Date.now() - startedAt > MAX_WAIT_MS) {
         finish(null, "This is taking longer than expected. Please try again.");
         return;
       }
-      timer = window.setTimeout(tick, POLL_MS);
+      schedule(POLL_MS);
     };
-    timer = window.setTimeout(tick, POLL_MS);
+
+    const onVisible = () => {
+      if (document.hidden || !paused || cancelled) return;
+      paused = false;
+      schedule(0);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    schedule(FIRST_POLL_MS);
     return () => {
       cancelled = true;
-      if (timer) window.clearTimeout(timer);
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [runningId]);
 
@@ -558,7 +707,8 @@ export function RedesignerWizard() {
         }}
       />
 
-      {/* Header */}
+      {/* Header (hidden when the page brings its own h1 + intro) */}
+      {showHeader ? (
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -587,11 +737,14 @@ export function RedesignerWizard() {
           </p>
         </div>
       </div>
+      ) : null}
 
-      {/* Desktop: one fixed-height card; the photo fits inside and each step scrolls in its own panel. */}
-      <div className="grid overflow-hidden rounded-[28px] border border-input bg-card shadow-[0_30px_70px_-50px_rgba(0,0,0,0.45)] lg:h-[min(48rem,calc(100dvh-6rem))] lg:grid-cols-[minmax(0,1.5fr)_minmax(24rem,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+      {/* Desktop: the card grows with its content and the page scrolls (no inner scrollbars).
+          Previous: fixed height lg:h-[min(48rem,calc(100dvh-6rem))] with each panel scrolling on its own,
+          which gave two cramped vertical scrollbars. */}
+      <div className="grid overflow-hidden rounded-[28px] border border-input bg-card shadow-[0_30px_70px_-50px_rgba(0,0,0,0.45)] lg:grid-cols-[minmax(0,1.5fr)_minmax(24rem,1fr)]">
         {/* Preview */}
-        <div className="flex min-w-0 flex-col gap-4 bg-muted/40 bg-[radial-gradient(circle,rgba(0,0,0,0.07)_1px,transparent_1.2px)] [background-size:18px_18px] p-4 md:p-5 lg:min-h-0 lg:overflow-y-auto lg:border-r">
+        <div className="flex min-w-0 flex-col gap-4 bg-muted/40 bg-[radial-gradient(circle,rgba(0,0,0,0.07)_1px,transparent_1.2px)] [background-size:18px_18px] p-4 md:p-5 lg:border-r">
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-2 rounded-full bg-card px-3.5 py-1.5 text-[13px] font-medium shadow-sm capitalize">
               <span
@@ -637,26 +790,23 @@ export function RedesignerWizard() {
           </div>
 
           {/* Stage */}
-          <div className="relative aspect-[4/3] w-full lg:aspect-auto lg:min-h-[30rem] lg:flex-1">
+          {/* Previous: lg:aspect-auto lg:min-h-[30rem] lg:flex-1 (filled the fixed-height card) */}
+          <div className="relative aspect-[4/3] w-full">
             {shownPhoto ? (
               // Photo / result fill the whole stage width (cropped to fit) so the design reads big.
               <div className="absolute inset-0">
                 <div className="relative size-full overflow-hidden rounded-2xl shadow-[0_24px_50px_-28px_rgba(0,0,0,0.55)]">
                   {done && active ? (
-                    // Only the redesigned room (client feedback); the before/after slider is kept commented out.
-                    // <BeforeAfterSlider
-                    //   key={active.id}
-                    //   before={active.sourceImage}
-                    //   after={active.resultImage}
-                    //   alt={`${active.style} ${active.roomType}`}
-                    //   className="animate-in fade-in size-full duration-700"
-                    // />
-                    // eslint-disable-next-line @next/next/no-img-element -- generated result from our storage
-                    <img
+                    // Before / after (Kitchen & Bath Design spec) — drag the handle to compare.
+                    // Previous (client feedback at the time): only the redesigned room —
+                    // <img key={active.id} src={active.resultImage} alt={`${active.style} ${active.roomType}, redesigned`}
+                    //   className="animate-in fade-in block size-full object-cover duration-700" />
+                    <BeforeAfterSlider
                       key={active.id}
-                      src={active.resultImage}
-                      alt={`${active.style} ${active.roomType}, redesigned`}
-                      className="animate-in fade-in block size-full object-cover duration-700"
+                      before={active.sourceImage}
+                      after={active.resultImage}
+                      alt={`${active.style} ${active.roomType}`}
+                      className="animate-in fade-in size-full duration-700"
                     />
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element -- the customer's own photo (blob or our storage)
@@ -690,7 +840,8 @@ export function RedesignerWizard() {
                   event.preventDefault();
                   setDragOver(false);
                   const file = event.dataTransfer.files?.[0];
-                  if (file && guardLogin()) void handleFile(file);
+                  // Previous: if (file && guardLogin()) — guests can upload now.
+                  if (file) void handleFile(file);
                 }}
                 className={cn(
                   "absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 text-center transition-colors",
@@ -834,7 +985,7 @@ export function RedesignerWizard() {
         </div>
 
         {/* Steps */}
-        <div className="flex min-w-0 flex-col p-5 md:p-7 lg:min-h-0">
+        <div className="flex min-w-0 flex-col p-5 md:p-7">
           <ol className="mb-6 grid shrink-0 grid-cols-4 gap-3">
             {STEPS.map((label, index) => {
               const isDone = index < step;
@@ -890,7 +1041,7 @@ export function RedesignerWizard() {
 
           <div
             key={step}
-            className="animate-in fade-in slide-in-from-right-2 flex-1 duration-300 lg:-mx-2 lg:min-h-0 lg:overflow-y-auto lg:px-2 lg:pb-2"
+            className="animate-in fade-in slide-in-from-right-2 flex-1 duration-300"
           >
             {step === 0 ? (
               <PhotoStep
@@ -966,7 +1117,8 @@ export function RedesignerWizard() {
               onClick={() =>
                 step < 3 ? setStep((value) => value + 1) : void create()
               }
-              disabled={step < 3 ? !canNext : busy || uploading}
+              // Step 4: also disabled while the inputs match the last finished design (no duplicate AI run).
+              disabled={step < 3 ? !canNext : busy || uploading || upToDate}
               className="group inline-flex h-12 flex-1 items-center justify-between gap-3 rounded-full bg-primary pr-1.5 pl-6 text-[15px] font-semibold text-primary-foreground shadow-[0_12px_24px_-14px_rgba(0,63,125,0.9)] transition-[opacity,transform] hover:opacity-95 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span>
@@ -974,21 +1126,35 @@ export function RedesignerWizard() {
                   ? nextLabel
                   : running
                     ? "Designing…"
-                    : done
-                      ? `Design my ${roomWord} again`
-                      : `Design my ${roomWord}`}
+                    : upToDate
+                      ? "Design generated"
+                      : done
+                        ? `Design a new version` // Previous: `Design my ${roomWord} again` (also with no changes)
+                        : `Design my ${roomWord}`}
               </span>
               <span className="flex size-9 items-center justify-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
                 {step < 3 ? (
                   <ArrowRight className="size-4" aria-hidden="true" />
                 ) : busy ? (
                   <span className="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                ) : upToDate ? (
+                  <Check className="size-4" aria-hidden="true" />
                 ) : (
                   <Sparkles className="size-4" aria-hidden="true" />
                 )}
               </span>
             </button>
           </div>
+          {step === 3 && upToDate && !busy ? (
+            <p className="mt-3 text-center text-[13px] text-muted-foreground" aria-live="polite">
+              Change the photo, room, style, a finish or your notes to create a new version.
+            </p>
+          ) : null}
+          {step === 3 && !isLoggedIn ? (
+            <p className="mt-3 text-center text-[13px] text-muted-foreground">
+              A free account is needed to generate. We&apos;ll keep your photo and picks.
+            </p>
+          ) : null}
           {step === 3 && done ? (
             <button
               type="button"

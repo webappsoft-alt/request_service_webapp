@@ -66,6 +66,91 @@ Modules, layout, notification channels and API conventions: see
 Newest first. Format: **what** — why · files.
 
 ### 2026-11-23
+- **AI designer: placeholders on the contact fields**
+  - Name "e.g. Jane Smith", ZIP "e.g. 80202", Email "you@example.com", Phone "(555) 123-4567". They show only while a field is empty; logged-in users still get their own details prefilled.
+  - UI only; validation and payload unchanged.
+  - Files: `components/ai-redesigner/redesigner-steps.tsx`.
+- **AI designer: lighter status polling + no duplicate generations**
+  - **Polling, as found:** one chained `setTimeout` loop per run id (3s, no overlap), cleaned up on unmount or new run, and stopped on done / failed / 6 min. There were no duplicate loops; the ~22 GETs per run are expected for a ~60–70s run, and the 304s are ETag "not modified" replies.
+  - **Polling, changed:**
+    - The first check waits 10s (`FIRST_POLL_MS`).
+    - Checks pause while the tab is hidden and resume immediately when it is visible again.
+    - `finish()` marks the run cancelled, so nothing can schedule another check after done / failed.
+  - **Duplicate runs:** a snapshot `designKey` covers photo URL, room, style, the four finishes (style + colour) and notes. Contact details and consent are left out because they don't change the image.
+    - It is stored per run id at start and becomes `generatedKey` when that run finishes `done`; a failed run still allows a retry.
+    - While the inputs match, step 4's button is disabled and shows "Design generated" with a check icon and a hint, and `create()` refuses as well.
+    - Any change re-enables it as "Design a new version" (previously "Design my kitchen again", even with nothing changed).
+  - **Files:** `components/ai-redesigner/redesigner-wizard.tsx`.
+- **Fix: "Session expired, please login again" on Design my kitchen while logged in**
+  - **Cause:** `startRedesign` (`POST ai-redesigner/generations`, the only login-only call on the page) passed `skipLogoutOn401: true`. In `unwrapWithRefresh` that flag also skips the refresh-token retry, so an expired access token failed straight away with the backend's TokenExpiredError 401. The header still showed the user as logged in from saved auth, and the page's public calls (categories, FAQs, catalog) kept working because they send no token.
+  - **Fix:** the flag is removed, so an expired token is refreshed and the request retried like every portal call.
+  - **If the refresh also fails:** the wizard saves the draft and shows the normal login prompt instead of the raw error.
+  - **Unchanged:** backend and guest flow.
+  - **Files:** `lib/api/ai-redesigner-client.ts`, `components/ai-redesigner/redesigner-wizard.tsx`.
+- **Kitchen & Bath Design: full multi-section page at `/kitchen-bath-design`**
+  - **Route:** the page moved from `/ai-kitchen-redesign` to `/kitchen-bath-design`, which matches the navbar label.
+    - `/ai-kitchen-redesign` and `/ai-kitchen-bath-designer` both `permanentRedirect` (308) to it.
+    - `AI_DESIGNER_PATH`, the navbar href and the sitemap are updated.
+  - **Sections, top to bottom:**
+    1. **Hero:** the SEO `<h1>` "AI Kitchen & Bathroom Design Tool" and a two-line value line.
+       - "Try It Now" smooth-scrolls to `#demo` (it is a plain link without JavaScript, and respects reduced motion). "Get a free quote" sits beside it, with trust points under both.
+       - The `BeforeAfterSlider` shows the admin's showcase pair (`catalog.section.showcase`), or a local still photo if there is no pair.
+    2. **`#demo`:** the live designer in `max-w-6xl`.
+    3. **How it works:** 3 steps.
+    4. **Styles showcase** ("A real design studio. Not a filter."):
+       - The admin's styles per room, with a Kitchen / Bathroom toggle and up to 8 cards each, showing photo, swatches and description.
+       - Styles without a photo use a gradient of their own swatches.
+       - Clicking a card sends `rs-ai-designer:pick-style`. The designer then selects that room and style with its default finishes, goes to the Style step if a photo is uploaded (otherwise it stays on Photo with a toast "Upload a photo… to continue"), and scrolls to `#demo`.
+    5. **Quote bridge:** a navy `#0B3B70` banner, "Love your new design? Get real quotes from verified local kitchen & bath contractors", linking to `/get-a-quote`.
+    6. **FAQ:** the admin-managed FAQ, unchanged.
+  - **Server rendering:** the catalog is fetched on the server (`lib/data/public-ai-redesigner.ts`, revalidates every 5 min), so the slider and styles are in the HTML.
+  - **Designer:** no more inner scrollbars. The fixed desktop height and the two panel `overflow-y-auto`s are removed, so the card grows with its content, and the photo stage is a 4:3 frame.
+  - **Checked:**
+    - Redirects return 308, there is one h1, and the designer has 0 inner scroll areas.
+    - A style click selects the style and scrolls.
+    - Screenshots at 1440 / 390.
+    - Type check and lint clean.
+  - **Files:**
+    - `app/(marketing)/kitchen-bath-design/page.tsx` (new)
+    - `app/(marketing)/ai-kitchen-redesign/page.tsx` (now a redirect)
+    - `components/ai-redesigner/kitchen-bath-sections.tsx` (new)
+    - `components/ai-redesigner/designer-events.ts` (new)
+    - `components/ai-redesigner/redesigner-wizard.tsx`
+    - `lib/data/public-ai-redesigner.ts` (new)
+    - `lib/api/ai-redesigner-client.ts`
+    - `lib/data/navigation.ts`
+    - `lib/sitemap-entries.ts`
+- **Kitchen & Bath Design page: the live AI designer is back, no login wall**
+  - **Page:** `/ai-kitchen-redesign` keeps its URL and is rebuilt. It has:
+    - a breadcrumb "Home / Kitchen & Bath Design";
+    - a centered SEO `<h1>` "AI Kitchen & Bathroom Design Tool" with a two-line intro;
+    - the interactive `RedesignerWizard` (`showHeader={false}`, new prop that hides the wizard's own logo / h1) inside a centered `max-w-6xl px-4` container;
+    - an admin-managed FAQ.
+  - **Metadata:** title "AI Kitchen & Bathroom Design Tool".
+  - **What it replaced:** the info page (photo hero, benefits, styles, rooms, static FAQ, closing CTA) that pushed visitors to log in first.
+  - **Old URL:** `/ai-kitchen-bath-designer` now `permanentRedirect`s (308) here. `AI_DESIGNER_PATH` is now `/ai-kitchen-redesign`, so login "next" links and the home section point here.
+  - **Renames:** navbar label "AI Kitchen Redesign" → "Kitchen & Bath Design". The page was added to the sitemap.
+  - **No login wall:** guests can upload a photo (`/upload-image` is public), switch Kitchen / Bathroom, and pick a style and finishes.
+    - Only "Design my kitchen" asks for an account, because `POST /ai-redesigner/generations` requires a login and has a 5-per-day quota (backend unchanged).
+    - Before the login prompt, the guest's room, style, finishes, notes, photo URL and step are saved to sessionStorage (`rs-ai-designer:draft:v1`) and restored when they come back.
+    - The toast now reads "Log in or create a free account to generate your design" and returns to the page they were on.
+    - A small note under the button tells guests an account is needed only to generate.
+  - **Before / after:** the `BeforeAfterSlider` is restored for finished designs; it had been commented out earlier on client feedback.
+  - **FAQ:**
+    - Loaded on the server from the existing `GET public/faqs?audience=customer&domain=kitchen-bath-design` (`lib/data/public-faqs.ts`, revalidates every 5 min), and also emitted as FAQPage JSON-LD.
+    - Admins manage these FAQs in Admin → FAQs with Domain / Category `kitchen-bath-design` and audience Customer; Sort order sets the order.
+    - Until any exist, five built-in display-only answers are shown. No DB writes or seeds.
+  - **Checked:** at 1440 / 390 px; type check and lint clean.
+  - **Files:**
+    - `app/(marketing)/ai-kitchen-redesign/page.tsx`
+    - `app/(marketing)/ai-kitchen-bath-designer/page.tsx`
+    - `components/ai-redesigner/redesigner-wizard.tsx`
+    - `components/ai-redesigner/login-guard.ts`
+    - `components/ai-redesigner/redesign-start-cta.tsx` (comment only, now unused)
+    - `lib/api/ai-redesigner-client.ts`
+    - `lib/data/public-faqs.ts` (new)
+    - `lib/data/navigation.ts`
+    - `lib/sitemap-entries.ts`
 - **Pro Co-pilot bubble no longer moves by itself** — removed the "smart collision" lift, which slid the pill up to 280px whenever a button or card was under it, so it ended up floating mid-screen over the Invoices / Paid column. It now sits fixed 24px from the bottom-right corner (`bottom-6 right-6`, z-40). Still kept: the Pro can drag it up or down (the spot is saved in localStorage), it fades while a dialog or sheet is open, and it is clamped on screen when the window resizes. The per-scroll re-check is gone too. Files: `components/pro-assistant/pro-assistant-bubble.tsx`.
 - **Pipeline board readability** — UI only; drag and drop, move menu, search, "See more" and the booking dialog are unchanged.
   - Columns: each is its own soft surface (`bg-slate-50/80`, `dark:bg-white/3`, rounded, `p-3`). Gap is 4 and columns are 300px wide; on 2xl they sit in a `minmax(290px,1fr)` grid and scroll sideways instead of squishing.

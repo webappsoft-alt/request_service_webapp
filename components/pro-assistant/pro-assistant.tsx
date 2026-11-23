@@ -9,7 +9,8 @@ import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { ConfirmCard, InfoCard, ListCard } from "./action-cards";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store/hooks";
-import { selectAuthToken, selectAuthUser } from "@/store/authSlice";
+import { selectAuthProvider, selectAuthToken, selectAuthUser } from "@/store/authSlice";
+import { getServiceCategoryById } from "@/lib/data/services";
 import { EstimateDraftCard } from "./estimate-draft-card";
 import { ProAssistantHistory } from "./history-panel";
 import { ProAssistantInput } from "./pro-assistant-input";
@@ -37,7 +38,13 @@ import { useProAssistantSocket } from "./use-pro-assistant-socket";
  */
 
 // Previous: ["Show employee time tracking", "Open estimates", "Open invoice INV-…", "Fix kitchen pipe leak, replace valve, total $150"]
-const STARTERS = ["How's business today?", "Show overdue invoices", "Who should take my next job?", "Create an estimate for a bathroom leak"];
+// Previous: [...OPS_STARTERS, "Create an estimate for a bathroom leak"] — the estimate chips now come from the Pro's own categories.
+const OPS_STARTERS = ["How's business today?", "Show overdue invoices", "Who should take my next job?"];
+const STARTERS = OPS_STARTERS;
+/** Shown when the Pro has no categories yet (or the profile is still loading). */
+const GENERIC_ESTIMATE_STARTER = "Create a new estimate";
+/** Category estimate chips shown before "+N more" (all are shown when there are this many or fewer). */
+const ESTIMATE_CHIPS_VISIBLE = 4;
 // Previous key ("read every reply aloud"); kept so the old setting is not reused with a new meaning.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const VOICE_KEY = "rs-pro-assistant:speak";
@@ -130,6 +137,24 @@ export function ProAssistant() {
   const token = useAppSelector(selectAuthToken);
   const isPro = String(user?.role || "provider") === "provider";
   const storageKey = `${STORAGE_PREFIX}${String(user?.id || user?._id || "pro")}`;
+
+  // Welcome estimate chips from the Pro's own service categories (same source as the estimate draft card).
+  const authProvider = useAppSelector(selectAuthProvider);
+  const categoryIds = authProvider?.services?.categoryIds;
+  const estimateStarters = useMemo(() => {
+    const ids = Array.isArray(categoryIds) ? categoryIds : [];
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const id of ids) {
+      const category = getServiceCategoryById(String(id));
+      const name = (category?.name || category?.shortName || "").trim();
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      list.push(`Create an estimate for ${name}`);
+    }
+    return list.length ? list : [GENERIC_ESTIMATE_STARTER];
+  }, [categoryIds]);
+  const [showAllEstimateStarters, setShowAllEstimateStarters] = useState(false);
 
   // Client only (portal to <body>, sessionStorage).
   const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
@@ -583,7 +608,36 @@ export function ProAssistant() {
                         />
                       ) : null}
 
-                      {m === lastAssistant && m.suggestions?.length && !busy ? (
+                      {m === lastAssistant && m.id === "welcome" && !busy ? (
+                        // Welcome: operational chips + one estimate chip per category (first 4, then "+N more").
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            ...OPS_STARTERS,
+                            ...(showAllEstimateStarters || estimateStarters.length <= ESTIMATE_CHIPS_VISIBLE
+                              ? estimateStarters
+                              : estimateStarters.slice(0, ESTIMATE_CHIPS_VISIBLE - 1)),
+                          ].map((s) => (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => void ask(s)}
+                              className="rounded-full border bg-background px-2.5 py-1 text-xs font-medium text-foreground/80 transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                            >
+                              {s}
+                            </button>
+                          ))}
+                          {estimateStarters.length > ESTIMATE_CHIPS_VISIBLE ? (
+                            <button
+                              type="button"
+                              onClick={() => setShowAllEstimateStarters((v) => !v)}
+                              aria-expanded={showAllEstimateStarters}
+                              className="rounded-full border border-dashed bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                            >
+                              {showAllEstimateStarters ? "Show less" : `+${estimateStarters.length - (ESTIMATE_CHIPS_VISIBLE - 1)} more`}
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : m === lastAssistant && m.suggestions?.length && !busy ? (
                         <div className="flex flex-wrap gap-1.5">
                           {m.suggestions.map((s) => (
                             <button

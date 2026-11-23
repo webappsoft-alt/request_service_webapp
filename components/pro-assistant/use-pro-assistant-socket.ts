@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { getSocketBaseUrl } from "@/components/socket/SocketProvider";
-import { sendAssistantMessageRest, type PaReply } from "./pro-assistant-api";
+import { sendAssistantMessageRest, type PaReply, type PaSendExtras } from "./pro-assistant-api";
 
 export const PRO_ASSISTANT_NAMESPACE = "/pro-assistant";
 
@@ -64,14 +64,22 @@ export function useProAssistantSocket({ token, enabled, handlers }: { token: str
   }, [enabled, token]);
 
   const send = useCallback(
-    (clientMessageId: string, message: string, history: Array<{ role: string; text: string }>, conversationId: string | null) => {
+    (
+      clientMessageId: string,
+      message: string,
+      history: Array<{ role: string; text: string }>,
+      conversationId: string | null,
+      extras: PaSendExtras = {},
+    ) => {
       const socket = socketRef.current;
-      if (!socket?.connected) return sendAssistantMessageRest(message, history, conversationId, clientMessageId);
+      if (!socket?.connected) return sendAssistantMessageRest(message, history, conversationId, clientMessageId, extras);
+      // Photo analysis (one multimodal call) can take longer than a text reply.
+      const waitMs = extras.images?.length || extras.visionAction ? 75_000 : 45_000;
       return new Promise<PaReply>((resolve, reject) => {
         const timer = setTimeout(() => {
           pendingRef.current.delete(clientMessageId);
           reject(new Error("The assistant took too long to answer. Please try again."));
-        }, 45_000);
+        }, waitMs);
         pendingRef.current.set(clientMessageId, {
           resolve: (reply) => {
             clearTimeout(timer);
@@ -82,7 +90,14 @@ export function useProAssistantSocket({ token, enabled, handlers }: { token: str
             reject(error);
           },
         });
-        socket.emit("pa:message", { clientMessageId, message, history, conversationId });
+        socket.emit("pa:message", {
+          clientMessageId,
+          message,
+          history,
+          conversationId,
+          images: extras.images || [],
+          visionAction: extras.visionAction || null,
+        });
       });
     },
     [],

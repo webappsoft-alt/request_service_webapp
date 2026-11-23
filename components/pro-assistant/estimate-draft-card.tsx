@@ -183,8 +183,13 @@ export function EstimateDraftCard({
   onCreated,
   conversationId,
   messageId,
+  initialCustomer = null,
+  onCustomerChange,
 }: {
   draft: PaEstimateDraft;
+  /** Customer picked on an earlier version of this draft (kept when it is changed in chat). */
+  initialCustomer?: PaCustomerOption | null;
+  onCustomerChange?: (customer: PaCustomerOption | null) => void;
   created: { href: string; number: string } | null | undefined;
   onCreated: (result: { href: string; number: string }) => void;
   /** Saved chat + message this draft belongs to (marked "created" in history). */
@@ -221,7 +226,12 @@ export function EstimateDraftCard({
   }, [draft.serviceCategory, providerCategories]);
 
   const [title, setTitle] = useState(draft.title);
-  const [customer, setCustomer] = useState<PaCustomerOption | null>(draft.customer);
+  // Previous: useState(draft.customer) — a customer tapped on the card was lost on the next chat edit.
+  const [customer, setCustomerState] = useState<PaCustomerOption | null>(draft.customer || initialCustomer || null);
+  const setCustomer = (next: PaCustomerOption | null) => {
+    setCustomerState(next);
+    onCustomerChange?.(next);
+  };
   const [addressId, setAddressId] = useState("");
   const [categoryName, setCategoryName] = useState<string | null>(null);
   const [subcategoryName, setSubcategoryName] = useState("");
@@ -313,6 +323,20 @@ export function EstimateDraftCard({
         </div>
       </div>
 
+      {/* How the AI priced it (site-photo estimates): market, pricing history, dimensions. */}
+      {draft.pricing?.label ? (
+        <p
+          className="flex items-start gap-1.5 border-b bg-muted/40 px-3 py-1.5 text-[11px] leading-4 text-muted-foreground"
+          title="Every line, quantity and rate stays editable"
+        >
+          <MapPin className="mt-px size-3 shrink-0 text-primary" aria-hidden />
+          <span>
+            {draft.pricing.label}
+            <span className="text-muted-foreground/70"> · edit anything below</span>
+          </span>
+        </p>
+      ) : null}
+
       <div className="flex flex-col gap-2.5 p-3">
         <div className="flex flex-col gap-1">
           <span className="text-[11px] font-medium text-muted-foreground">Customer</span>
@@ -325,8 +349,33 @@ export function EstimateDraftCard({
             }}
             disabled={locked}
           />
+          {/* Several customers match the name the Pro said → one tap to link the right one. */}
+          {!customer && draft.customerCandidates?.length ? (
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Matching customers">
+              {draft.customerCandidates.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  disabled={locked}
+                  onClick={() => {
+                    setCustomer(c);
+                    setAddressId("");
+                  }}
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs font-medium transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary max-sm:min-h-9"
+                  title={c.subtitle || undefined}
+                >
+                  <UserRound className="size-3.5 shrink-0" aria-hidden />
+                  <span className="truncate">{c.name}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
           {draft.customerName && !draft.customer && !customer ? (
-            <p className="text-[11px] text-muted-foreground">Pick the right “{draft.customerName}”, or search another customer.</p>
+            <p className="text-[11px] text-muted-foreground">
+              {draft.customerCandidates?.length
+                ? `Tap the right “${draft.customerName}”, or search another customer.`
+                : `Pick the right “${draft.customerName}”, or search another customer.`}
+            </p>
           ) : null}
           {customer?.hasAddress === false ? (
             <p className="text-[11px] text-amber-700">
@@ -441,7 +490,7 @@ export function EstimateDraftCard({
                     type="button"
                     onClick={() => setItems((prev) => prev.filter((_, i) => i !== index))}
                     aria-label={`Remove line ${index + 1}`}
-                    className="-mt-0.5 flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-rose-50 hover:text-rose-600"
+                    className="-mt-0.5 flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-rose-50 hover:text-rose-600 max-sm:size-9"
                   >
                     <Trash2 className="size-3.5" />
                   </button>
@@ -485,7 +534,7 @@ export function EstimateDraftCard({
               <button
                 type="button"
                 onClick={() => setItems((prev) => [...prev, { description: "", kind: "labor", quantity: 1, unit: "", unitPrice: 0 }])}
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline max-sm:min-h-9 max-sm:text-xs"
               >
                 <Plus className="size-3" /> Add line
               </button>

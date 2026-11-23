@@ -66,6 +66,59 @@ Modules, layout, notification channels and API conventions: see
 Newest first. Format: **what** — why · files.
 
 ### 2026-11-23
+- **Pro Co-pilot: one-tap scope / tier chips, customer pills, customer kept across edits**
+  - **One-tap chips:** new `revise` quick-reply kind (`PaQuickReply.value` = the instruction, plus icon) for "+ Haul-away & disposal", "+ Subfloor / Permit allowance", "Budget option" and "Premium option" under a priced draft. A tap sends `visionAction: { kind: "revise", value }`, and the chip label shows as the Pro's message.
+  - **Customer pills:** when the customer named in a voice note / message matches several customers, the draft card shows them as one-tap pills under Customer ("Matching customers"); a tap links the customer and property.
+  - **Customer kept across edits:** the customer picked on a draft card is kept when the draft is changed in chat. Previously each updated card started empty. This uses `initialCustomer` / `onCustomerChange` on `EstimateDraftCard`, keyed by draft title in `pro-assistant.tsx`.
+  - **Type:** `PaVisionAction` gains `revise` / `set_customer`.
+  - **Checked:** type check and lint clean, and verified live as part of the backend stress test (see the backend log).
+  - **Files:**
+    - `components/pro-assistant/pro-assistant.tsx`
+    - `components/pro-assistant/estimate-draft-card.tsx`
+    - `components/pro-assistant/site-scope-card.tsx`
+    - `components/pro-assistant/pro-assistant-api.ts`
+- **Pro Co-pilot: new photos from the input box start a fresh job**
+  - Backend fix (see the backend log): only the "Upload 2–3 more photos" / "Add more photos" chip adds photos to the current job. A declined service (e.g. roofing) no longer absorbs the next photo.
+  - No UI change needed: the chip already sends `more_photos`; plain uploads send none.
+  - Verified live: roof → declined → bathroom photo = new Bathroom job, 1 photo.
+- **Pro Co-pilot Vision Estimator: live-test fixes (UI)** — the backend fixes and the full test list are in the backend log.
+  - **Superseded drafts:** when a draft is changed in chat, older uncreated drafts with the same title collapse to "Earlier version of '…' — replaced by the updated draft below", so the same job can't be created twice.
+  - **Phone (375 px) checked:** thumbnails, scope card, chips, inline dimension input and the itemized card. No overflow or clipped text.
+    - Tap targets enlarged on phones only (`max-sm:`): scope and suggestion chips `min-h-9`, inline dimension input / Use `h-10`, "Remove line" `size-9`, "Add line" `min-h-9`. Desktop unchanged.
+  - **Small fix:** photo thumbnails use `size-18` (was `size-[4.5rem]`).
+  - **Checked:** type check and lint clean.
+  - **Files:**
+    - `components/pro-assistant/pro-assistant.tsx`
+    - `components/pro-assistant/site-scope-card.tsx`
+    - `components/pro-assistant/estimate-draft-card.tsx`
+- **Pro Co-pilot: priced site-photo estimates (Vision Estimator, Phases 2 + 3)**
+  - **Card note:** the estimate draft card shows how the AI priced it, under the title (pin icon), e.g. "Priced for Austin, TX market rates • calibrated to your last 15 estimates • Based on 10 × 12 ft · 120 sq ft · edit anything below".
+  - **Unchanged:** lines, quantities and rates stay editable, and "Create estimate" works as before.
+  - **Type:** `PaEstimateDraft.pricing`.
+  - **Pricing:** done on the backend (see the backend log).
+  - **Files:**
+    - `components/pro-assistant/estimate-draft-card.tsx`
+    - `components/pro-assistant/pro-assistant-api.ts`
+- **Pro Co-pilot: site photos + AI scope chips (AI Vision Estimator, Phase 1)**
+  - **Input bar:**
+    - An attach button, plus paste and drag & drop (drop overlay), up to 6 JPG / PNG / WebP photos of 15 MB or less.
+    - Each photo uploads immediately through the existing `uploadFile` → `/upload-image`. Thumbnails show a spinner, an error and an × button.
+    - Send waits for uploads; photos-only messages are allowed. The placeholder changes when photos are attached.
+  - **Chat:** photos appear in the user's bubble (a grid, or one larger image) and open full-size on click.
+  - **`SiteScopeCard`:** trade · area, photo count, summary, finding pills, likely scope (once ready), and dimensions with their source (AI approximate / Your dimensions) and a confidence badge plus the visual cues used.
+  - **`QuickReplies` chips:**
+    - Confirm, Draft, Use AI dimensions → `visionAction`.
+    - Enter dimensions → inline "12x14 ft" input.
+    - Upload more → opens the picker and shows a hint; those photos are sent as `more_photos`.
+    - "No, it's something else" → prefills "It's a ".
+  - **Plumbing:** the socket and REST send `images` and `visionAction` (75s timeout for photo turns). New types: `PaQuickReply`, `PaVisionAction`, `PaSiteScope`, `PaSendExtras`.
+  - **Checked:** type check and lint clean.
+  - **Files:**
+    - `components/pro-assistant/pro-assistant-input.tsx`
+    - `components/pro-assistant/pro-assistant.tsx`
+    - `components/pro-assistant/site-scope-card.tsx` (new)
+    - `components/pro-assistant/pro-assistant-api.ts`
+    - `components/pro-assistant/use-pro-assistant-socket.ts`
 - **AI designer: placeholders on the contact fields**
   - Name "e.g. Jane Smith", ZIP "e.g. 80202", Email "you@example.com", Phone "(555) 123-4567". They show only while a field is empty; logged-in users still get their own details prefilled.
   - UI only; validation and payload unchanged.

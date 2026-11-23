@@ -46,6 +46,41 @@ export type PaEstimateDraft = {
   items: Array<PaDraftItem & { total?: number }>;
   subtotal: number;
   notes: string;
+  /** Site-photo estimates: how the AI priced it (shown as a note on the card). */
+  pricing?: {
+    label: string;
+    basis: "history" | "market";
+    market: string | null;
+    historyCount: number;
+    historyMatch: "category" | "any" | null;
+    dimensions: string | null;
+    dimensionsSource: "ai" | "pro" | null;
+  } | null;
+};
+
+/** Site-photo scope chips (backend site-scope.js). A click is sent back as a PaVisionAction. */
+export type PaQuickReplyKind = "confirm" | "reject" | "upload_more" | "enter_dimensions" | "use_ai_dimensions" | "draft" | "revise";
+/** `revise` chips (one-tap "+ Haul-away", "Budget option"…) carry the instruction in `value`. */
+export type PaQuickReply = { id: string; kind: PaQuickReplyKind; label: string; value?: string };
+export type PaVisionAction = {
+  kind: "more_photos" | "confirm" | "reject" | "describe" | "dimensions" | "use_ai" | "draft" | "revise" | "set_customer";
+  value?: string;
+};
+/** Extras sent with a message: site photos (our upload URLs) and/or a clicked scope chip. */
+export type PaSendExtras = { images?: string[]; visionAction?: PaVisionAction | null };
+
+/** What the co-pilot read from the site photos (AI Vision Estimator, Phase 1). */
+export type PaSiteScope = {
+  type: "site_scope";
+  status: "awaiting_confirmation" | "awaiting_request" | "awaiting_dimensions" | "ready" | "drafted";
+  photoCount: number;
+  trade: string;
+  area: string;
+  summary: string;
+  findings: string[];
+  scopeItems: string[];
+  dimensions: { label: string; source: "ai" | "pro" | "ai_suggested"; confidence: "high" | "medium" | "low" | null; basis: string } | null;
+  missing: string[];
 };
 
 export type PaConfirmStatus = "pending" | "running" | "done" | "failed" | "cancelled";
@@ -54,6 +89,7 @@ export type PaAction =
   | { type: "navigate"; href: string; label: string; /** Show a button instead of opening at once. */ manual?: boolean }
   | { type: "choices"; entity: string; items: PaRecord[] }
   | { type: "estimate_draft"; draft: PaEstimateDraft }
+  | PaSiteScope
   /** Live list from the CRM (overdue invoices, new leads, today's schedule…). */
   | { type: "list"; title: string; total: number; amountDue?: number | null; items: PaRecord[]; href: string }
   /** Facts card (timesheet summary, live status, business snapshot, suggestion). */
@@ -74,6 +110,7 @@ export type PaReply = {
   replyText: string;
   action: PaAction | null;
   suggestions: string[];
+  quickReplies?: PaQuickReply[];
   /** Saved conversation this turn belongs to (new chats get one on the first reply). */
   conversationId?: string;
 };
@@ -92,6 +129,10 @@ export type PaMessage = {
   text: string;
   action?: PaAction | null;
   suggestions?: string[];
+  /** Site photos on a user message. */
+  images?: string[];
+  /** Structured chips on an assistant reply (site-photo loop). */
+  quickReplies?: PaQuickReply[];
   /** Estimate card created → its link. */
   created?: { href: string; number: string } | null;
   pending?: boolean;
@@ -110,9 +151,14 @@ export async function sendAssistantMessageRest(
   history: Array<{ role: string; text: string }>,
   conversationId: string | null,
   clientMessageId: string,
+  extras: PaSendExtras = {},
 ) {
   return unwrap<PaReply>(
-    await postData(PRO_ASSISTANT_API.message, { message, history, conversationId, clientMessageId }, { silent: true }),
+    await postData(
+      PRO_ASSISTANT_API.message,
+      { message, history, conversationId, clientMessageId, images: extras.images || [], visionAction: extras.visionAction || null },
+      { silent: true },
+    ),
   );
 }
 

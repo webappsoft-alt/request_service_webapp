@@ -28,6 +28,8 @@ import {
   type PaReply,
 } from "./pro-assistant-api";
 import { useProAssistantSocket } from "./use-pro-assistant-socket";
+import { QuickReplies, SiteScopeCard } from "./site-scope-card";
+import type { PaCustomerOption, PaQuickReply, PaVisionAction } from "./pro-assistant-api";
 
 /**
  * Pro operations co-pilot (Pro portal only). Separate from the customer bot: its own socket
@@ -343,16 +345,33 @@ export function ProAssistant() {
     [patchConfirm],
   );
 
+  // Site-photo loop: the "Upload more photos" chip opens the picker and marks the next photos as
+  // more angles of the same job; "No, it's something else" prefills the box.
+  const [photoRequest, setPhotoRequest] = useState(0);
+  /** Customer picked on a draft card, by draft title (carried to its updated versions). */
+  const [draftCustomers, setDraftCustomers] = useState<Record<string, PaCustomerOption | null>>({});
+  const [morePhotos, setMorePhotos] = useState(false);
+  const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
+
   const ask = useCallback(
-    async (text: string, meta?: { voice: boolean }) => {
+    async (
+      text: string,
+      meta?: { voice?: boolean; images?: string[]; visionAction?: PaVisionAction | null; display?: string },
+    ) => {
       const clean = text.trim();
-      if (!clean || busy) return;
+      const images = meta?.images?.length ? meta.images : [];
+      // Previous: if (!clean || busy) return; — photos or a clicked chip can come without text.
+      if ((!clean && !images.length && !meta?.visionAction) || busy) return;
+      // Photos sent after "Upload more photos" are more angles of the open job.
+      const visionAction: PaVisionAction | null =
+        meta?.visionAction || (images.length && morePhotos ? { kind: "more_photos" } : null);
+      if (images.length) setMorePhotos(false);
       // const aloud = Boolean(meta?.voice) || speakOn;
       // Spoken reply only when the Pro used the mic (and voice replies aren't muted).
       const aloud = Boolean(meta?.voice) && speakOn;
       // "Yes" / "cancel" answers the Confirm card that is waiting (voice-friendly).
       const waiting = [...messages].reverse().find((m) => m.role === "assistant" && !m.pending);
-      if (waiting?.action?.type === "confirm" && waiting.action.status === "pending" && clean.split(/\s+/).length <= 5) {
+      if (!images.length && !visionAction && waiting?.action?.type === "confirm" && waiting.action.status === "pending" && clean.split(/\s+/).length <= 5) {
         if (YES.test(clean)) {
           setMessages((prev) => [...prev, { id: `u-${newId()}`, role: "user", text: clean, at: Date.now() }]);
           return runConfirm(waiting.id, waiting.action.actionId, aloud);
@@ -369,18 +388,18 @@ export function ProAssistant() {
         .slice(-6)
         .map((m) => ({ role: m.role, text: m.text }));
       setMessages((prev) => [
-        ...prev.map((m) => ({ ...m, suggestions: undefined })),
-        { id: `u-${id}`, role: "user", text: clean, at: Date.now() },
+        ...prev.map((m) => ({ ...m, suggestions: undefined, quickReplies: undefined })),
+        { id: `u-${id}`, role: "user", text: meta?.display || clean, ...(images.length ? { images } : {}), at: Date.now() },
         { id: `a-${id}`, role: "assistant", text: "", pending: true, at: Date.now() },
       ]);
       setBusy(true);
       try {
-        const reply: PaReply = await send(id, clean, history, conversationId);
+        const reply: PaReply = await send(id, clean, history, conversationId, { images, visionAction });
         if (reply.conversationId) setConversationId(reply.conversationId);
         setMessages((prev) =>
           prev.map((m) =>
             m.id === `a-${id}`
-              ? { ...m, text: reply.replyText, action: reply.action, suggestions: reply.suggestions, pending: false }
+              ? { ...m, text: reply.replyText, action: reply.action, suggestions: reply.suggestions, quickReplies: reply.quickReplies, pending: false }
               : m,
           ),
         );
@@ -401,12 +420,46 @@ export function ProAssistant() {
         setBusy(false);
       }
     },
-    [busy, conversationId, go, messages, send, speakOn, runConfirm, runCancel],
+    [busy, conversationId, go, messages, send, speakOn, runConfirm, runCancel, morePhotos],
+  );
+
+  /** A clicked scope chip → the structured action (the label shows as the Pro's message). */
+  const pickQuickReply = useCallback(
+    (item: PaQuickReply) => {
+      if (item.kind === "upload_more") {
+        setMorePhotos(true);
+        setPhotoRequest((n) => n + 1);
+        return;
+      }
+      if (item.kind === "reject") {
+        void ask("", { visionAction: { kind: "reject" }, display: item.label });
+        setPrefill({ text: "It's a ", nonce: Date.now() });
+        return;
+      }
+      // One-tap scope / tier chips ("+ Haul-away & disposal", "Budget option") → the instruction.
+      if (item.kind === "revise" && item.value) {
+        void ask("", { visionAction: { kind: "revise", value: item.value }, display: item.label });
+        return;
+      }
+      const kind = item.kind === "use_ai_dimensions" ? "use_ai" : item.kind === "confirm" ? "confirm" : item.kind === "draft" ? "draft" : null;
+      if (kind) void ask("", { visionAction: { kind }, display: item.label });
+    },
+    [ask],
   );
 
   if (!mounted || !isPro) return null;
 
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  // Drafts revised in chat keep their title: an uncreated draft with a later same-title draft is superseded.
+  const supersededDrafts = new Set<string>();
+  const laterTitles = new Set<string>();
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const m = messages[i];
+    if (m.action?.type !== "estimate_draft") continue;
+    const key = m.action.draft.title.trim().toLowerCase();
+    if (laterTitles.has(key) && !m.created) supersededDrafts.add(m.id);
+    laterTitles.add(key);
+  }
 
   return createPortal(
     <>
@@ -528,10 +581,27 @@ export function ProAssistant() {
             <div className={cn("mx-auto flex w-full flex-col gap-3", expanded && "max-w-3xl")}>
               {messages.map((m) =>
                 m.role === "user" ? (
-                  <div key={m.id} className="flex justify-end">
-                    <p className="max-w-[85%] rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-sm whitespace-pre-wrap text-primary-foreground shadow-sm">
-                      {m.text}
-                    </p>
+                  <div key={m.id} className="flex flex-col items-end gap-1.5">
+                    {m.images?.length ? (
+                      <div className={cn("grid max-w-[85%] gap-1", m.images.length === 1 ? "grid-cols-1" : "grid-cols-3")}>
+                        {m.images.map((src) => (
+                          <a key={src} href={src} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl border shadow-sm">
+                            {/* eslint-disable-next-line @next/next/no-img-element -- the Pro's site photo (our storage) */}
+                            <img
+                              src={src}
+                              alt="Site photo"
+                              loading="lazy"
+                              className={cn("object-cover", m.images && m.images.length === 1 ? "max-h-44 w-56" : "size-18")}
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
+                    {m.text ? (
+                      <p className="max-w-[85%] rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-sm whitespace-pre-wrap text-primary-foreground shadow-sm">
+                        {m.text}
+                      </p>
+                    ) : null}
                   </div>
                 ) : (
                   <div key={m.id} className="flex items-start gap-2">
@@ -595,16 +665,40 @@ export function ProAssistant() {
                         />
                       ) : null}
 
-                      {m.action?.type === "estimate_draft" ? (
+                      {m.action?.type === "estimate_draft" && supersededDrafts.has(m.id) ? (
+                        // An older version of a draft that was changed in chat: only the latest
+                        // can be created, so the same job can't be saved twice.
+                        <p className="w-fit rounded-lg border border-dashed px-3 py-1.5 text-xs text-muted-foreground">
+                          Earlier version of “{m.action.draft.title}” — replaced by the updated draft below.
+                        </p>
+                      ) : m.action?.type === "estimate_draft" ? (
                         <EstimateDraftCard
                           draft={m.action.draft}
                           created={m.created}
                           conversationId={conversationId}
                           messageId={m.id}
+                          // Keep the customer picked on the card across chat edits (same draft title).
+                          initialCustomer={draftCustomers[m.action.draft.title.trim().toLowerCase()] || null}
+                          onCustomerChange={(c) => {
+                            const key = m.action?.type === "estimate_draft" ? m.action.draft.title.trim().toLowerCase() : "";
+                            if (key) setDraftCustomers((prev) => ({ ...prev, [key]: c }));
+                          }}
                           onCreated={(result) => {
                             setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, created: result } : x)));
                             go(result.href);
                           }}
+                        />
+                      ) : null}
+
+                      {m.action?.type === "site_scope" ? <SiteScopeCard scope={m.action} /> : null}
+
+                      {m === lastAssistant && m.quickReplies?.length && !busy ? (
+                        <QuickReplies
+                          items={m.quickReplies}
+                          onPick={pickQuickReply}
+                          onDimensions={(value) =>
+                            void ask("", { visionAction: { kind: "dimensions", value }, display: `Dimensions: ${value}` })
+                          }
                         />
                       ) : null}
 
@@ -621,7 +715,7 @@ export function ProAssistant() {
                               key={s}
                               type="button"
                               onClick={() => void ask(s)}
-                              className="rounded-full border bg-background px-2.5 py-1 text-xs font-medium text-foreground/80 transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                              className="rounded-full border bg-background px-2.5 py-1 text-xs font-medium text-foreground/80 transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary max-sm:min-h-9 max-sm:px-3"
                             >
                               {s}
                             </button>
@@ -645,7 +739,7 @@ export function ProAssistant() {
                               type="button"
                               onClick={() => (s.includes("…") ? undefined : void ask(s))}
                               className={cn(
-                                "rounded-full border bg-background px-2.5 py-1 text-xs font-medium text-foreground/80 transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary",
+                                "rounded-full border bg-background px-2.5 py-1 text-xs font-medium text-foreground/80 transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary max-sm:min-h-9 max-sm:px-3",
                                 s.includes("…") && "cursor-default opacity-70",
                               )}
                               title={s.includes("…") ? "Type the number, e.g. INV-874" : undefined}
@@ -663,7 +757,16 @@ export function ProAssistant() {
           </div>
 
           <div className={cn(expanded && "sm:px-[max(0px,calc((100%-48rem)/2))]")}>
-            <ProAssistantInput onSend={(text, meta) => void ask(text, meta)} onListenStart={stopSpeaking} disabled={busy} autoFocus={open} />
+            <ProAssistantInput
+              onSend={(text, meta) => void ask(text, meta)}
+              onListenStart={stopSpeaking}
+              disabled={busy}
+              autoFocus={open}
+              photoRequest={photoRequest}
+              photoHint={morePhotos ? "Add 2–3 more photos of the same area from other angles, then send." : null}
+              onCancelPhotoHint={() => setMorePhotos(false)}
+              prefill={prefill}
+            />
           </div>
           </div>
         </section>

@@ -9,8 +9,8 @@ import { cn } from "@/lib/utils";
  * Floating "Pro Co-pilot" bubble (client spec):
  *  - starts bottom-right; drag it ANYWHERE (free x / y, no snapping) — the spot is saved in
  *    localStorage and kept on screen when the window resizes;
- *  - smart collision: when a button, link, field, pagination control… is under the bubble, it
- *    slides up smoothly to the nearest clear spot (and back down when the space is free again);
+ *  - it never moves by itself: fixed at the bottom-right (24px) until the Pro drags it. (Previous
+ *    "smart collision" slid it up over nearby buttons/cards — removed, it floated mid-screen);
  *  - while a dialog / side sheet is open it fades away, so it never sits over their actions.
  * A click opens the co-pilot; a drag never does.
  */
@@ -19,11 +19,6 @@ const SIZE = 52;
 const EDGE = 16;
 const DRAG_THRESHOLD = 6;
 const STORAGE_KEY = "rs-pro-copilot-bubble:v1";
-const LIFT_STEP = 8;
-const MAX_LIFT = 280;
-/** What counts as something the bubble must not cover. */
-const INTERACTIVE =
-  'button, a[href], input, select, textarea, label, summary, [role="button"], [role="link"], [role="tab"], [role="checkbox"], [role="switch"], [role="combobox"], [role="menuitem"], [contenteditable="true"], nav[aria-label*="agination" i], [data-slot="pagination"]';
 /** Open overlays the bubble hides for (our own panel excluded). */
 const OVERLAY = '[role="dialog"]:not(.pa-panel), [role="alertdialog"], [data-slot="dialog-content"], [data-slot="sheet-content"]';
 
@@ -35,8 +30,9 @@ const OVERLAY = '[role="dialog"]:not(.pa-panel), [role="alertdialog"], [data-slo
  */
 type Side = "left" | "right";
 type Spot = { side: Side; bottom: number };
-const DEFAULT_SPOT: Spot = { side: "right", bottom: EDGE + 4 };
-const SIDE_GAP = EDGE + 4;
+// Fixed default: 24px from the bottom-right corner (bottom-6 right-6). Previous: 20px (EDGE + 4).
+const SIDE_GAP = 24;
+const DEFAULT_SPOT: Spot = { side: "right", bottom: SIDE_GAP };
 
 /** Left edge of the page content (the portal sidebar is skipped so the pill never covers its menu). */
 function contentLeft(): number {
@@ -85,7 +81,6 @@ export function ProAssistantBubble({ open, onOpen }: { open: boolean; onOpen: ()
   const [spot, setSpot] = useState<Spot>(DEFAULT_SPOT);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [dragPoint, setDragPoint] = useState<{ x: number; y: number } | null>(null);
-  const [lift, setLift] = useState(0);
   const [overlayOpen, setOverlayOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   // const labelRef = useRef<HTMLSpanElement>(null); — old separate dark label (replaced by the open pill)
@@ -132,43 +127,20 @@ export function ProAssistantBubble({ open, onOpen }: { open: boolean; onOpen: ()
   const [leftX, setLeftX] = useState(SIDE_GAP);
 
   /**
-   * Smart collision: the smallest upward lift (0…280px) at which nothing interactive is under the
-   * bubble. Reads what is on screen at 9 points of each candidate square (the bubble itself is
-   * ignored), so it follows scrolling, route changes and content that appears later.
+   * Only checks whether a dialog / side sheet is open (the bubble fades away for it). It never
+   * moves the bubble. Previous: also computed a "lift" (0…280px up) so nothing interactive sat under
+   * it — removed (client: the button floated over pipeline cards).
    */
   const measure = useCallback(() => {
-    const button = buttonRef.current;
-    if (!button || dragRef.current) return;
+    if (!buttonRef.current || dragRef.current) return;
     setOverlayOpen(Boolean(document.querySelector(OVERLAY)));
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    const w = widthRef.current;
-    const base = clampSpot(spotRef.current, height);
-    const left = sideLeft(base.side, width, w);
-    if (base.side === "left") setLeftX((current) => (current === left ? current : left));
-    // Previous: 3×3 points on the round bubble + 3 on the separate label. Now the whole pill.
-    const xs = w > SIZE ? [0.05, 0.27, 0.5, 0.73, 0.95] : [0.12, 0.5, 0.88];
-    const blocked = (top: number) => {
-      const points = xs.flatMap((fx) => [0.12, 0.5, 0.88].map((fy) => [left + w * fx, top + SIZE * fy]));
-      return points.some(([x, y]) => {
-        if (y < 0 || y > height) return false;
-        const under = document.elementsFromPoint(x, y).find((el) => !button.contains(el) && !el.closest(".pa-panel"));
-        return Boolean(under?.closest(INTERACTIVE));
-      });
-    };
-    const baseTop = height - base.bottom - SIZE;
-    // Nothing clear within reach → stay where the Pro put it (lift 0).
-    let next = 0;
-    for (let up = 0; up <= MAX_LIFT && baseTop - up >= EDGE; up += LIFT_STEP) {
-      if (!blocked(baseTop - up)) {
-        next = up;
-        break;
-      }
+    if (spotRef.current.side === "left") {
+      const left = sideLeft("left", window.innerWidth, widthRef.current);
+      setLeftX((current) => (current === left ? current : left));
     }
-    setLift((current) => (current === next ? current : next));
   }, []);
 
-  // Re-check (debounced) on scroll — any scroll container —, resize, DOM changes and route changes.
+  // Re-check open overlays (debounced) on resize, DOM changes and route changes. Previous: also on every scroll.
   useEffect(() => {
     let timer = 0;
     const schedule = () => {
@@ -176,13 +148,11 @@ export function ProAssistantBubble({ open, onOpen }: { open: boolean; onOpen: ()
       timer = window.setTimeout(() => requestAnimationFrame(measure), 120);
     };
     schedule();
-    window.addEventListener("scroll", schedule, { capture: true, passive: true });
     window.addEventListener("resize", schedule);
     const observer = new MutationObserver(schedule);
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "data-state", "hidden", "aria-hidden"] });
     return () => {
       window.clearTimeout(timer);
-      window.removeEventListener("scroll", schedule, { capture: true });
       window.removeEventListener("resize", schedule);
       observer.disconnect();
     };
@@ -232,7 +202,6 @@ export function ProAssistantBubble({ open, onOpen }: { open: boolean; onOpen: ()
     if (next.side === "left") setLeftX(sideLeft("left", window.innerWidth, widthRef.current));
     setSpot(next);
     saveSpot(next);
-    setLift(0);
     setDragPoint(null);
   }
 
@@ -242,7 +211,6 @@ export function ProAssistantBubble({ open, onOpen }: { open: boolean; onOpen: ()
     : {
         ...(placed.side === "right" ? { right: SIDE_GAP } : { left: leftX }),
         bottom: placed.bottom,
-        transform: lift ? `translateY(-${lift}px)` : undefined,
       };
   // Previous style: { right: placed.right, bottom: placed.bottom, transform: … }
   const hidden = open || overlayOpen;

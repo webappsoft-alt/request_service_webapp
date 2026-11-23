@@ -587,9 +587,9 @@ export function PipelineBoard({ className }: { className?: string }) {
           </Button>
         </div>
       ) : !board ? (
-        <div className="flex gap-3 overflow-hidden px-4 py-3 2xl:grid 2xl:grid-cols-5">
+        <div className="flex gap-4 overflow-hidden px-4 py-4 sm:px-5">
           {Array.from({ length: 5 }, (_, i) => (
-            <div key={i} className="w-70 shrink-0 space-y-2 2xl:w-auto">
+            <div key={i} className="w-[82vw] max-w-75 shrink-0 space-y-3 rounded-xl bg-slate-50/80 p-3 sm:w-75 dark:bg-white/3">
               <Skeleton className="h-10 w-full rounded-lg" />
               <Skeleton className="h-44 w-full rounded-xl" />
               <Skeleton className="h-28 w-full rounded-xl" />
@@ -602,8 +602,9 @@ export function PipelineBoard({ className }: { className?: string }) {
             ref={scroller}
             className={cn(
               // Wide screens: the five columns share the width. Narrower: fixed columns scroll sideways.
-              "flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-4 pt-3 pb-4 lg:snap-none",
-              "2xl:grid 2xl:grid-cols-5 2xl:overflow-x-visible",
+              // Previous: gap-3 px-4 pt-3 pb-4, and 2xl:grid-cols-5 with no minimum (columns got squished).
+              "flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-4 pt-4 pb-5 sm:px-5 lg:snap-none",
+              "2xl:grid 2xl:grid-cols-[repeat(5,minmax(290px,1fr))]",
               // Snapping fights the auto-scroll while a card is carried to another column.
               dragging && "snap-none",
             )}
@@ -615,14 +616,31 @@ export function PipelineBoard({ className }: { className?: string }) {
                 <div
                   key={column.id}
                   data-column={column.id}
-                  className="flex w-[82vw] max-w-75 shrink-0 snap-start flex-col gap-2.5 sm:w-68 2xl:w-auto 2xl:max-w-none 2xl:min-w-0"
+                  // Each column is its own soft surface so the white cards stand out. Previous: no surface, w-68.
+                  className="flex w-[82vw] max-w-75 shrink-0 snap-start flex-col gap-3 rounded-xl border border-input/50 bg-slate-50/80 p-3 sm:w-75 2xl:w-auto 2xl:max-w-none 2xl:min-w-0 dark:bg-white/3"
                 >
-                  <header className={"border-b border-input pb-1.5"}>
-                    <h3 className="text-[15px] font-semibold tracking-tight">
-                      {column.title}
-                    </h3>
+                  {/* Title + count on one row, value on the right; the description is held to two lines
+                      so every column header is the same height. Previous: title, description, then a
+                      "Total: / Value:" row under a border. */}
+                  <header className="px-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="flex min-w-0 items-center gap-2 text-[15px] font-semibold tracking-tight">
+                        <span className="truncate">{column.title}</span>
+                        <span
+                          className="shrink-0 rounded-full bg-background px-2 py-px text-[11px] font-semibold text-muted-foreground tabular-nums ring-1 ring-input/70"
+                          aria-label={`${column.count} total`}
+                        >
+                          {column.count}
+                        </span>
+                      </h3>
+                      {column.value > 0 ? (
+                        <span className="shrink-0 text-[13px] font-bold text-foreground tabular-nums">
+                          {money(column.value)}
+                        </span>
+                      ) : null}
+                    </div>
                     {/* What the stage holds, and the tabs where those records live */}
-                    <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                    <p className="mt-1 line-clamp-2 min-h-[2lh] text-[11px] leading-snug text-muted-foreground">
                       {column.description}
                       {column.links?.map((link) => (
                         <span key={link.href}>
@@ -636,22 +654,6 @@ export function PipelineBoard({ className }: { className?: string }) {
                         </span>
                       ))}
                     </p>
-                    <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
-                      <span>
-                        Total:{" "}
-                        <span className="font-semibold text-foreground">
-                          {column.count}
-                        </span>
-                      </span>
-                      {column.value > 0 ? (
-                        <span>
-                          Value:{" "}
-                          <span className="font-semibold text-foreground">
-                            {money(column.value)}
-                          </span>
-                        </span>
-                      ) : null}
-                    </div>
                   </header>
 
                   {column.groups.map((group) => {
@@ -685,15 +687,16 @@ export function PipelineBoard({ className }: { className?: string }) {
                       <div
                         key={group.id}
                         className={cn(
-                          "rounded-lg border p-1.5 transition-opacity",
-                          "border-input/70 bg-muted/30",
+                          // Sub-stage = a plain section on the column surface. Previous: a boxed
+                          // "rounded-lg border p-1.5 border-input/70 bg-muted/30" that blended in.
+                          "rounded-lg border border-transparent transition-opacity",
                           blocked && "opacity-40",
-                          locked && "border-dashed border-amber-400/80",
+                          locked && "border-dashed border-amber-400/80 p-1.5",
                         )}
                       >
-                        <div className="flex items-baseline justify-between gap-2 px-1.5 pt-0.5 pb-1.5">
+                        <div className="mb-2 flex items-center justify-between gap-2 border-b border-input/60 px-0.5 pb-1.5">
                           <p
-                            className="truncate text-[12px] font-semibold"
+                            className="truncate text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
                             title={group.hint || undefined}
                           >
                             {group.title}
@@ -704,13 +707,19 @@ export function PipelineBoard({ className }: { className?: string }) {
                               />
                             ) : null}
                           </p>
-                          <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
-                            {group.count}
-                            {group.value > 0 ? ` · ${money(group.value)}` : ""}
+                          <span className="flex shrink-0 items-center gap-1.5 tabular-nums">
+                            {group.value > 0 ? (
+                              <span className="text-[11px] font-medium text-muted-foreground">
+                                {money(group.value)}
+                              </span>
+                            ) : null}
+                            <span className="rounded-full bg-background px-1.5 py-px text-[10.5px] font-semibold text-foreground/80 ring-1 ring-input/70">
+                              {group.count}
+                            </span>
                           </span>
                         </div>
                         {locked ? (
-                          <p className="mx-1.5 mb-1.5 flex items-start gap-1.5 rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+                          <p className="mb-2 flex items-start gap-1.5 rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
                             <Lock
                               className="mt-px size-3 shrink-0"
                               aria-hidden
@@ -727,7 +736,7 @@ export function PipelineBoard({ className }: { className?: string }) {
                               ref={provided.innerRef}
                               {...provided.droppableProps}
                               className={cn(
-                                "min-h-11 space-y-1.5 rounded-md transition-colors",
+                                "min-h-9 space-y-2.5 rounded-md transition-colors",
                                 snapshot.isDraggingOver &&
                                   (locked
                                     ? "bg-amber-500/10 ring-2 ring-amber-400/70"
@@ -738,7 +747,7 @@ export function PipelineBoard({ className }: { className?: string }) {
                                 ? sections.map((section) =>
                                     section.cards.length ? (
                                       <Fragment key={section.id}>
-                                        <p className="flex items-center gap-1.5 px-1 pt-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                        <p className="flex items-center gap-1.5 px-0.5 pt-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
                                           {section.title}
                                           <span className="font-medium tabular-nums">
                                             · {section.cards.length}
@@ -752,7 +761,7 @@ export function PipelineBoard({ className }: { className?: string }) {
                               {provided.placeholder}
                               {!group.cards.length &&
                               !snapshot.isDraggingOver ? (
-                                <p className="rounded-md border border-dashed border-input/80 px-2 py-2.5 text-center text-[11px] text-muted-foreground">
+                                <p className="rounded-md border border-dashed border-input/70 px-2 py-1.5 text-center text-[11px] text-muted-foreground/80">
                                   {group.count > 0
                                     ? "Older cards · See more below"
                                     : group.hint || "Nothing here"}
@@ -946,7 +955,7 @@ const PipelineCardItem = memo(function PipelineCardItem({
             {...provided.draggableProps}
             {...provided.dragHandleProps}
             className={cn(
-              "relative rounded-md border border-input/70 bg-card shadow-[0_1px_1px_rgba(15,23,42,0.04)] outline-none select-none",
+              "relative rounded-lg border border-input/70 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.05)] outline-none select-none",
               // Only the shadow animates: the drag itself moves the card with transform.
               "transition-shadow focus-visible:ring-2 focus-visible:ring-ring/50",
               snapshot.isDragging
@@ -961,10 +970,19 @@ const PipelineCardItem = memo(function PipelineCardItem({
               onFocus={prefetchCard}
               onTouchStart={prefetchCard}
               draggable={false}
-              className="block rounded-md px-2.5 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              className="block rounded-lg p-3.5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             >
+              {/* Hierarchy: title first; number + category are metadata; the amount stands out.
+                  Previous: blue number on top, 12px medium title, plain-weight amount. */}
               <div className="flex items-center justify-between gap-2 pr-6">
-                <p className="flex min-w-0 items-center gap-1.5 truncate text-[12.5px] font-semibold text-primary">
+                <p
+                  className={cn(
+                    "flex min-w-0 items-center gap-1.5 truncate tabular-nums",
+                    card.title
+                      ? "text-[11px] font-medium text-muted-foreground"
+                      : "text-[13.5px] font-semibold text-foreground",
+                  )}
+                >
                   <span className="truncate">{card.number || "—"}</span>
                 </p>
                 <span
@@ -977,12 +995,12 @@ const PipelineCardItem = memo(function PipelineCardItem({
                 </span>
               </div>
               {card.title ? (
-                <p className="mt-0.5 line-clamp-2 text-[12px] font-medium wrap-break-word">
+                <p className="mt-1 line-clamp-2 text-[13.5px] leading-snug font-semibold text-foreground wrap-break-word">
                   {card.title}
                 </p>
               ) : null}
               {card.category || origin ? (
-                <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+                <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
                   {origin ? (
                     <span
                       className={cn(
@@ -995,22 +1013,22 @@ const PipelineCardItem = memo(function PipelineCardItem({
                     </span>
                   ) : null}
                   {card.category ? (
-                    <p className="truncate text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    <p className="truncate rounded bg-muted px-1.5 py-px text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
                       {card.category}
                     </p>
                   ) : null}
                 </div>
               ) : null}
-              <div className="mt-1 flex items-center justify-between gap-2 text-[11.5px]">
-                <span className="min-w-0 truncate">{card.customerName}</span>
+              <div className="mt-2.5 flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-xs text-muted-foreground">{card.customerName}</span>
                 {card.value > 0 ? (
-                  <span className="shrink-0 font-medium tabular-nums">
+                  <span className="shrink-0 text-[13.5px] font-bold text-foreground tabular-nums">
                     {money(card.value)}
                   </span>
                 ) : null}
               </div>
               {card.address || date ? (
-                <div className="mt-0.5 flex items-center justify-between gap-2 text-[10.5px] text-muted-foreground">
+                <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-muted-foreground/90">
                   <span
                     className="min-w-0 truncate"
                     title={card.address || undefined}
@@ -1025,7 +1043,8 @@ const PipelineCardItem = memo(function PipelineCardItem({
               {/* What's left before this estimate can be booked (the card opens the estimate). */}
               {card.blocker && card.blocker.code !== "declined" ? (
                 <p
-                  className="mt-1.5 flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10.5px] font-medium text-amber-800 dark:text-amber-200"
+                  // Compact pill. Previous: a full-width amber strip.
+                  className="mt-2.5 inline-flex max-w-full items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10.5px] font-medium text-amber-800 ring-1 ring-amber-500/20 dark:text-amber-200"
                   title={card.blocker.message}
                 >
                   <TriangleAlert className="size-3 shrink-0" aria-hidden />

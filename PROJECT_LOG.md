@@ -66,6 +66,19 @@ Modules, layout, notification channels and API conventions: see
 Newest first. Format: **what** — why · files.
 
 ### 2026-11-23
+- **Pro Co-pilot bubble no longer moves by itself** — removed the "smart collision" lift, which slid the pill up to 280px whenever a button or card was under it, so it ended up floating mid-screen over the Invoices / Paid column. It now sits fixed 24px from the bottom-right corner (`bottom-6 right-6`, z-40). Still kept: the Pro can drag it up or down (the spot is saved in localStorage), it fades while a dialog or sheet is open, and it is clamped on screen when the window resizes. The per-scroll re-check is gone too. Files: `components/pro-assistant/pro-assistant-bubble.tsx`.
+- **Pipeline board readability** — UI only; drag and drop, move menu, search, "See more" and the booking dialog are unchanged.
+  - Columns: each is its own soft surface (`bg-slate-50/80`, `dark:bg-white/3`, rounded, `p-3`). Gap is 4 and columns are 300px wide; on 2xl they sit in a `minmax(290px,1fr)` grid and scroll sideways instead of squishing.
+  - Column headers: title, count pill and value sit on one row, and the description is clamped to two lines (`min-h-[2lh]`) so all five headers line up. The "Total: / Value:" row is gone.
+  - Sub-stages (New leads, Never sent, Booked…): plain sections with an uppercase label and hairline, value plus a count badge; no longer boxed.
+  - Cards:
+    - `p-3.5`, `space-y-2.5`, `rounded-lg`.
+    - The title is the prominent line (13.5px semibold). The number is muted metadata, or prominent when there is no title.
+    - The category is a small tag, the amount is bold, and customer, address and date are muted xs.
+    - The blocker hint is a compact amber pill.
+  - Empty states: shorter (`py-1.5`).
+  - Theme tokens instead of raw slate text colours, so dark mode keeps working.
+  - Files: `components/portal/pipeline/pipeline-board.tsx`.
 - **Pro Co-pilot: estimate starter chips from the Pro's categories** — the hard-coded "Create an estimate for a bathroom leak" chip is replaced by one "Create an estimate for {Category}" chip per category in the Pro profile (`authProvider.services.categoryIds` → `getServiceCategoryById`, de-duplicated; the same source the estimate draft card uses). With up to 4 categories, all show. With 5 or more, the first 3 show plus a dashed "+N more" / "Show less" pill, so the welcome area doesn't push the input off-screen. With no categories (or while the profile is loading) there is one "Create a new estimate" chip. The operational chips ("How's business today?", "Show overdue invoices", "Who should take my next job?") are unchanged. Clicking a chip sends its exact text through `ask()`, like the other chips. The chips are built at render time for the welcome message, so a welcome already saved in sessionStorage picks them up. No API changes. Files: `components/pro-assistant/pro-assistant.tsx`.
 
 ### 2026-11-20

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, FileText, Loader2, MapPin, Plus, Search, Trash2, UserRound, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, FolderPlus, Loader2, MapPin, Pencil, Plus, Search, Trash2, UserRound, X } from "lucide-react";
 import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
@@ -23,6 +23,126 @@ const PROFILE_CATEGORIES_HREF = "/pro/dashboard/profile?step=categories";
 
 function money2(n: number) {
   return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+type CardItem = PaDraftItem & { key: string; section: string };
+type SectionGroup = { key: string; label: string; items: CardItem[]; total: number };
+
+let keySeq = 0;
+const nextKey = () => `l${++keySeq}`;
+const lineTotal = (i: PaDraftItem) => money2((Number(i.quantity) || 0) * (Number(i.unitPrice) || 0));
+
+/** Same grouping as the estimate builder (line-sections.ts): first-seen order, "" = General. */
+function groupBySection(items: CardItem[]): SectionGroup[] {
+  const order: string[] = [];
+  const map = new Map<string, CardItem[]>();
+  for (const item of items) {
+    if (!map.has(item.section)) {
+      map.set(item.section, []);
+      order.push(item.section);
+    }
+    map.get(item.section)!.push(item);
+  }
+  return order.map((key) => {
+    const list = map.get(key) || [];
+    return { key, label: key || "General", items: list, total: money2(list.reduce((t, i) => t + lineTotal(i), 0)) };
+  });
+}
+
+/** Section title (tap the pencil to rename), subtotal and remove. */
+function SectionHeader({
+  group,
+  locked,
+  onRename,
+  onRemove,
+}: {
+  group: SectionGroup;
+  locked: boolean;
+  /** false = name taken (kept editing). */
+  onRename: (name: string) => boolean;
+  /** Undefined = the only section (kept). */
+  onRemove?: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(group.label);
+  const [taken, setTaken] = useState(false);
+
+  function commit() {
+    const next = name.trim() || "General";
+    if (next === group.label) {
+      setEditing(false);
+      return;
+    }
+    if (onRename(next)) {
+      setEditing(false);
+      setTaken(false);
+    } else setTaken(true);
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 border-b bg-muted/60 px-2.5 py-1.5">
+      {editing ? (
+        <input
+          autoFocus
+          value={name}
+          onChange={(event) => {
+            setName(event.target.value);
+            setTaken(false);
+          }}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              commit();
+            }
+            if (event.key === "Escape") {
+              setName(group.label);
+              setEditing(false);
+              setTaken(false);
+            }
+          }}
+          aria-label="Section name"
+          aria-invalid={taken || undefined}
+          title={taken ? "A section with this name already exists" : undefined}
+          className={cn(
+            "h-7 min-w-0 flex-1 rounded border bg-background px-2 text-xs font-semibold outline-none focus:border-primary/50",
+            taken && "border-rose-400",
+          )}
+        />
+      ) : (
+        <span className="flex min-w-0 flex-1 items-center gap-1">
+          <span className="truncate text-xs font-semibold text-foreground">{group.label}</span>
+          <span className="shrink-0 text-[10px] text-muted-foreground">
+            · {group.items.length} item{group.items.length === 1 ? "" : "s"}
+          </span>
+          {!locked ? (
+            <button
+              type="button"
+              onClick={() => {
+                setName(group.label);
+                setEditing(true);
+              }}
+              aria-label={`Rename section ${group.label}`}
+              className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-background hover:text-foreground max-sm:size-8"
+            >
+              <Pencil className="size-3" />
+            </button>
+          ) : null}
+        </span>
+      )}
+      <span className="shrink-0 text-xs font-semibold text-foreground tabular-nums">{formatMoney(group.total)}</span>
+      {!locked && onRemove ? (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Remove section ${group.label}`}
+          className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-rose-50 hover:text-rose-600 max-sm:size-8"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 const fieldClass =
@@ -235,9 +355,20 @@ export function EstimateDraftCard({
   const [addressId, setAddressId] = useState("");
   const [categoryName, setCategoryName] = useState<string | null>(null);
   const [subcategoryName, setSubcategoryName] = useState("");
-  const [items, setItems] = useState<PaDraftItem[]>(() =>
-    draft.items.map(({ description, kind, quantity, unit, unitPrice }) => ({ description, kind, quantity, unit, unitPrice })),
+  // Lines keep a local key (stable React keys while sections are added / removed / renamed).
+  const [items, setItems] = useState<CardItem[]>(() =>
+    draft.items.map(({ description, kind, quantity, unit, unitPrice, section }) => ({
+      key: nextKey(),
+      description,
+      kind,
+      quantity,
+      unit,
+      unitPrice,
+      section: String(section || "").trim(),
+    })),
   );
+  const groups = useMemo(() => groupBySection(items), [items]);
+  const [newSection, setNewSection] = useState("");
   const [notes, setNotes] = useState(draft.notes);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -277,8 +408,38 @@ export function EstimateDraftCard({
             ? "Add a title"
             : null;
 
-  function update(index: number, patch: Partial<PaDraftItem>) {
-    setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  function update(key: string, patch: Partial<PaDraftItem>) {
+    setItems((prev) => prev.map((item) => (item.key === key ? { ...item, ...patch } : item)));
+  }
+
+  /** New line at the end of its section (sections stay together, like the estimate builder). */
+  function addItem(section: string, kind: PaDraftItem["kind"] = "labor") {
+    setItems((prev) => {
+      const line: CardItem = { key: nextKey(), description: "", kind, quantity: 1, unit: kind === "labor" ? "hr" : "", unitPrice: 0, section };
+      const last = prev.map((i) => i.section).lastIndexOf(section);
+      return last < 0 ? [...prev, line] : [...prev.slice(0, last + 1), line, ...prev.slice(last + 1)];
+    });
+  }
+
+  const sectionTaken = (name: string, except?: string) => {
+    const wanted = name.trim().replace(/\s+/g, " ").toLowerCase();
+    return groups.some((g) => g.key !== except && (g.key.toLowerCase() === wanted || (!g.key && wanted === "general")));
+  };
+  const newSectionTaken = Boolean(newSection.trim()) && sectionTaken(newSection);
+
+  function addSection() {
+    const name = newSection.trim().replace(/\s+/g, " ").slice(0, 60);
+    if (!name || newSectionTaken) return;
+    addItem(name.toLowerCase() === "general" ? "" : name);
+    setNewSection("");
+  }
+
+  function renameSection(from: string, to: string) {
+    const next = to.trim().replace(/\s+/g, " ").slice(0, 60);
+    const target = next.toLowerCase() === "general" ? "" : next;
+    if (target === from || sectionTaken(target || "general", from)) return false;
+    setItems((prev) => prev.map((i) => (i.section === from ? { ...i, section: target } : i)));
+    return true;
   }
 
   async function create() {
@@ -290,7 +451,19 @@ export function EstimateDraftCard({
         customerId: customer.id,
         title: title.trim(),
         notes: notes.trim(),
-        items: validItems.map((i) => ({ ...i, quantity: money2(i.quantity), unitPrice: money2(i.unitPrice) })),
+        // Section by section (same order as the card) → the builder shows the same sections.
+        items: groups.flatMap((g) =>
+          g.items
+            .filter((i) => i.description.trim() && Number(i.quantity) > 0)
+            .map(({ description, kind, quantity, unit, unitPrice }) => ({
+              description,
+              kind,
+              unit,
+              quantity: money2(quantity),
+              unitPrice: money2(unitPrice),
+              section: g.key,
+            })),
+        ),
         addressId: selectedAddressId || undefined,
         categoryName: category,
         subcategoryName: validSubcategory || undefined,
@@ -456,95 +629,199 @@ export function EstimateDraftCard({
           </label>
         </div>
 
-        <div className="overflow-hidden rounded-lg border">
-          <div className="flex items-center justify-between bg-muted/50 px-2.5 py-1.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-            <span>Line items</span>
-            <span>{items.length}</span>
+        {/* Line items by work / trade section (same `section` field as the estimate builder).
+            Previous: one flat "Line items" list. The card is a size container: in the expanded
+            co-pilot each line is one table row (description · type · qty · rate · total). */}
+        <div className="@container flex flex-col gap-2">
+          <div className="flex items-center justify-between px-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+            <span>Line items by section</span>
+            <span>
+              {groups.length} section{groups.length === 1 ? "" : "s"} · {items.length} item{items.length === 1 ? "" : "s"}
+            </span>
           </div>
-          {items.map((item, index) => (
-            <div key={index} className="flex flex-col gap-1.5 border-t px-2.5 py-2">
-              <div className="flex items-start gap-1.5">
-                <textarea
-                  value={item.description}
-                  disabled={locked}
-                  rows={1}
-                  onChange={(event) => update(index, { description: event.target.value })}
-                  aria-label={`Line ${index + 1} description`}
-                  className="min-w-0 flex-1 resize-none bg-transparent text-xs leading-snug font-medium outline-none [field-sizing:content]"
-                />
-                <select
-                  value={item.kind}
-                  disabled={locked}
-                  onChange={(event) => update(index, { kind: event.target.value as PaDraftItem["kind"] })}
-                  aria-label={`Line ${index + 1} type`}
-                  className="h-6 shrink-0 rounded-full border-0 bg-muted px-2 text-[10px] text-muted-foreground outline-none"
-                >
-                  {(Object.keys(KIND_LABEL) as PaDraftItem["kind"][]).map((k) => (
-                    <option key={k} value={k}>
-                      {KIND_LABEL[k]}
-                    </option>
-                  ))}
-                </select>
-                {!locked && items.length > 1 ? (
-                  <button
-                    type="button"
-                    onClick={() => setItems((prev) => prev.filter((_, i) => i !== index))}
-                    aria-label={`Remove line ${index + 1}`}
-                    className="-mt-0.5 flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-rose-50 hover:text-rose-600 max-sm:size-9"
+
+          {groups.map((group) => (
+            <section key={group.key || "__general"} aria-label={`${group.label} section`} className="overflow-hidden rounded-lg border bg-background">
+              <SectionHeader
+                group={group}
+                locked={locked}
+                onRename={(name) => renameSection(group.key, name)}
+                onRemove={groups.length > 1 ? () => setItems((prev) => prev.filter((i) => i.section !== group.key)) : undefined}
+              />
+              {/* Column labels (wide card only). */}
+              <div className="hidden border-b px-2.5 py-1 text-[10px] font-medium text-muted-foreground @2xl:grid @2xl:grid-cols-[minmax(0,1fr)_6.5rem_8rem_7.5rem_6rem_1.75rem] @2xl:gap-2">
+                <span>Description</span>
+                <span>Type</span>
+                <span className="text-right">Qty</span>
+                <span className="text-right">Rate</span>
+                <span className="text-right">Total</span>
+                <span />
+              </div>
+              {group.items.map((item, index) => {
+                const n = `${group.label} line ${index + 1}`;
+                return (
+                  <div
+                    key={item.key}
+                    className={cn("flex flex-col gap-1.5 px-2.5 py-2 @2xl:grid @2xl:grid-cols-[minmax(0,1fr)_6.5rem_8rem_7.5rem_6rem_1.75rem] @2xl:items-center @2xl:gap-2 @2xl:py-1.5", index > 0 && "border-t")}
                   >
-                    <Trash2 className="size-3.5" />
-                  </button>
-                ) : null}
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span>Qty</span>
-                <input
-                  type="number"
-                  min={0.01}
-                  step="any"
-                  value={item.quantity}
-                  disabled={locked}
-                  onChange={(event) => update(index, { quantity: Number(event.target.value) })}
-                  aria-label={`Line ${index + 1} quantity`}
-                  className="h-7 w-14 rounded border bg-background px-1.5 text-right text-xs text-foreground tabular-nums outline-none focus:border-primary/50"
-                />
-                {item.unit ? <span>{item.unit}</span> : null}
-                <span>×</span>
-                <span className="relative">
-                  <span className="pointer-events-none absolute top-1/2 left-1.5 -translate-y-1/2 text-xs">$</span>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={item.unitPrice}
-                    disabled={locked}
-                    onChange={(event) => update(index, { unitPrice: Number(event.target.value) })}
-                    aria-label={`Line ${index + 1} unit price`}
-                    className="h-7 w-24 rounded border bg-background pr-1.5 pl-4 text-right text-xs text-foreground tabular-nums outline-none focus:border-primary/50"
-                  />
+                    <div className="flex items-start gap-1.5 @2xl:contents">
+                      <textarea
+                        value={item.description}
+                        disabled={locked}
+                        rows={1}
+                        placeholder="Describe the work or material"
+                        onChange={(event) => update(item.key, { description: event.target.value })}
+                        aria-label={`${n} description`}
+                        className="min-w-0 flex-1 resize-none bg-transparent text-xs leading-snug font-medium outline-none [field-sizing:content] placeholder:font-normal placeholder:text-muted-foreground/70"
+                      />
+                      <select
+                        value={item.kind}
+                        disabled={locked}
+                        onChange={(event) => update(item.key, { kind: event.target.value as PaDraftItem["kind"] })}
+                        aria-label={`${n} type`}
+                        className={cn(
+                          "h-6 shrink-0 rounded-full border-0 px-2 text-[10px] outline-none",
+                          item.kind === "labor"
+                            ? "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300"
+                            : item.kind === "material"
+                              ? "bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300"
+                              : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {(Object.keys(KIND_LABEL) as PaDraftItem["kind"][]).map((k) => (
+                          <option key={k} value={k}>
+                            {KIND_LABEL[k]}
+                          </option>
+                        ))}
+                      </select>
+                      {/* Narrow card: remove sits on the first row. */}
+                      {!locked && items.length > 1 ? (
+                        <button
+                          type="button"
+                          onClick={() => setItems((prev) => prev.filter((i) => i.key !== item.key))}
+                          aria-label={`Remove ${n}`}
+                          className="-mt-0.5 flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-rose-50 hover:text-rose-600 max-sm:size-9 @2xl:hidden"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground @2xl:contents">
+                      <span className="flex shrink-0 items-center gap-1.5 @2xl:justify-end">
+                        <span className="@2xl:hidden">Qty</span>
+                        <input
+                          type="number"
+                          min={0.01}
+                          step="any"
+                          value={item.quantity}
+                          disabled={locked}
+                          onChange={(event) => update(item.key, { quantity: Number(event.target.value) })}
+                          aria-label={`${n} quantity`}
+                          className="h-7 w-14 rounded border bg-background px-1.5 text-right text-xs text-foreground tabular-nums outline-none focus:border-primary/50"
+                        />
+                        {item.unit ? <span className="max-w-9 truncate @2xl:w-9">{item.unit}</span> : <span className="hidden w-9 @2xl:block" />}
+                      </span>
+                      <span className="@2xl:hidden">×</span>
+                      <span className="relative @2xl:justify-self-end">
+                        <span className="pointer-events-none absolute top-1/2 left-1.5 -translate-y-1/2 text-xs">$</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={item.unitPrice}
+                          disabled={locked}
+                          onChange={(event) => update(item.key, { unitPrice: Number(event.target.value) })}
+                          aria-label={`${n} unit price`}
+                          className="h-7 w-20 rounded border bg-background pr-1.5 pl-4 text-right text-xs text-foreground tabular-nums outline-none focus:border-primary/50 @2xl:w-24"
+                        />
+                      </span>
+                      <span className="ml-auto shrink-0 text-xs font-semibold text-foreground tabular-nums @2xl:ml-0 @2xl:text-right">
+                        {formatMoney(lineTotal(item))}
+                      </span>
+                      {/* Wide card: remove is the last column. */}
+                      {!locked && items.length > 1 ? (
+                        <button
+                          type="button"
+                          onClick={() => setItems((prev) => prev.filter((i) => i.key !== item.key))}
+                          aria-label={`Remove ${n}`}
+                          className="hidden size-7 items-center justify-center rounded text-muted-foreground hover:bg-rose-50 hover:text-rose-600 @2xl:flex"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      ) : (
+                        <span className="hidden @2xl:block" />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-muted/30 px-2.5 py-1.5">
+                {!locked ? (
+                  <span className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => addItem(group.key, "labor")}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline max-sm:min-h-9 max-sm:text-xs"
+                      aria-label={`Add labor item to ${group.label}`}
+                    >
+                      <Plus className="size-3" /> Add item
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addItem(group.key, "material")}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-primary hover:underline max-sm:min-h-9 max-sm:text-xs"
+                      aria-label={`Add material to ${group.label}`}
+                    >
+                      <Plus className="size-3" /> Material
+                    </button>
+                  </span>
+                ) : (
+                  <span />
+                )}
+                <span className="text-[11px] text-muted-foreground">
+                  {group.label} subtotal{" "}
+                  <span className="font-semibold text-foreground tabular-nums">{formatMoney(group.total)}</span>
                 </span>
-                <span className="ml-auto text-xs font-semibold text-foreground tabular-nums">
-                  {formatMoney(money2((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)))}
-                </span>
               </div>
-            </div>
+            </section>
           ))}
-          <div className="flex items-center justify-between border-t bg-muted/30 px-2 py-1.5">
-            {!locked ? (
+
+          {!locked ? (
+            <div className="flex items-center gap-1.5">
+              <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-dashed bg-background px-2.5">
+                <FolderPlus className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                <input
+                  value={newSection}
+                  onChange={(event) => setNewSection(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addSection();
+                    }
+                  }}
+                  placeholder="New section (e.g. Electrical)"
+                  aria-label="New section name"
+                  aria-invalid={newSectionTaken || undefined}
+                  className="h-8 min-w-0 flex-1 bg-transparent text-xs outline-none max-sm:h-9"
+                />
+              </div>
               <button
                 type="button"
-                onClick={() => setItems((prev) => [...prev, { description: "", kind: "labor", quantity: 1, unit: "", unitPrice: 0 }])}
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline max-sm:min-h-9 max-sm:text-xs"
+                onClick={addSection}
+                disabled={!newSection.trim() || newSectionTaken}
+                className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border bg-background px-2.5 text-[11px] font-semibold text-primary transition hover:border-primary/40 hover:bg-primary/5 disabled:opacity-50 max-sm:h-9"
               >
-                <Plus className="size-3" /> Add line
+                <Plus className="size-3" /> Add section
               </button>
-            ) : (
-              <span />
-            )}
-            <span className="text-xs">
-              <span className="text-muted-foreground">Total </span>
-              <span className="font-semibold tabular-nums">{formatMoney(total)}</span>
+            </div>
+          ) : null}
+          {newSectionTaken ? <p className="text-[11px] text-rose-600">A section with this name already exists.</p> : null}
+
+          <div className="flex items-center justify-between rounded-lg bg-muted/50 px-2.5 py-2">
+            <span className="text-[11px] text-muted-foreground">
+              {groups.length > 1 ? `${groups.length} sections` : "Estimate"} total
             </span>
+            <span className="text-sm font-semibold tabular-nums">{formatMoney(total)}</span>
           </div>
         </div>
 

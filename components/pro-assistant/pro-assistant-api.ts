@@ -24,6 +24,8 @@ export type PaDraftItem = {
   quantity: number;
   unit: string;
   unitPrice: number;
+  /** Work / trade section (e.g. Plumbing, Flooring, Shower) — saved as the estimate line's section; "" = General. */
+  section?: string;
 };
 
 export type PaCustomerAddress = { id: string; label: string; line: string };

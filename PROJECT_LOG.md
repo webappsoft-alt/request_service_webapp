@@ -65,6 +65,32 @@ Modules, layout, notification channels and API conventions: see
 
 Newest first. Format: **what** — why · files.
 
+### 2026-11-24
+- **Pro Co-pilot: sectioned draft estimate card + expand to 90% of the screen**
+  - **Why:** client feedback. The `DRAFT ESTIMATE` card showed every line in one flat "Line items" list, and Expand opened a small window (min(64rem, 100vw - 4rem), under 40% of a wide screen).
+  - **Sections on the card** (`estimate-draft-card.tsx`): lines are grouped by work / trade section the same way as the builder (`line-sections.ts`: first-seen order, "" = General). Each section has:
+    - a header with name, item count, subtotal, rename (pencil) and remove (hidden when it is the only section);
+    - its labor and material lines together;
+    - "+ Add item" (labor) and "+ Material";
+    - a section subtotal.
+  - **"Add section"** (dashed input + button) adds a section, and duplicate names are blocked. The footer shows the estimate total across sections.
+  - **Create** sends each line's `section`, section by section, so the estimate opens in the builder with the same sections. Lines keep a local key for stable rows.
+  - **Wide layout:** the card is a size container. When it is wide (`@2xl`, the expanded co-pilot), each line is one table row: Description · Type · Qty + unit · Rate · Total · remove, with column labels. In the normal panel and on phones it keeps the two-row layout. The rate input is narrower on small cards so totals fit at 375px.
+  - **Type pills:** Labor is sky, Material is amber.
+  - **Expand** (`pro-assistant.css`): the panel is now 90vw × 90dvh, centred (desktop ≥640px only). The message column widens to max-w-7xl (was max-w-3xl), and site photos in the chat are larger when expanded. The normal floating panel and the full-screen phone layout are unchanged.
+  - **Type:** `PaDraftItem.section`.
+  - **Checked:**
+    - type check and lint clean;
+    - live as `provider@gmail.com`: the expanded panel measured 1440 × 810 on a 1600 × 900 viewport (90% / 90%), and the bathroom remodel showed separate Shower and Flooring sections with Plumbing / Electrical / Demolition;
+    - Create opened the sectioned estimate in the builder;
+    - at 375px: no horizontal scroll and no clipped totals (17 rows checked).
+    - Backend side: see the backend log.
+  - **Files:**
+    - `components/pro-assistant/estimate-draft-card.tsx`
+    - `components/pro-assistant/pro-assistant.tsx`
+    - `components/pro-assistant/pro-assistant.css`
+    - `components/pro-assistant/pro-assistant-api.ts`
+
 ### 2026-11-23
 - **Pro Co-pilot: one-tap scope / tier chips, customer pills, customer kept across edits**
   - **One-tap chips:** new `revise` quick-reply kind (`PaQuickReply.value` = the instruction, plus icon) for "+ Haul-away & disposal", "+ Subfloor / Permit allowance", "Budget option" and "Premium option" under a priced draft. A tap sends `visionAction: { kind: "revise", value }`, and the chip label shows as the Pro's message.

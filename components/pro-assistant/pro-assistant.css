@@ -45,8 +45,10 @@
       bottom 420ms cubic-bezier(0.16, 1, 0.3, 1);
   }
   .pa-panel[data-expanded="true"] {
-    --pa-w: min(64rem, calc(100vw - 4rem));
-    --pa-h: min(52rem, calc(100dvh - 4rem));
+    /* Client feedback: 90% of the screen so sectioned estimates, labor / material columns and
+       site photos have room. Previous: min(64rem, calc(100vw - 4rem)) × min(52rem, calc(100dvh - 4rem)). */
+    --pa-w: 90vw;
+    --pa-h: 90dvh;
     --pa-right: calc((100vw - var(--pa-w)) / 2);
     --pa-bottom: calc((100dvh - var(--pa-h)) / 2);
   }

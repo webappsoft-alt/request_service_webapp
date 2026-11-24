@@ -578,7 +578,7 @@ export function ProAssistant() {
             </div>
           ) : null}
           <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-3" aria-live="polite">
-            <div className={cn("mx-auto flex w-full flex-col gap-3", expanded && "max-w-3xl")}>
+            <div className={cn("mx-auto flex w-full flex-col gap-3", expanded && "max-w-7xl")}>
               {messages.map((m) =>
                 m.role === "user" ? (
                   <div key={m.id} className="flex flex-col items-end gap-1.5">
@@ -591,7 +591,16 @@ export function ProAssistant() {
                               src={src}
                               alt="Site photo"
                               loading="lazy"
-                              className={cn("object-cover", m.images && m.images.length === 1 ? "max-h-44 w-56" : "size-18")}
+                              className={cn(
+                                "object-cover",
+                                m.images && m.images.length === 1
+                                  ? expanded
+                                    ? "max-h-80 w-[28rem]"
+                                    : "max-h-44 w-56"
+                                  : expanded
+                                    ? "size-32"
+                                    : "size-18",
+                              )}
                             />
                           </a>
                         ))}
@@ -756,7 +765,7 @@ export function ProAssistant() {
             </div>
           </div>
 
-          <div className={cn(expanded && "sm:px-[max(0px,calc((100%-48rem)/2))]")}>
+          <div className={cn(expanded && "sm:px-[max(0px,calc((100%-80rem)/2))]")}>
             <ProAssistantInput
               onSend={(text, meta) => void ask(text, meta)}
               onListenStart={stopSpeaking}

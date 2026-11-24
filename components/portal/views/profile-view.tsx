@@ -600,7 +600,18 @@ export function ProfileView() {
       const res = await putData<{
         message?: string;
         workingHours?: typeof workingHours;
+        /** Closed days changed → the API moved future work (see crm/estimates/stages.js). */
+        rescheduled?: { projects: number; entries: number; skipped: number };
       }>(providerApi.officeHours, { workingHours }, { silent: true });
+
+      const moved = res?.rescheduled;
+      if (moved && (moved.projects || moved.entries)) {
+        const parts = [
+          moved.projects ? `${moved.projects} project${moved.projects === 1 ? "" : "s"} re-planned` : "",
+          moved.entries ? `${moved.entries} visit${moved.entries === 1 ? "" : "s"} / job${moved.entries === 1 ? "" : "s"} moved off closed days` : "",
+        ].filter(Boolean);
+        toast.info(`Schedule updated for your new hours: ${parts.join(", ")}.`);
+      }
 
       const nextHours = Array.isArray(res?.workingHours)
         ? res.workingHours

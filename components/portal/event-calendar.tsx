@@ -27,6 +27,9 @@ import {
 import { formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { useAppSelector } from "@/store/hooks";
+import { selectAuthProvider } from "@/store/authSlice";
+import { workingHoursFromProvider } from "@/lib/auth/provider-profile";
 import { stageDisplayStatus, stageStatusLabel, type StageDisplayStatus } from "@/lib/project-stages";
 
 /** Visits the AI receptionist booked on a phone call get their own light AI card, not the solid card. */
@@ -463,6 +466,16 @@ export function EventCalendar({
   const now = new Date();
   const [view, setView] = useState<CalendarView>("month");
   const [cursor, setCursor] = useState({ year: now.getFullYear(), month: now.getMonth() });
+  // Closed weekdays from Business Profile → Working hours (0 = Sunday).
+  const authProvider = useAppSelector(selectAuthProvider);
+  const closedDays = useMemo(() => {
+    const set = new Set<number>();
+    for (const h of workingHoursFromProvider(authProvider)) {
+      const index = WEEKDAY_INDEX[String(h.day || "").toLowerCase()];
+      if (h.closed && index !== undefined) set.add(index);
+    }
+    return set.size >= 7 ? new Set<number>() : set;
+  }, [authProvider]);
   const [kindFilterInternal, setKindFilterInternal] = useState<PortalEventKind | "">("");
   const [employeeFilterInternal, setEmployeeFilterInternal] = useState(
     lockEmployeeId || initialEmployeeId,
@@ -558,7 +571,15 @@ export function EventCalendar({
     }
   }
 
-  function applyMove(item: PortalCalendarEvent, move: CalendarMove) {
+  function applyMove(item: PortalCalendarEvent, requested: CalendarMove) {
+    // Closed days (Business Profile → Working hours) are skipped, same as the API does.
+    const shifted = WORK_KINDS.has(item.kind) ? shiftOffClosed(requested, closedDays) : { move: requested, moved: false };
+    const move = shifted.move;
+    if (shifted.moved && move.date) {
+      const day = new Date(`${requested.date}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
+      const to = new Date(`${move.date}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
+      toast.info(`${day} is closed in your Working hours — moved to ${to}.`);
+    }
     // Register optimistic patch so propEvents re-syncs don't flicker. A card built from a record
     // (task_, inv_…) gets a new id once saved, so it is also tracked by kind + record; a real row
     // only by its id (other rows of the same record, e.g. more site visits, must not move).
@@ -873,6 +894,7 @@ export function EventCalendar({
         ) : view === "month" ? (
           <MonthGrid
             cells={cells}
+            closedDays={closedDays}
             events={visible}
             today={today}
             selectedDay={selectedDay}
@@ -1060,7 +1082,34 @@ type WeekLaneItem = {
   continuesRight: boolean;
 };
 
-function layoutWeekEvents(weekIsos: string[], events: PortalCalendarEvent[]): WeekLaneItem[][] {
+const WEEKDAY_INDEX: Record<string, number> = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+/** Calendar kinds that are work on a day (invoice / payment dates are due dates, not work). */
+const WORK_KINDS = new Set<PortalEventKind>(["job", "fixed_service", "estimate", "request", "task", "visit"]);
+const weekdayOfIso = (iso: string) => new Date(`${iso}T00:00:00Z`).getUTCDay();
+
+/**
+ * Same rule as the API (crm/estimates/stages.js shiftOffClosedDays): work dropped on a closed
+ * day moves to the next open day; a multi-day range keeps its length, its end also off a closed day.
+ */
+function shiftOffClosed(move: CalendarMove, closed: Set<number>) {
+  if (!closed.size || !move.date) return { move, moved: false };
+  const forward = (iso: string) => {
+    let next = iso;
+    for (let i = 0; i < 7 && closed.has(weekdayOfIso(next)); i += 1) next = addIsoDays(next, 1);
+    return next;
+  };
+  const date = forward(move.date);
+  const span = move.endDate ? diffDays(move.date, move.endDate) : 0;
+  const endDate = move.endDate ? forward(addIsoDays(date, Math.max(0, span))) : undefined;
+  const moved = date !== move.date || (move.endDate ? endDate !== move.endDate : false);
+  return { move: { ...move, date, endDate }, moved };
+}
+
+function layoutWeekEvents(
+  weekIsos: string[],
+  events: PortalCalendarEvent[],
+  closed: Set<number> = new Set(),
+): WeekLaneItem[][] {
   const items: WeekLaneItem[] = [];
   const weekStartIso = weekIsos[0];
   const weekEndIso = weekIsos[6];
@@ -1075,6 +1124,27 @@ function layoutWeekEvents(weekIsos: string[], events: PortalCalendarEvent[]): We
     const startCol = weekIsos.indexOf(visStart);
     const endCol = weekIsos.indexOf(visEnd);
     if (startCol < 0 || endCol < 0) continue;
+    // Multi-day work skips the Pro's closed days (Working hours): the bar breaks around them
+    // (e.g. Fri | Mon instead of one bar over the weekend). Single-day items stay where they are.
+    const open = (col: number) => !closed.has(weekdayOfIso(weekIsos[col]));
+    if (closed.size && endCol > startCol && WORK_KINDS.has(event.kind)) {
+      let col = startCol;
+      while (col <= endCol) {
+        while (col <= endCol && !open(col)) col += 1;
+        if (col > endCol) break;
+        const runStart = col;
+        while (col <= endCol && open(col)) col += 1;
+        const runEnd = col - 1;
+        items.push({
+          event,
+          startCol: runStart,
+          span: runEnd - runStart + 1,
+          continuesLeft: runStart > startCol || start < weekStartIso,
+          continuesRight: runEnd < endCol || end > weekEndIso,
+        });
+      }
+      continue;
+    }
     items.push({
       event,
       startCol,
@@ -1111,6 +1181,7 @@ function layoutWeekEvents(weekIsos: string[], events: PortalCalendarEvent[]): We
 
 function MonthGrid({
   cells,
+  closedDays = new Set<number>(),
   events,
   today,
   selectedDay,
@@ -1125,6 +1196,8 @@ function MonthGrid({
   onContextMenuDay,
 }: {
   cells: MonthCell[];
+  /** Weekdays marked Closed in Working hours (0 = Sunday): tagged and hatched. */
+  closedDays?: Set<number>;
   events: PortalCalendarEvent[];
   today: string;
   selectedDay: string;
@@ -1139,7 +1212,9 @@ function MonthGrid({
   onContextMenuDay?: (e: React.MouseEvent, iso: string) => void;
 }) {
   const inMonthLine = "var(--border)";
-  const outMonthLine = "var(--border-soft)";
+  // Client: previous / next-month days keep the same solid grid borders as the month (was
+  // var(--border-soft), which made their boxes disappear); only their fill and date are muted.
+  const outMonthLine = inMonthLine;
   const outerLine = "var(--border)";
   const weeks: MonthCell[][] = [];
   for (let index = 0; index < cells.length; index += 7) {
@@ -1173,7 +1248,7 @@ function MonthGrid({
       </div>
       {weeks.map((week, weekIndex) => {
         const weekIsos = week.map((cell) => cell.iso);
-        const lanes = layoutWeekEvents(weekIsos, events);
+        const lanes = layoutWeekEvents(weekIsos, events, closedDays);
         const isLastRow = weekIndex === weeks.length - 1;
         return (
           <div
@@ -1192,12 +1267,13 @@ function MonthGrid({
                   <div
                     key={cell.iso}
                     className={cn(
-                      "px-1.5 pt-1.5",
+                      "flex items-center gap-1.5 px-1.5 pt-1.5",
                       cell.inMonth
                         ? weekend
                           ? "bg-red-500/5 dark:bg-red-950/20"
                           : "bg-card"
-                        : "bg-muted/30 dark:bg-slate-900/60",
+                        : "bg-[#f1f3f6] dark:bg-slate-900/60",
+                      cell.inMonth && closedDays.has(weekday) && "bg-[repeating-linear-gradient(135deg,transparent_0_6px,rgba(148,163,184,0.14)_6px_7px)]",
                       cell.inMonth && selectedDay === cell.iso && "bg-secondary/55",
                       cell.inMonth && overDay === cell.iso && "bg-primary/15",
                       !cell.inMonth && overDay === cell.iso && "bg-primary/10",
@@ -1213,12 +1289,20 @@ function MonthGrid({
                           ? weekend && cell.iso !== today
                             ? "text-[#dc2626]/80 dark:text-red-400"
                             : "text-foreground"
-                          : "text-muted-foreground/60",
+                          : "text-slate-400 dark:text-slate-500",
                         cell.iso === today && "bg-primary text-primary-foreground",
                       )}
                     >
                       {cell.day}
                     </p>
+                    {cell.inMonth && closedDays.has(weekday) ? (
+                      <span
+                        className="rounded-full bg-slate-200/90 px-1.5 py-px text-[10px] font-semibold tracking-wide text-slate-600 uppercase dark:bg-slate-700 dark:text-slate-200"
+                        title="Closed in your Working hours (Business Profile) — work is not scheduled on this day"
+                      >
+                        Closed
+                      </span>
+                    ) : null}
                   </div>
                 );
               })}
@@ -1245,7 +1329,8 @@ function MonthGrid({
                           ? weekend
                             ? "bg-red-500/5 dark:bg-red-950/20"
                             : "bg-card"
-                          : "bg-muted/30 dark:bg-slate-900/60",
+                          : "bg-[#f1f3f6] dark:bg-slate-900/60",
+                        cell.inMonth && closedDays.has(weekday) && "bg-[repeating-linear-gradient(135deg,transparent_0_6px,rgba(148,163,184,0.14)_6px_7px)]",
                         cell.inMonth && selectedDay === cell.iso && "bg-secondary/55",
                         cell.inMonth && overDay === cell.iso && "bg-primary/15",
                         !cell.inMonth && overDay === cell.iso && "bg-primary/10",

@@ -284,7 +284,9 @@ export function ProjectStagesDialog({
                 value={startDate}
                 onChange={(event) => setStartDate(event.target.value)}
               />
-              <span className="text-xs text-muted-foreground">Stages with only hours are booked from 9 AM.</span>
+              <span className="text-xs text-muted-foreground">
+                Stages with only hours are booked from 9 AM. Days marked Closed in your Working hours are skipped.
+              </span>
             </div>
           ) : null}
         </div>

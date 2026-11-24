@@ -66,6 +66,21 @@ Modules, layout, notification channels and API conventions: see
 Newest first. Format: **what** — why · files.
 
 ### 2026-11-24
+- **Schedule calendar shows the Pro's closed days; drag / drop and hour changes follow them**
+  - **Month view** (`event-calendar.tsx`):
+    - Closed weekdays come from Business Profile → Working hours (auth provider `settings.workingHours`).
+    - Their cells get a "Closed" tag and a light hatch.
+    - Multi-day work bars break around closed days (e.g. JOB-930 now shows Mon–Fri and no longer runs over Saturday / Sunday). Single-day items keep their day.
+  - **Drag / drop / resize:** work dropped on a closed day moves to the next open day right away (same rule as the API), with a toast: "Saturday is closed in your Working hours — moved to Monday, Dec 14."
+  - **Profile editor** (`profile-view.tsx`): when changing the closed days re-planned the schedule, a toast says so ("Schedule updated for your new hours: 1 project re-planned, …").
+  - **Checked live:** November 2026 showed 9 Closed tags on Sat / Sun, and JOB-930 stopped at Friday. Type check and lint clean (6 existing warnings in `event-calendar.tsx`).
+- **Schedule month view: previous / next-month days keep their borders, light grey fill; stage dialog note**
+  - **Month view** (`components/portal/event-calendar.tsx`):
+    - Leading / trailing days of other months now use the same solid grid line as the month (`outMonthLine = inMonthLine`; it was `var(--border-soft)`, so their boxes looked borderless).
+    - Fill is light grey `#f1f3f6` (was `bg-muted/30`), and the date is muted `text-slate-400`.
+    - In-month weekends (pink), today and the drag / selected states are unchanged.
+  - **Stages dialog** (`estimate-v2/project-stages.tsx`): adds "Days marked Closed in your Working hours are skipped." next to the start date. Off-day skipping itself is in the API (see the backend log).
+  - **Checked live:** December 2026 shows Nov 29–30 and Jan 1–2 as grey boxes with full borders; February 2027 shows Jan 31 and Mar 1–6 the same way. Type check and lint clean.
 - **Business Profile follow-up: gallery mosaic; edit page back arrow + actions on the step row**
   - **Gallery** (`business-profile-detail-view.tsx`):
     - The banner is on the left. The other photos fill a block of the same height on the right (26rem on desktop), with a tile layout per count (`GALLERY_TILE_GRID`: 1 → one tile, 2 → two tall tiles, 3 → one wide tile + 2, 4 → 2×2, 5 → one wide tile + 4, 6 → 3×2), so there are never empty cells.

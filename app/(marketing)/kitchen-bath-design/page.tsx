@@ -144,7 +144,7 @@ export default async function KitchenBathDesignPage() {
 
       {/* 1. Hero */}
       <section className="relative overflow-hidden border-b bg-[linear-gradient(180deg,#f4f7fb_0%,#ffffff_100%)] dark:bg-none dark:bg-muted/20">
-        <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 pt-6 pb-12 md:pt-8 md:pb-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center lg:gap-12">
+        <div className="container-site grid gap-8 pt-6 pb-12 md:pt-8 md:pb-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center lg:gap-12">
           <div className="flex flex-col gap-5">
             <nav aria-label="Breadcrumb">
               <ol className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -223,7 +223,7 @@ export default async function KitchenBathDesignPage() {
 
       {/* 2. The designer (#demo) */}
       <section id={DESIGNER_ANCHOR} className="scroll-mt-20 bg-[#f5f5f5] py-12 md:py-16 dark:bg-muted/30">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4">
+        <div className="container-site flex flex-col gap-8">
           <SectionIntro
             eyebrow="Live designer"
             title="Try it yourself, free"
@@ -245,7 +245,7 @@ export default async function KitchenBathDesignPage() {
 
       {/* 3. How it works */}
       <section className="py-12 md:py-16">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4">
+        <div className="container-site flex flex-col gap-10">
           <SectionIntro eyebrow="How it works" title="From photo to real quotes in three steps" />
           <ol className="grid gap-4 md:grid-cols-3 md:gap-6">
             {HOW_IT_WORKS.map(({ icon: Icon, title, body }, index) => (
@@ -272,24 +272,24 @@ export default async function KitchenBathDesignPage() {
       {/* 4. Styles showcase */}
       {styles.length ? (
         <section className="bg-[#f5f5f5] py-12 md:py-16 dark:bg-muted/30">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4">
+          <div className="container-site flex flex-col gap-8">
             <SectionIntro
-              eyebrow="Styles & finishes"
+              eyebrow="Style library"
               title={
                 <>
-                  A real design studio. <span className="text-primary">Not a filter.</span>
+                  Explore curated <span className="text-primary">kitchen &amp; bath styles</span>
                 </>
               }
-              body="Start from a style, then fine-tune the cabinets, countertops, backsplash and hardware. Tap a style to try it in the designer."
+              body="Pick a starting aesthetic, then customize cabinetry, surfaces, fixtures and finishes in the designer."
             />
-            <StyleShowcase styles={styles} />
+            <StyleShowcase styles={styles} finishes={catalog?.finishes || []} rooms={catalog?.rooms || []} />
           </div>
         </section>
       ) : null}
 
       {/* 5. Quote bridge */}
       <section className="py-12 md:py-16">
-        <div className="mx-auto w-full max-w-6xl px-4">
+        <div className="container-site">
           <div className="relative overflow-hidden rounded-3xl bg-[#0B3B70] px-6 py-10 text-white shadow-[0_30px_60px_-35px_rgba(11,59,112,0.8)] md:px-12 md:py-12">
             <div
               aria-hidden="true"
@@ -322,7 +322,7 @@ export default async function KitchenBathDesignPage() {
 
       {/* 6. FAQ (admin panel → FAQs, Domain / Category "kitchen-bath-design", audience Customer) */}
       <section className="border-t py-12 md:py-16">
-        <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <div className="container-site grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
           <div className="flex flex-col gap-3">
             <p className="eyebrow text-primary">Questions</p>
             <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">Kitchen &amp; Bath Design FAQ</h2>

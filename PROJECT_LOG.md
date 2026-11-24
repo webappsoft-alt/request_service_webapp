@@ -66,6 +66,26 @@ Modules, layout, notification channels and API conventions: see
 Newest first. Format: **what** — why · files.
 
 ### 2026-11-24
+- **Kitchen & Bath Design style cards redone as compact cards**
+  - **Why:** client feedback ("not good UI"). The tall cards with a finish table and chips were too busy, and styles without finishes (Minimalist, Japandi) left big empty cards.
+  - **New card:**
+    - a framed photo (inset, rounded) with the room tag on hover;
+    - the name with a "Try →" pill, which fills on hover;
+    - a two-line summary: the description, else the default finish names, else "The <style> <room> look, ready to customize.";
+    - a slim segmented palette bar with the color names under it, or a dashed bar with "Choose your own finishes" when there's no palette.
+  - Every card is the same height. The room switch's active tab is now solid primary. Behavior is unchanged: switching rooms, and a click selects the style in the designer (verified). Desktop, dark mode and 375px were checked.
+  - **Files:** `components/ai-redesigner/kitchen-bath-sections.tsx`.
+- **Kitchen & Bath Design page: site container width + original style-library cards**
+  - **Why:** client request. The page used `max-w-6xl px-4` (narrower than the navbar), and the style grid's dark name/swatch pill over each photo looked too close to an outside reference site.
+  - **Container:** every section (hero, live designer, how it works, style library, quote bridge, FAQ) now uses `container-site`, the same wrapper as the header and Home. Checked live: section edges match the navbar at 1440 (143–1283px), 820 (32–773px) and 375 (20–355px), with no horizontal overflow.
+  - **Style library:** new copy ("Explore curated kitchen & bath styles" / "Pick a starting aesthetic, then customize cabinetry, surfaces, fixtures and finishes in the designer."). Each card now has:
+    - the photo on top, with a room/finish tag in the top-left on hover;
+    - a card footer with the style name and description;
+    - the first 3 default finishes (e.g. "Cabinets: Shaker · Greige"), resolved from the catalog's finishes and room labels;
+    - labeled color chips from the default color finishes, falling back to the style's swatches;
+    - a "Try this style →" row.
+  - **Room switch:** the Kitchen/Bathroom switch is restyled as a segmented control. Behavior is unchanged: switching rooms, and clicking a card selects that room and style in the designer and scrolls to it (verified). Dark mode and 375px were checked.
+  - **Files:** `app/(marketing)/kitchen-bath-design/page.tsx`, `components/ai-redesigner/kitchen-bath-sections.tsx` (`StyleShowcase` now takes `finishes` + `rooms`).
 - **Pro marketing site moved `/for-pros` → `/pros` (trade pages at `/pros/trades/<trade>`)**
   - **Why:** client request. `/pros/<slug>` already is the public Pro profile (customer page), so a separate `/pros/[trade]` route is impossible (Next.js can't have two dynamic segments at one level). The user chose "trades under /pros/trades".
   - **Routes** (folders moved):

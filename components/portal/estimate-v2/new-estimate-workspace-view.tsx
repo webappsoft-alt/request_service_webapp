@@ -947,13 +947,18 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           };
         });
 
-      // Tax rate only needs the property state: load it in the background, the page doesn't wait.
-      // A quiet reload (after a save / send) keeps the rate already loaded for the same state.
-      const rateState = String(data.propertyAddress?.state || "").trim().toUpperCase();
+      // Tax rate only needs the property City + State (city rate, else state rate): load it in the
+      // background, the page doesn't wait. A quiet reload (after a save / send) keeps the rate
+      // already loaded for the same city + state.
+      const rateState = `${String(data.propertyAddress?.state || "").trim().toUpperCase()}|${String(
+        data.propertyAddress?.city || "",
+      )
+        .trim()
+        .toLowerCase()}`;
       const reuseRate = silent && taxRateStateRef.current === rateState && taxRateReadyRef.current;
       taxRateStateRef.current = rateState;
       const ratePromise: Promise<number> = (
-        reuseRate ? taxRatePromiseRef.current : fetchTaxRatePercent(data.propertyAddress?.state)
+        reuseRate ? taxRatePromiseRef.current : fetchTaxRatePercent(data.propertyAddress)
       ).then((rate) => {
         if (taxRatePromiseRef.current === ratePromise) {
           setTaxRatePercent(rate);

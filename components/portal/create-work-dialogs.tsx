@@ -719,7 +719,7 @@ export function CreateEstimateDialog({
       if (isEdit && estimate) {
         const taxRatePercent = await (
           await import("@/lib/tax/state-tax")
-        ).fetchTaxRatePercent(state);
+        ).fetchTaxRatePercent({ city, state });
         const nextEstimate = buildEstimate({
           id: estimate.id,
           number: estimate.number,
@@ -794,7 +794,7 @@ export function CreateEstimateDialog({
 
       const taxRatePercent = await (
         await import("@/lib/tax/state-tax")
-      ).fetchTaxRatePercent(state);
+      ).fetchTaxRatePercent({ city, state });
       const estimateDraft = buildEstimate({
         number: nextRecordNumber(
           "EST",
@@ -1769,7 +1769,7 @@ export function CreateJobDialog({
       if (!source && !useApi) {
         const taxRatePercent = await (
           await import("@/lib/tax/state-tax")
-        ).fetchTaxRatePercent(state);
+        ).fetchTaxRatePercent({ city, state });
         const linked = buildEstimate({
           number: nextRecordNumber(
             "EST",

@@ -194,17 +194,19 @@ export function JobCosting({
   const mix = useMemo(() => jobCostMix(activeLines), [activeLines]);
   const [taxRatePercent, setTaxRatePercent] = useState(0);
   const addressState = job?.address?.state || "";
+  // City rate first (admin City Tax Rates), else the state rate.
+  const addressCity = job?.address?.city || "";
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       const { fetchTaxRatePercent } = await import("@/lib/tax/state-tax");
-      const rate = await fetchTaxRatePercent(addressState);
+      const rate = await fetchTaxRatePercent({ city: addressCity, state: addressState });
       if (!cancelled) setTaxRatePercent(rate);
     })();
     return () => {
       cancelled = true;
     };
-  }, [addressState]);
+  }, [addressCity, addressState]);
   const sheet = useMemo(
     () => jobMoneySheet(mix, taxRatePercent),
     [mix, taxRatePercent],

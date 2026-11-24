@@ -620,7 +620,7 @@ export function EstimateDetailView({ id }: { id: string }) {
       const lines = filledWorkLines(readCostLines(session?.email, asJob));
       const taxRatePercent = await (
         await import("@/lib/tax/state-tax")
-      ).fetchTaxRatePercent(quote.propertyAddress?.state);
+      ).fetchTaxRatePercent(quote.propertyAddress);
       const items = lines.length
         ? linesToEstimateItems(quote.id, lines, taxRatePercent)
         : quote.items;
@@ -672,7 +672,7 @@ export function EstimateDetailView({ id }: { id: string }) {
       const lines = filledWorkLines(readCostLines(session?.email, asJob));
       const taxRatePercent = await (
         await import("@/lib/tax/state-tax")
-      ).fetchTaxRatePercent(quote.propertyAddress?.state);
+      ).fetchTaxRatePercent(quote.propertyAddress);
       const items = lines.length
         ? linesToEstimateItems(quote.id, lines, taxRatePercent)
         : quote.items;
@@ -783,7 +783,7 @@ export function EstimateDetailView({ id }: { id: string }) {
         const lines = filledWorkLines(readCostLines(session?.email, asJob));
         const taxRatePercent = await (
           await import("@/lib/tax/state-tax")
-        ).fetchTaxRatePercent(quote.propertyAddress?.state);
+        ).fetchTaxRatePercent(quote.propertyAddress);
         const items = lines.length
           ? linesToEstimateItems(quote.id, lines, taxRatePercent)
           : quote.items;
@@ -1354,7 +1354,7 @@ export function EstimateDetailView({ id }: { id: string }) {
                         filled,
                         await (
                           await import("@/lib/tax/state-tax")
-                        ).fetchTaxRatePercent(quote.propertyAddress?.state),
+                        ).fetchTaxRatePercent(quote.propertyAddress),
                       );
                       writeCostLines(session?.email, quote.id, filled);
                       if (apiReady) {

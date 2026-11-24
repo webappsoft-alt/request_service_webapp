@@ -325,21 +325,21 @@ export function JobSummaryTab({
   const jobStages = noun === "job" ? (shownBundle?.stages ?? estimate?.stages ?? []) : [];
   const jobStageNotes = noun === "job" ? (shownBundle?.notes ?? []) : [];
   const [taxRatePercent, setTaxRatePercent] = useState(0);
-  const addressState =
-    estimate?.propertyAddress?.state ||
-    job?.address?.state ||
-    "";
+  // City + State from the same address (property, else job): city rate first, else state rate.
+  const taxAddress = estimate?.propertyAddress?.state ? estimate.propertyAddress : job?.address;
+  const addressState = taxAddress?.state || "";
+  const addressCity = taxAddress?.city || "";
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       const { fetchTaxRatePercent } = await import("@/lib/tax/state-tax");
-      const rate = await fetchTaxRatePercent(addressState);
+      const rate = await fetchTaxRatePercent({ city: addressCity, state: addressState });
       if (!cancelled) setTaxRatePercent(rate);
     })();
     return () => {
       cancelled = true;
     };
-  }, [addressState]);
+  }, [addressCity, addressState]);
   const sheet = jobMoneySheet(mix, taxRatePercent);
   const file = useJobFile(job, estimate, invoice, technician);
   const crm = useCrmApiData();

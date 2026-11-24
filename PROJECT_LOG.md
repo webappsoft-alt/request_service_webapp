@@ -66,6 +66,49 @@ Modules, layout, notification channels and API conventions: see
 Newest first. Format: **what** — why · files.
 
 ### 2026-11-24
+- **Admin `/tax`: one unified tax table (replaces the City / State tabs)**
+  - **Why:** client request. Admins wanted one list with every rule, so nothing is re-entered.
+  - **Data:** frontend only. No backend or database change. The two existing record types are read from their APIs (`GET /admin/tax`, `GET /admin/tax/cities`) and merged. Nothing is migrated, rewritten or reset: all 48 state records and Huntsville, AL are untouched. Backend priority is unchanged: City + State rule → state rule → 0.
+  - **Table:**
+    - Columns: City, State, Code, Tax Rate (%), Status, Actions.
+    - State-wide rows show an "All cities" badge with "State default". City rows show the city name (editable inline) and "Overrides state X%" or "No state-wide rate".
+    - Sorted by state: the state-wide row first, then its cities.
+    - Inline edit: the rate on every row (saves on blur, Enter or Save), and the city name on city rows (Enter / Save; duplicates are refused).
+    - Delete always goes through the confirmation dialog, naming the exact rule and what applies next.
+  - **KPIs:** state-wide rates, city rates, average rate, states without a state-wide rate.
+  - **Add tax rate (one dialog):**
+    - An "Applies to" choice: a specific city (State + City with suggestions) or the whole state (all cities).
+    - A whole-state rate for a state that already has one is blocked, with a hint to edit it in the table.
+  - **Settings → Tax rates:** renders the same panel (no tabs).
+  - **Verified in a headless browser** against the running admin dev server. The page's API calls were intercepted in the browser, so **no write reached the server**, and no admin login was used. Real rates came from the read-only public `/api/public/tax-rate`.
+    - One table with 49 rules (48 state-wide + Huntsville, AL); old tabs gone.
+    - Add a city (Aurora, CO, via suggestions), edit its rate and rename it inline, delete it through the confirmation dialog.
+    - The whole-state add is blocked for Colorado.
+    - The real data compared identical before and after.
+  - **Files:** `admin/src/pages/tax.jsx`.
+- **City-based sales tax: admin `/tax` City Tax Rates + delete confirmation; Pro previews use the city rate**
+  - **Why:** client request. Tax was state-only. The backend now resolves City rate → State rate → 0 (see backend log).
+  - **Admin** (`admin/src/pages/tax.jsx`, `admin/src/store/api/taxApi.js`):
+    - The page is now "Sales Tax Rates" with two tabs. The header button adds to the active tab.
+    - **City Tax Rates** (default) has columns City (with the state rate under it), State, Code, Tax Rate (%), Status and Actions. Its KPIs are city rates, states covered, average city rate, and states with a fallback.
+    - **State Tax Rates (fallback)** is the old table plus a "City overrides" KPI and a per-state city count.
+    - Both tabs have inline edit + Save, and search by city, state or code.
+    - The Add City dialog has State, City (suggestions from `/public/us-cities`, cities already configured hidden) and Rate, plus a hint naming the state rate it replaces.
+    - **Fix:** the trash icon in both tables no longer deletes instantly. It opens a `DeleteConfirmDialog` naming the exact rule (e.g. "Austin, Texas (TX) · 8.30%") and what applies next, with Cancel / Confirm Delete.
+    - Settings → Tax rates embeds the same tabs.
+  - **Pro portal:**
+    - `lib/tax/state-tax.ts` `fetchTaxRatePercent` accepts an address `{ city, state }` (a plain state still works) and sends `city`.
+    - Callers now pass the city: estimate workspace (rate reuse keyed on state|city), create estimate / job dialogs, job costing, job file, and record detail (quote property address). Previews now match what the backend saves.
+  - **Tested live** (admin UI on a test dev server against the test API):
+    - Added Austin, TX at 8.25% via the modal and its suggestions.
+    - Inline-edited it to 8.30%; the lookup returned 8.30 (city).
+    - Trash → Cancel kept the rate; Trash → Confirm Delete removed it and Austin fell back to TX 8.20%.
+    - State tab: trash opens the confirmation; Cancel left Alaska unchanged.
+  - **Files:**
+    - `admin/src/pages/tax.jsx`, `admin/src/store/api/taxApi.js`, `lib/tax/state-tax.ts`;
+    - `components/portal/{create-work-dialogs,job-costing,job-file}.tsx`;
+    - `components/portal/views/record-detail-views.tsx`;
+    - `components/portal/estimate-v2/new-estimate-workspace-view.tsx`.
 - **Kitchen & Bath Design style cards redone as compact cards**
   - **Why:** client feedback ("not good UI"). The tall cards with a finish table and chips were too busy, and styles without finishes (Minimalist, Japandi) left big empty cards.
   - **New card:**

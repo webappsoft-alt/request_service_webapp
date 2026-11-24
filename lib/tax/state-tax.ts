@@ -26,22 +26,33 @@ function readRate(payload: unknown): number {
   return Number.isFinite(rate) && rate > 0 ? rate : 0;
 }
 
+/** A state ("TX" / "Texas") or an address with a city ({ city: "Austin", state: "TX" }). */
+export type TaxLocation =
+  | string
+  | { state?: string | null; city?: string | null }
+  | null
+  | undefined;
+
 /**
- * Resolve admin-configured sales tax percent for a U.S. state.
- * Returns 0 when the state is unknown or no rate is configured.
+ * Resolve the admin-configured sales tax percent for an address: the City Tax Rate for its
+ * City + State when one exists, else the State rate (fallback), else 0. Same rule the backend
+ * applies when it saves (admin/tax resolveTaxRate), so previews match the saved totals.
  * Never cached (client or GET cache) — every call reads the live admin rate.
  */
 export async function fetchTaxRatePercent(
-  state: string | null | undefined,
+  location: TaxLocation,
   options?: { public?: boolean; force?: boolean },
 ): Promise<number> {
+  const state = typeof location === "string" ? location : location?.state;
+  const city = typeof location === "string" ? "" : String(location?.city || "").trim();
   const code = normalizeUsStateCode(state || "");
   if (!code) return 0;
 
   try {
+    const query = `state=${encodeURIComponent(code)}${city ? `&city=${encodeURIComponent(city)}` : ""}`;
     const endpoint = options?.public
-      ? `${publicApi.taxRate}?state=${encodeURIComponent(code)}`
-      : `${providerCrmApi.taxRate}?state=${encodeURIComponent(code)}`;
+      ? `${publicApi.taxRate}?${query}`
+      : `${providerCrmApi.taxRate}?${query}`;
     const payload = await http().getData(endpoint, { silent: true, force: true });
     return readRate(payload);
   } catch {

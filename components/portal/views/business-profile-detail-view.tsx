@@ -24,6 +24,7 @@ import {
 } from "@/lib/coverage-areas";
 import { getServiceCategoryById } from "@/lib/data/services";
 import { formatHoursValue, formatLocation, formatWorkingDay } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   getUserAvatarSrc,
@@ -42,6 +43,18 @@ import {
   getProfileSetupItems,
   profileSetupProgress,
 } from "@/lib/business-profile-setup";
+
+/** Gallery mosaic (right block) by photo count: always a full rectangle, no empty cells. */
+const GALLERY_TILE_GRID: Record<number, string> = {
+  1: "grid-cols-1 grid-rows-1",
+  2: "grid-cols-2 grid-rows-1",
+  3: "grid-cols-2 grid-rows-2",
+  4: "grid-cols-2 grid-rows-2",
+  5: "grid-cols-3 grid-rows-2",
+  6: "grid-cols-3 grid-rows-2",
+};
+/** Counts where the first tile spans two columns (3 → 1 wide + 2; 5 → 1 wide + 1, then 3). */
+const GALLERY_FIRST_TILE_WIDE = new Set([3, 5]);
 
 function SectionEdit({ href }: { href: string }) {
   return (
@@ -382,6 +395,7 @@ export function BusinessProfileDetailView() {
               )}
             </CardContent>
           </Card>
+
         </div>
 
         <div className="flex min-w-0 flex-col gap-4 lg:col-span-5">
@@ -433,47 +447,69 @@ export function BusinessProfileDetailView() {
               )}
             </CardContent>
           </Card>
-
-          <Card className={softCardClass}>
-            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
-              <CardTitle>Main business gallery</CardTitle>
-              <SectionEdit href="/pro/dashboard/profile?step=gallery" />
-            </CardHeader>
-            <CardContent className="pt-4">
-              {banner ? (
-                <div className="flex flex-col gap-3">
-                  <div className="relative aspect-2/1 w-full overflow-hidden rounded-md border border-border-soft">
-                    <Image
-                      src={banner.url}
-                      alt="Main banner"
-                      fill
-                      unoptimized
-                      className="object-cover"
-                      sizes="(min-width: 1024px) 40vw, 100vw"
-                    />
-                  </div>
-                  {otherPhotos.length ? (
-                    <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3">
-                      {otherPhotos.map((photo) => (
-                        <div key={photo.url} className="relative aspect-square min-w-0 overflow-hidden rounded-md border border-border-soft">
-                          <Image src={photo.url} alt="" fill unoptimized className="object-cover" sizes="(min-width: 640px) 160px, 50vw" />
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                  <p className="text-xs text-muted-foreground">
-                    {gallery.length} of 7 photos · banner shows first on your public profile
-                  </p>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Add 3–7 photos and choose a main banner for your public profile.
-                </p>
-              )}
-            </CardContent>
-          </Card>
         </div>
       </div>
+
+      {/* Main business gallery: full width under both columns (banner + photos side by side).
+          It used to end the right column, leaving a large gap under Working hours on the left;
+          the two columns now end at about the same height. */}
+      <Card className={`${softCardClass} mt-4`}>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
+          <CardTitle>Main business gallery</CardTitle>
+          <SectionEdit href="/pro/dashboard/profile?step=gallery" />
+        </CardHeader>
+        <CardContent className="pt-4">
+          {banner ? (
+            <div className="flex flex-col gap-3">
+              {/* Mosaic: banner on the left, the other photos fill a block of the same height on
+                  the right, with a tile layout per photo count (1–6) so there are no empty cells.
+                  Previous: square thumbnails that left gaps beside the banner. */}
+              <div className={cn("grid gap-2", otherPhotos.length ? "lg:h-[26rem] lg:grid-cols-2" : "")}>
+                <div
+                  className={cn(
+                    "relative w-full overflow-hidden rounded-lg border border-border-soft",
+                    otherPhotos.length ? "aspect-video lg:aspect-auto lg:h-full" : "aspect-[21/9]",
+                  )}
+                >
+                  <Image
+                    src={banner.url}
+                    alt="Main banner"
+                    fill
+                    unoptimized
+                    className="object-cover"
+                    sizes="(min-width: 1024px) 50vw, 100vw"
+                  />
+                  <span className="absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white">
+                    Main banner
+                  </span>
+                </div>
+                {otherPhotos.length ? (
+                  <div className={cn("grid h-64 gap-2 sm:h-80 lg:h-full", GALLERY_TILE_GRID[Math.min(otherPhotos.length, 6)])}>
+                    {otherPhotos.slice(0, 6).map((photo, index) => (
+                      <div
+                        key={photo.url}
+                        className={cn(
+                          "relative min-h-0 min-w-0 overflow-hidden rounded-lg border border-border-soft",
+                          index === 0 && GALLERY_FIRST_TILE_WIDE.has(otherPhotos.length) && "col-span-2",
+                        )}
+                      >
+                        <Image src={photo.url} alt="" fill unoptimized className="object-cover" sizes="(min-width: 1024px) 25vw, 50vw" />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {gallery.length} of 7 photos · banner shows first on your public profile
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Add 3–7 photos and choose a main banner for your public profile.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="mt-4">
         <PortfolioView embedded />

@@ -6,15 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { BadgeCheck, Camera, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
-import {
-  putData,
-  showApiErrorToast,
-} from "@/components/api/apiFuntions";
+import { putData, showApiErrorToast } from "@/components/api/apiFuntions";
 import { providerApi, userApi } from "@/components/api/ApiRoutesFile";
-import {
-  extractUploadedUrl,
-  uploadFile,
-} from "@/components/api/uploadFile";
+import { extractUploadedUrl, uploadFile } from "@/components/api/uploadFile";
 import { AddressFields } from "@/components/shared/address-fields";
 import { BusinessGalleryEditor } from "@/components/portal/business-gallery-editor";
 import { HoursEditor } from "@/components/portal/hours-editor";
@@ -24,7 +18,12 @@ import { usePortalSettings } from "@/components/portal/use-portal-settings";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -40,11 +39,12 @@ import {
   normalizePaymentMethods,
   type ProviderPaymentMethod,
 } from "@/lib/provider-preferences";
+import { getServiceCategoryById, serviceCategories } from "@/lib/data/services";
 import {
-  getServiceCategoryById,
-  serviceCategories,
-} from "@/lib/data/services";
-import { cloneWorkingHours, PROVIDER_CONTACT_ROLES, normalizeProviderContactRole } from "@/lib/data/portal";
+  cloneWorkingHours,
+  PROVIDER_CONTACT_ROLES,
+  normalizeProviderContactRole,
+} from "@/lib/data/portal";
 import {
   asAuthProvider,
   type AuthProviderRecord,
@@ -400,7 +400,9 @@ export function ProfileView() {
     setCategoryIds((current) => toggleValue(current, categoryId));
     if (checked && category) {
       const categoryJobs = jobsFor(categoryId, category.commonServices);
-      setJobs((current) => current.filter((job) => !categoryJobs.includes(job)));
+      setJobs((current) =>
+        current.filter((job) => !categoryJobs.includes(job)),
+      );
     }
   }
 
@@ -429,7 +431,9 @@ export function ProfileView() {
     }
   }
 
-  async function saveProfile(isUpdate = false): Promise<{ provider: AuthProviderRecord; user: AuthUser } | false> {
+  async function saveProfile(
+    isUpdate = false,
+  ): Promise<{ provider: AuthProviderRecord; user: AuthUser } | false> {
     const nextFirst = firstName.trim();
     const nextLast = lastName.trim();
     if (!isUpdate && (!nextFirst || !nextLast)) {
@@ -538,9 +542,7 @@ export function ProfileView() {
         profile: {
           ...(Number.isFinite(years) ? { yearsInBusiness: years } : {}),
           employeeCount:
-            EMPLOYEE_TO_API[employeeCount] ||
-            employeeCount.trim() ||
-            undefined,
+            EMPLOYEE_TO_API[employeeCount] || employeeCount.trim() || undefined,
           licensed,
           insured,
           paymentMethods,
@@ -583,7 +585,10 @@ export function ProfileView() {
     }
   }
 
-  async function persistOfficeHours(baseProvider?: AuthProviderRecord, baseUser?: AuthUser): Promise<boolean> {
+  async function persistOfficeHours(
+    baseProvider?: AuthProviderRecord,
+    baseUser?: AuthUser,
+  ): Promise<boolean> {
     const workingHours = cloneWorkingHours(hours).map((entry) => ({
       day: entry.day,
       open: entry.closed ? null : entry.open,
@@ -668,7 +673,9 @@ export function ProfileView() {
   async function onFinalSubmit() {
     if (!validateStep("account") || !validateStep("business")) return;
     if (!galleryIsReady(gallery)) {
-      toast.error("Add 3–7 gallery photos and choose a main banner on the Profile step.");
+      toast.error(
+        "Add 3–7 gallery photos and choose a main banner on the Profile step.",
+      );
       goTo("profile");
       return;
     }
@@ -740,37 +747,101 @@ export function ProfileView() {
       eyebrow="Public listing"
       title="Edit business profile"
       description="One section at a time. Changes stay on this page until you Submit on the last step."
-      actions={
-        <Button asChild variant="outline">
-          <Link href="/pro/dashboard/settings">Back</Link>
-        </Button>
-      }
+      // Back arrow beside the title (previous header: a Back / Cancel button). Update and
+      // Next / Submit sit on the step row below, clear of the floating Pro Co-pilot pill.
+      backHref="/pro/dashboard/settings"
+      backLabel="Back to business profile"
     >
       <div className="flex w-full flex-col gap-5">
-        <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-          {STEPS.map((item, index) => {
-            const current = item === step;
-            const done = index < stepIndex;
-            return (
-              <li key={item} className="flex flex-col gap-1.5">
-                <span
-                  className={cn(
-                    "h-1.5 rounded-full",
-                    current || done ? "bg-primary" : "bg-border",
-                  )}
+        {/* Every step is a tab: jump straight to Hours / Services… All changes stay on the page;
+            Update and Submit still validate the required fields (name, company, gallery). */}
+        <div className="flex flex-col gap-3">
+          <nav aria-label="Profile steps">
+            <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+              {STEPS.map((item, index) => {
+                const current = item === step;
+                const done = index < stepIndex;
+                return (
+                  <li key={item}>
+                    <button
+                      type="button"
+                      onClick={() => goTo(item)}
+                      disabled={busy}
+                      aria-current={current ? "step" : undefined}
+                      className="group flex w-full flex-col gap-1.5 rounded-md pt-1 pb-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
+                    >
+                      <span
+                        className={cn(
+                          "h-1.5 w-full rounded-full transition-colors",
+                          current || done
+                            ? "bg-primary"
+                            : "bg-border group-hover:bg-primary/40",
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          "text-[11px] font-medium transition-colors",
+                          current
+                            ? "text-foreground"
+                            : "text-muted-foreground group-hover:text-primary",
+                        )}
+                      >
+                        {STEP_LABELS[item]}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </nav>
+          {/* Own row under the step tabs, right-aligned, same size (user: not on the tab line). */}
+          <div className="flex shrink-0 items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 min-w-28 px-5"
+              disabled={busy}
+              onClick={() => void onUpdate()}
+            >
+              {isUpdating ? (
+                <Spinner
+                  size="sm"
+                  label="Updating"
+                  className="[&>span]:border-foreground/25 [&>span]:border-t-foreground [&>span:last-of-type]:border-b-foreground/70"
                 />
-                <span
-                  className={cn(
-                    "text-[11px] font-medium",
-                    current ? "text-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  {STEP_LABELS[item]}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
+              ) : (
+                "Update"
+              )}
+            </Button>
+            {isLastStep ? (
+              <Button
+                type="button"
+                className="h-10 min-w-28 px-5"
+                disabled={busy}
+                onClick={() => void onFinalSubmit()}
+              >
+                {saving ? (
+                  <Spinner
+                    size="sm"
+                    label="Submitting"
+                    className="text-primary-foreground [&>span]:border-primary-foreground/25 [&>span]:border-t-primary-foreground [&>span:last-of-type]:border-b-primary-foreground/70"
+                  />
+                ) : (
+                  "Submit"
+                )}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                className="h-10 min-w-28 px-5"
+                disabled={busy}
+                onClick={onNext}
+              >
+                Next
+              </Button>
+            )}
+          </div>
+        </div>
 
         {step === "account" ? (
           <section className="rounded-xl border border-input bg-card p-5">
@@ -846,9 +917,13 @@ export function ProfileView() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field>
-                  <FieldLabel htmlFor="phone" className="flex items-center gap-2">
+                  <FieldLabel
+                    htmlFor="phone"
+                    className="flex items-center gap-2"
+                  >
                     Phone
-                    {user?.isPhoneVerified === true && !isPhoneChanged(phone, user?.phone) ? (
+                    {user?.isPhoneVerified === true &&
+                    !isPhoneChanged(phone, user?.phone) ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30">
                         <BadgeCheck className="size-3.5" />
                         Verified
@@ -863,7 +938,8 @@ export function ProfileView() {
                   />
                   {isPhoneChanged(phone, user?.phone) ? (
                     <FieldDescription>
-                      You&apos;ll confirm the new number with a texted code when you save.
+                      You&apos;ll confirm the new number with a texted code when
+                      you save.
                     </FieldDescription>
                   ) : null}
                 </Field>
@@ -932,7 +1008,8 @@ export function ProfileView() {
               <p className="text-sm font-semibold">Coverage</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 The cities you serve. Customers in these cities can find you and
-                send you requests. Add or remove cities on the Service Areas page.
+                send you requests. Add or remove cities on the Service Areas
+                page.
               </p>
               {coverageAreas.length ? (
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -971,7 +1048,12 @@ export function ProfileView() {
                     Load more cities
                   </Button>
                 ) : null}
-                <Button asChild variant="link" size="sm" className="h-auto px-0">
+                <Button
+                  asChild
+                  variant="link"
+                  size="sm"
+                  className="h-auto px-0"
+                >
                   <Link href="/pro/dashboard/service-areas">
                     Manage service areas
                   </Link>
@@ -1005,9 +1087,7 @@ export function ProfileView() {
                     id="years"
                     inputMode="numeric"
                     value={yearsInBusiness}
-                    onChange={(event) =>
-                      setYearsInBusiness(event.target.value)
-                    }
+                    onChange={(event) => setYearsInBusiness(event.target.value)}
                     placeholder="Optional — 8"
                   />
                 </Field>
@@ -1098,7 +1178,9 @@ export function ProfileView() {
                 <Field>
                   <FieldLabel htmlFor="contact-role">Your role</FieldLabel>
                   <Select
-                    value={normalizeProviderContactRole(contactRole) || undefined}
+                    value={
+                      normalizeProviderContactRole(contactRole) || undefined
+                    }
                     onValueChange={setContactRole}
                   >
                     <SelectTrigger id="contact-role" className="w-full">
@@ -1122,7 +1204,8 @@ export function ProfileView() {
             <div className="mt-6 border-t border-border pt-5">
               <p className="text-sm font-semibold">Main business gallery</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Upload 3–7 photos. Set one as the main banner for your public profile.
+                Upload 3–7 photos. Set one as the main banner for your public
+                profile.
               </p>
               <div className="mt-4">
                 <BusinessGalleryEditor images={gallery} onChange={setGallery} />
@@ -1135,7 +1218,8 @@ export function ProfileView() {
           <section className="rounded-xl border border-input bg-card p-5">
             <p className="text-sm font-semibold">Working hours</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Set when customers can expect you to be available. Saved on Submit.
+              Set when customers can expect you to be available. Saved on
+              Submit.
             </p>
             <div className="mt-4">
               <HoursEditor hours={hours} onChange={setHours} />
@@ -1190,12 +1274,19 @@ export function ProfileView() {
               {selectedCategories.length ? (
                 <div className="flex flex-col gap-5">
                   {selectedCategories.map((category) => {
-                    const categoryJobs = jobsFor(category.id, category.commonServices);
-                    const selectedCount = categoryJobs.filter((job) => jobs.includes(job)).length;
+                    const categoryJobs = jobsFor(
+                      category.id,
+                      category.commonServices,
+                    );
+                    const selectedCount = categoryJobs.filter((job) =>
+                      jobs.includes(job),
+                    ).length;
                     return (
                       <div key={category.id} className="flex flex-col gap-3">
                         <div className="flex items-baseline justify-between gap-3">
-                          <p className="text-sm font-semibold">{category.name}</p>
+                          <p className="text-sm font-semibold">
+                            {category.name}
+                          </p>
                           <p className="text-xs text-muted-foreground">
                             {selectedCount} of {categoryJobs.length} selected
                           </p>
@@ -1216,7 +1307,9 @@ export function ProfileView() {
                                 <Checkbox
                                   checked={checked}
                                   onCheckedChange={() =>
-                                    setJobs((current) => toggleValue(current, job))
+                                    setJobs((current) =>
+                                      toggleValue(current, job),
+                                    )
                                   }
                                 />
                                 <span className="leading-5">{job}</span>
@@ -1259,55 +1352,8 @@ export function ProfileView() {
             Back
           </Button>
 
-          <div className="flex items-center gap-3">
-            <Button
-              type="button"
-              size="xl"
-              variant="outline"
-              className="min-w-[7.5rem]"
-              disabled={busy}
-              onClick={() => void onUpdate()}
-            >
-              {isUpdating ? (
-                <Spinner
-                  size="sm"
-                  label="Updating"
-                  className="[&>span]:border-foreground/25 [&>span]:border-t-foreground [&>span:last-of-type]:border-b-foreground/70"
-                />
-              ) : (
-                "Update"
-              )}
-            </Button>
-            {isLastStep ? (
-              <Button
-                type="button"
-                size="xl"
-                className="min-w-[7.5rem]"
-                disabled={busy}
-                onClick={() => void onFinalSubmit()}
-              >
-                {saving ? (
-                  <Spinner
-                    size="sm"
-                    label="Submitting"
-                    className="text-primary-foreground [&>span]:border-primary-foreground/25 [&>span]:border-t-primary-foreground [&>span:last-of-type]:border-b-primary-foreground/70"
-                  />
-                ) : (
-                  "Submit"
-                )}
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                size="xl"
-                className="min-w-[7.5rem]"
-                disabled={busy}
-                onClick={onNext}
-              >
-                Next
-              </Button>
-            )}
-          </div>
+          {/* Update / Next / Submit moved to the header (top-right) — the floating Pro Co-pilot
+              pill covered them here. Back stays bottom-left (previous step). */}
         </div>
       </div>
 
@@ -1320,7 +1366,9 @@ export function ProfileView() {
           title="Verify your new phone number"
           description="We'll text a 4-digit code to this number. Your profile is saved once it's verified."
           onCancel={() => settlePhoneVerification(false)}
-          onVerified={(verifiedPhone) => settlePhoneVerification(true, verifiedPhone)}
+          onVerified={(verifiedPhone) =>
+            settlePhoneVerification(true, verifiedPhone)
+          }
         />
       ) : null}
     </PortalPage>

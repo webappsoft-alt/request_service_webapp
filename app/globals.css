@@ -2614,8 +2614,10 @@ body.rs-cal-dragging [data-cal-overlay] {
       border-radius 420ms ease;
   }
   .bot-panel[data-expanded="true"] {
-    --bot-w: min(64rem, calc(100vw - 4rem));
-    --bot-h: min(52rem, calc(100dvh - 4rem));
+    /* 90% of the screen, same as the Pro Co-pilot's Expand. Previous: min(64rem, calc(100vw - 4rem))
+       × min(52rem, calc(100dvh - 4rem)). */
+    --bot-w: 90vw;
+    --bot-h: 90dvh;
     --bot-right: calc((100vw - var(--bot-w)) / 2);
     --bot-bottom: calc((100dvh - var(--bot-h)) / 2);
   }

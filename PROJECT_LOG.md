@@ -66,6 +66,41 @@ Modules, layout, notification channels and API conventions: see
 Newest first. Format: **what** — why · files.
 
 ### 2026-11-24
+- **Business Profile follow-up: gallery mosaic; edit page back arrow + actions on the step row**
+  - **Gallery** (`business-profile-detail-view.tsx`):
+    - The banner is on the left. The other photos fill a block of the same height on the right (26rem on desktop), with a tile layout per count (`GALLERY_TILE_GRID`: 1 → one tile, 2 → two tall tiles, 3 → one wide tile + 2, 4 → 2×2, 5 → one wide tile + 4, 6 → 3×2), so there are never empty cells.
+    - The banner has a "Main banner" tag; with no other photos it shows wide (21:9).
+    - Previous: square thumbnails that left a gap beside the banner (user feedback, "image sequence not good").
+  - **Edit header** (`profile-view.tsx`):
+    - "Cancel" removed; a back arrow beside "Public listing / Edit business profile" (`backHref`) goes back to the profile.
+    - Update and Next / Submit moved from the header to their own row right under the step tabs, right-aligned, same size (h-10, min-w-28). At first they were on the tab line; the user asked for them after the tabs instead.
+  - **Checked live:**
+    - 1600px: buttons 112×40, on the same line as the tabs;
+    - 375px: no horizontal scroll;
+    - gallery at 1600 and 375 with no overflow;
+    - type check and lint clean.
+- **Business Profile: balanced view layout; edit page with clickable step tabs and top-right actions**
+  - **Why:** client feedback. The view page had a large empty gap under Working hours. In the editor, the Pro had to click Next through every step, and the bottom-right Update / Next buttons sat under the floating Pro Co-pilot pill.
+  - **View** (`/pro/dashboard/settings`, `business-profile-detail-view.tsx`): "Main business gallery" moved out of the right column into a full-width card under both columns.
+    - The banner is 16:9 with the photos beside it (2-up on wide screens), stacked on phones.
+    - Measured at 1600px: left column ends at 1396px, right at 1413px. Before, the gallery made the right column about 500px longer.
+  - **Edit** (`/pro/dashboard/profile`, `profile-view.tsx`):
+    - Every step (Account · Business · Profile · Hours · Services · Sub-services · Portfolio) is a button (`nav[aria-label="Profile steps"]`, `aria-current="step"`, hover state) that jumps straight to that step. Edits stay on the page across steps, and Update / Submit still validate the required fields (names, company name, 3–7 gallery photos).
+    - **Update** and **Next / Submit** moved to the page header (top-right), next to a "Cancel" link back to the profile (the header used to have a "Back" link only).
+    - The bottom bar keeps only Back (previous step), bottom-left.
+  - **Checked live** (`provider@gmail.com`):
+    - the Hours and Services tabs opened directly (`?step=hours`, `?step=categories`);
+    - on Portfolio the header shows Cancel / Update / Submit at the top-right, with no overlap with the Co-pilot pill;
+    - 375px: no horizontal scroll;
+    - type check and lint clean.
+  - **Files:**
+    - `components/portal/views/business-profile-detail-view.tsx`
+    - `components/portal/views/profile-view.tsx`
+- **Customer AI assistant (Home Service Helper): Maximize now fills 90% of the screen.**
+  - **What:** `.bot-panel[data-expanded="true"]` is now 90vw × 90dvh, centred. It was min(64rem, 100vw - 4rem) × min(52rem, 100dvh - 4rem).
+  - **Why:** to match the Pro Co-pilot's Expand.
+  - **Unchanged:** the docked panel and the full-screen phone layout.
+  - **File:** `app/globals.css`.
 - **Pro Co-pilot: sectioned draft estimate card + expand to 90% of the screen**
   - **Why:** client feedback. The `DRAFT ESTIMATE` card showed every line in one flat "Line items" list, and Expand opened a small window (min(64rem, 100vw - 4rem), under 40% of a wide screen).
   - **Sections on the card** (`estimate-draft-card.tsx`): lines are grouped by work / trade section the same way as the builder (`line-sections.ts`: first-seen order, "" = General). Each section has:

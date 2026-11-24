@@ -14,6 +14,7 @@ import {
   useProPlans,
 } from "@/components/subscription/pro-plan-cards";
 import { Button } from "@/components/ui/button";
+import { ComparePlans } from "@/components/pro/compare-plans";
 import type { ProPlanBillingCycle, ProSubscriptionPlan } from "@/lib/constants/subscription-plans";
 import { faqJsonLd } from "@/lib/json-ld";
 import { proDashboard, proPaths } from "@/lib/pro-paths";
@@ -149,6 +150,11 @@ function PlanGrid({ cycle, plansState }: { cycle: ProPlanBillingCycle; plansStat
   );
 }
 
+function ComparePlansSection({ cycle, plans }: { cycle: ProPlanBillingCycle; plans: ProSubscriptionPlan[] }) {
+  const isProvider = useIsProvider();
+  return <ComparePlans plans={plans} cycle={cycle} ctaFor={(plan) => planCta(plan, isProvider)} />;
+}
+
 /** Plans section on the Pro landing page (/pro#plans). */
 export function ProLandingPlans() {
   const [cycle, setCycle] = useState<ProPlanBillingCycle>("monthly");
@@ -171,7 +177,7 @@ export function ProLandingPlans() {
         </div>
         <PlanGrid cycle={cycle} plansState={plansState} />
         <Link
-          href={proPaths.pricing}
+          href={`${proPaths.pricing}#compare`}
           className="inline-flex items-center gap-1.5 self-center text-sm font-medium text-primary hover:underline"
         >
           Compare plans and read the pricing FAQ
@@ -218,6 +224,9 @@ export function ProPricingView() {
           </p>
         </Container>
       </Section>
+
+      {/* Feature matrix under the plan cards (client): same live plans and CTAs. */}
+      <ComparePlansSection cycle={cycle} plans={plansState.plans} />
 
       <Section density="tight" tone="muted">
         <Container className="flex flex-col gap-8">

@@ -24,7 +24,7 @@ const heroStats = [
 export function ProHero({
   withScreenshot = true,
 }: {
-  /** false: no floating dashboard capture under the hero (for-pros-v1 shows a tabbed showcase instead). */
+  /** false: no floating dashboard capture under the hero (the /pros landing shows a tabbed showcase instead). */
   withScreenshot?: boolean;
 } = {}) {
   const auth = useAppSelector(selectAuth);

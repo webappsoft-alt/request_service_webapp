@@ -36,7 +36,7 @@ import { handleUserLogout } from "@/components/api/apiFuntions";
 
 export function SiteHeader() {
   const pathname = usePathname();
-  // Pro marketing (/for-pros/*) and Pro auth (/pro/*) share the Pro header; /pros/[slug] is a customer page.
+  // Pro marketing (/pros/*) and Pro auth (/pro/*) share the Pro header; /pros/[slug] is a customer page.
   const onPro = pathname === "/pro" || pathname.startsWith("/pro/") || isProMarketingPath(pathname);
 
   if (onPro) {

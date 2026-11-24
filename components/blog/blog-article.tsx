@@ -38,7 +38,7 @@ import { buildMetadata } from "@/lib/seo";
 import type { PublicBlogItem } from "@/lib/types";
 
 /**
- * One article page for both blogs: /blog/[slug] (customer) and /for-pros/blog/[slug] (Pro).
+ * One article page for both blogs: /blog/[slug] (customer) and /pros/blog/[slug] (Pro).
  * An article opened on the wrong blog (a Pro article under /blog, or the reverse) is permanently
  * redirected to its own blog; "both" articles render on either, with the customer URL canonical.
  */

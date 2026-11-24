@@ -10,6 +10,7 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { DeferredHydration } from "@/components/shared/deferred-hydration";
 import { useAppDispatch } from "@/store/hooks";
 import { fetchSiteBranding } from "@/store/siteBrandingSlice";
+import { isProMarketingPath } from "@/lib/pro-paths";
 
 /** Customer dashboard + every portal (Pro, Contractor, Technician, Admin) never get the AI assistant. */
 const BOT_EXCLUDED_PREFIXES = [
@@ -17,7 +18,6 @@ const BOT_EXCLUDED_PREFIXES = [
   "/dashboard",
   "/customer",
   "/pro",
-  "/for-pros",
   "/contractor",
   "/technical",
   "/technician",
@@ -25,8 +25,9 @@ const BOT_EXCLUDED_PREFIXES = [
 ];
 
 function isBotRoute(pathname: string) {
-  // Pro landing pages and their previews (/for-pros, /for-pros-v1, …) are for pros, not customers.
-  if (pathname.startsWith("/for-pros")) return false;
+  // Pro landing pages (/pros and its Pro-site sections) are for pros, not customers. Public
+  // profiles (/pros/<slug>) do get the assistant. (Old /for-pros URLs 308 to /pros in next.config.)
+  if (isProMarketingPath(pathname)) return false;
   return !BOT_EXCLUDED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );

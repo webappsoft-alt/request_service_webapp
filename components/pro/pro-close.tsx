@@ -25,7 +25,7 @@ const assurances = [
 
 /**
  * Testimonial + "Open your account" CTA. `band`: full-width brand band (no rounded card) for the
- * middle of a page; default: the rounded card used at the bottom of /for-pros.
+ * middle of a page; default: the rounded card used at the bottom of /pros.
  */
 export function ProClose({ band = false }: { band?: boolean } = {}) {
   const auth = useAppSelector(selectAuth);

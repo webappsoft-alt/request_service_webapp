@@ -53,7 +53,7 @@ function corePaths(): Entry[] {
 }
 
 /**
- * Both blogs (customer /blog + Pro /for-pros/blog), their categories, and every published post at
+ * Both blogs (customer /blog + Pro /pros/blog), their categories, and every published post at
  * its canonical URL ("both" posts are listed once, under the customer blog).
  */
 async function blogPaths(): Promise<Entry[]> {
@@ -144,7 +144,8 @@ export function sitemapIds(): string[] {
     "blog",
     "services",
     "pros",
-    "for-pros",
+    // Pro marketing site (was "for-pros"; the site moved /for-pros → /pros, "pros" = public profiles).
+    "pro-site",
     ...Array.from({ length: locationChunkCount() }, (_, index) => `locations-${index}`),
   ];
 }
@@ -154,7 +155,7 @@ export async function sitemapSection(id: string): Promise<MetadataRoute.Sitemap>
   if (id === "blog") return blogPaths();
   if (id === "services") return servicePaths();
   if (id === "pros") return professionalPaths();
-  if (id === "for-pros") return proLandingPaths();
+  if (id === "pro-site" || id === "for-pros") return proLandingPaths();
   const chunk = /^locations-(\d+)$/.exec(id);
   if (chunk) {
     const start = Number(chunk[1]) * LOCATION_CHUNK_SIZE;

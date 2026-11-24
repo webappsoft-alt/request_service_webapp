@@ -66,6 +66,71 @@ Modules, layout, notification channels and API conventions: see
 Newest first. Format: **what** — why · files.
 
 ### 2026-11-24
+- **Pro marketing site moved `/for-pros` → `/pros` (trade pages at `/pros/trades/<trade>`)**
+  - **Why:** client request. `/pros/<slug>` already is the public Pro profile (customer page), so a separate `/pros/[trade]` route is impossible (Next.js can't have two dynamic segments at one level). The user chose "trades under /pros/trades".
+  - **Routes** (folders moved):
+
+    | Old | New |
+    |---|---|
+    | `(marketing)/for-pros/page.tsx` | `(marketing)/pros/page.tsx` |
+    | `for-pros/pricing` | `pros/pricing` |
+    | `for-pros/blog/**` | `pros/blog/**` |
+    | `for-pros/locations/[state]/[city]` | `pros/locations/[state]/[city]` |
+    | `for-pros/[trade]` | `pros/trades/[trade]` |
+    | `(auth)/for-pros/join` | `(auth)/pros/join` |
+
+    The `/for-pros-v1` preview page (which only redirected) was removed.
+  - **Paths:**
+    - `lib/pro-paths.ts`: `home /pros`, `pricing /pros/pricing`, new `blog /pros/blog`, `join` / `register /pros/join`, `trade(t) → /pros/trades/t`, `location → /pros/locations/…`.
+    - New `PRO_SITE_SECTIONS` (pricing, join, blog, locations, trades). `isProMarketingPath` is true for `/pros` and those sections only, never for `/pros/<profile-slug>`.
+    - Header, logo, footer, route guard, bot exclusion, session scope (`lib/session-scope.ts`) and public-data cache (`public-data-sync.tsx`) all go through it, so profiles stay customer pages.
+  - **Redirects** (`next.config.ts`, permanent = 308):
+    - `/for-pros` → `/pros`; `/for-pros/pricing`, `/join`, `/blog(/…)`, `/locations/…` → same under `/pros`;
+    - `/for-pros/<trade>` → `/pros/trades/<trade>`; any other `/for-pros/…` → `/pros/…`;
+    - `/for-pros-v1` → `/pros`;
+    - the older `/pro`, `/pro/pricing`, `/pro/register`, `/for-providers` and `/providers/register` now go straight to `/pros…` (no chains).
+  - **SEO:**
+    - Canonical / `og:url` follow `proPaths`. The sitemap section is renamed `for-pros` → `pro-site` (`/sitemaps/sitemap/pro-site.xml`, old id still answered) and lists `/pros`, `/pros/pricing`, `/pros/join`, `/pros/trades/…`, `/pros/locations/…`.
+    - `llms.txt` links are updated, and the auth-page check in `apiFuntions.ts` uses `/pros/join`.
+  - **Comments** across blog / pro / data files updated. The only `for-pros` strings left are the legacy redirect rules and the old-path fallback / notes (`session-scope.ts`, `pro-paths.ts`, `marketing-shell.tsx`, `sitemap-entries.ts`).
+  - **Checked live:**
+    - all 9 legacy URLs return 308 to the right page;
+    - `/pros`, `/pros/pricing`, `/pros/join`, `/pros/blog`, `/pros/trades/plumbers`, `/pros/locations/tx/austin` return 200 with canonical / `og:url` on `/pros…`;
+    - in the browser, Pro pages show the Pro header and `/pros/apex-advisory-group` (a profile) shows the customer header;
+    - source type check clean (`.next/types` regenerates on the next build).
+  - **Files:**
+    - `next.config.ts`
+    - `lib/pro-paths.ts`
+    - `lib/session-scope.ts`
+    - `lib/sitemap-entries.ts`
+    - `app/llms.txt/route.ts`
+    - `components/api/apiFuntions.ts`
+    - `components/layout/marketing-shell.tsx`
+    - `components/realtime/public-data-sync.tsx`
+    - the moved `app/(marketing)/pros/*` and `app/(auth)/pros/join` pages, plus comments in blog / pro / data files.
+- **Pricing: "Compare plans" feature matrix; signed-in Pros could not open Pro marketing pages; stage time hint**
+  - **Compare plans** (new `components/pro/compare-plans.tsx`, under the plan cards on `/for-pros/pricing`, `#compare`):
+    - Columns are the live plans from admin → Subscription Plans (Free · Starter · Growth · Scale today).
+    - Every cell is computed from that plan's own settings (`modules`, crew seats, AI voice minutes), so the table follows admin edits. ✓ / – / limits such as "Owner only", "Up to 5", "Unlimited", "500 min / mo".
+    - 6 groups, 24 features, all original copy covering only real Request Services features: Core Access & Team · Lead & Client Management · Scheduling & Dispatching · Job & Project Management · Estimates, Invoicing & Payments · Pro Co-pilot & AI Tools.
+    - Each feature name / chevron opens a 1–2 sentence explanation (smooth grid-rows animation, `aria-expanded` / `aria-controls`).
+    - The plan header row (name, price for the billing toggle, CTA) is sticky under the 68px header. CTAs match the plan cards: guest → register with the plan, signed-in Pro → Subscription.
+    - Phones: plan tabs show one plan column at a time (popular plan first).
+    - `ProSubscriptionPlan` gains `modules` (portal, leads, orders/jobs, estimates/invoices, schedules/timesheets, crew logins, subcontractors, mobile app) from the API.
+    - The landing page's "Compare plans" link now goes to `#compare`.
+  - **Fix** (`components/auth/auth-route-guard.tsx`): a signed-in Pro got a blank page on Pro marketing pages (`/for-pros/pricing`, trade pages…). The guard hid every non-dashboard page but only redirected from customer pages, the Pro login and the Pro landing. Hiding now uses the same condition as the redirect. Existing redirects are unchanged (`/for-pros` → dashboard).
+  - **Stage time dialog** (`estimate-v2/project-stages.tsx`): with 0 days and some hours it now says "0 days is fine — this stage goes on the Schedule as one day, starting 9 AM." (0 d + 1 h already saved correctly; see the backend log.)
+  - **Checked live:**
+    - guest: 4 plans, 6 groups / 24 rows, accordion 0 → 66px, sticky header at 68px;
+    - 375px: tabs, no horizontal scroll;
+    - signed-in Pro: page renders, CTAs → `/pro/dashboard/subscription`.
+    - Type check and lint clean.
+  - **Files:**
+    - `components/pro/compare-plans.tsx` (new)
+    - `components/pro/pro-pricing-view.tsx`
+    - `lib/constants/subscription-plans.ts`
+    - `components/auth/auth-route-guard.tsx`
+    - `components/portal/estimate-v2/project-stages.tsx`
 - **Schedule calendar shows the Pro's closed days; drag / drop and hour changes follow them**
   - **Month view** (`event-calendar.tsx`):
     - Closed weekdays come from Business Profile → Working hours (auth provider `settings.workingHours`).

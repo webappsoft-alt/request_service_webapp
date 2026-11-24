@@ -88,7 +88,7 @@ export type FetchBlogsQuery = {
   limit?: number;
   search?: string;
   category?: string;
-  /** customer → articles for /blog, pro → articles for /for-pros/blog ("both" articles appear in each). */
+  /** customer → articles for /blog, pro → articles for /pros/blog ("both" articles appear in each). */
   audience?: BlogSite;
 };
 

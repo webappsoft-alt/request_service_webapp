@@ -8,7 +8,7 @@
  * Now each role keeps its own saved session:
  *   persist:userData:provider | :technician | :contractor | :customer
  * and the URL decides which one a tab uses:
- *   /pro/*, /for-pros*, /for-providers → provider (Pro portal, Pro auth + Pro marketing pages)
+ *   /pro/*, /pros (Pro site sections), /for-providers → provider (Pro portal, Pro auth + Pro marketing pages)
  *   /technical/*                 → technician
  *   /contractor/*                → contractor
  *   estimate share links         → the session this tab already uses (sessionStorage)
@@ -23,6 +23,8 @@
  * - Writes go to the slot of the role inside the saved session, never by URL alone.
  * - Kill switch: NEXT_PUBLIC_SCOPED_SESSIONS=off restores the single shared key exactly as before.
  */
+
+import { isProMarketingPath } from "@/lib/pro-paths";
 import { decryptData } from "@/components/api/encrypted";
 
 export type SessionRole = "provider" | "technician" | "contractor" | "customer";
@@ -45,7 +47,8 @@ const SHARE_LINK = /^\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
  * The role a URL belongs to (client: "/ is the customer, /pro the provider, /technical the technician"):
  *   /technical/*                                   → technician
  *   /contractor/*                                  → contractor
- *   /pro/*, /for-pros*, /for-providers (Pro site)  → provider   (not /pros/<slug>: a public profile)
+ *   /pro/*, /pros + its Pro-site sections (pricing, join, blog, locations, trades),
+ *   /for-providers (Pro site)                     → provider   (not /pros/<slug>: a public profile)
  *   estimate share links                           → null: keep this tab's own session
  *   everything else (/, /account, /login, marketing, profiles, booking…) → customer
  */
@@ -53,7 +56,8 @@ export function scopeForPath(pathname: string): SessionRole | null {
   const path = pathname || "/";
   if (under(path, "/technical")) return "technician";
   if (under(path, "/contractor")) return "contractor";
-  if (under(path, "/pro") || path.startsWith("/for-pros") || under(path, "/for-providers")) return "provider";
+  // /for-pros* is the old Pro site path (308 → /pros in next.config).
+  if (under(path, "/pro") || isProMarketingPath(path) || path.startsWith("/for-pros") || under(path, "/for-providers")) return "provider";
   if (under(path, "/e") || SHARE_LINK.test(path)) return null;
   return "customer";
 }

@@ -89,7 +89,7 @@ function clock(seconds: number) {
 }
 
 /**
- * Pro landing (for-pros-v1): "AI Business Receptionist" section, copy on the left and the live-call
+ * Pro landing (/pros): "AI Business Receptionist" section, copy on the left and the live-call
  * card with CTAs on the right. Not on the page right now.
  */
 export function ProAiReceptionist() {

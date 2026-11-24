@@ -4,7 +4,7 @@ import { ProDeskTabs } from "@/components/pro/pro-desk-tabs";
 import { ProScreenshot } from "@/components/pro/pro-screenshot";
 import { cn } from "@/lib/utils";
 
-/** The six portal areas (shared with the for-pros-v1 tabbed showcase). */
+/** The six portal areas (shared with the /pros tabbed showcase). */
 export const featured = [
   {
     id: "leads",

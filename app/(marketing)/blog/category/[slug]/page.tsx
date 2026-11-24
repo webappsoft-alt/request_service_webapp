@@ -9,7 +9,7 @@ import { breadcrumbJsonLd } from "@/lib/json-ld";
 import { buildMetadata } from "@/lib/seo";
 import type { PageParams } from "@/lib/page-props";
 
-/** Customer blog categories. Pro categories (service-business) moved to /for-pros/blog/category/…. */
+/** Customer blog categories. Pro categories (service-business) moved to /pros/blog/category/…. */
 const customerCategories = blogCategoriesFor("customer").filter((category) => category.slug !== "all");
 
 export function generateStaticParams() {

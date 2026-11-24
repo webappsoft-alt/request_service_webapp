@@ -15,7 +15,7 @@ import type { PublicBlogItem } from "@/lib/types";
 
 interface BlogIndexProps {
   initialCategorySlug?: string;
-  /** customer → /blog (customer + "both" articles), pro → /for-pros/blog (pro + "both"). */
+  /** customer → /blog (customer + "both" articles), pro → /pros/blog (pro + "both"). */
   site?: BlogSite;
 }
 

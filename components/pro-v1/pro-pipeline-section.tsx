@@ -78,7 +78,7 @@ const COUNTS = [8, 5, 4, 3, 6];
 const STEP_MS = 2600;
 
 /**
- * Pro landing (for-pros-v1): the Pipeline — centered heading, then the five stages on the left
+ * Pro landing (/pros): the Pipeline — centered heading, then the five stages on the left
  * (clickable) beside a clean board where one customer's card moves column to column on its own,
  * with the matching stage lit and a live "what just happened" line. Pauses off screen and once a
  * stage is picked; static on the booking step with reduced motion.

@@ -1,5 +1,5 @@
 /**
- * Trade landing pages for Pro acquisition: /for-pros/[trade].
+ * Trade landing pages for Pro acquisition: /pros/trades/[trade].
  * One trade per service category; the slug is the plural "people" noun.
  */
 

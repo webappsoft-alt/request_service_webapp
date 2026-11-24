@@ -8,7 +8,7 @@ import { proTrades } from "@/lib/data/pro-trades";
 import { proPaths } from "@/lib/pro-paths";
 import { publicPaths } from "@/lib/public-paths";
 
-/** Server-rendered hero for /for-pros/[trade] and /for-pros/locations/[state]/[city]. */
+/** Server-rendered hero for /pros/trades/[trade] and /pros/locations/[state]/[city]. */
 export function ProSeoHero({
   breadcrumbs,
   eyebrow,

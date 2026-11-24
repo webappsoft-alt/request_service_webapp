@@ -34,7 +34,7 @@ const beats = [
   },
 ] as const;
 
-/** `compact`: tighter gaps and brand-blue trade icons (the /for-pros-v1 layout). */
+/** `compact`: tighter gaps and brand-blue trade icons (the /pros landing layout). */
 export function ProProduct({ compact = false }: { compact?: boolean } = {}) {
   return (
     <Section id="process" density="tight" className="scroll-mt-24">

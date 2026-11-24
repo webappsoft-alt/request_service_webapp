@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Where the RS logo goes (client: smart logo routing). Pro side — Pro login / auth (/pro/*) and
- * Pro marketing (/for-pros/*) — goes to the Pro landing page; everything else to the customer home.
+ * Pro marketing (/pros/*) — goes to the Pro landing page; everything else to the customer home.
  */
 export function logoHomeFor(pathname: string | null | undefined): string {
   const path = String(pathname || "");

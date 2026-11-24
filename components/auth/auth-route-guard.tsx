@@ -29,7 +29,7 @@ function isCustomerAuthPath(pathname: string): boolean {
   );
 }
 
-/** Pro auth/portal (/pro/*) + Pro marketing (/for-pros/*). Not /pros/[slug] — that's a public customer page. */
+/** Pro auth/portal (/pro/*) + Pro marketing (/pros/*). Not /pros/[slug] — that's a public customer page. */
 function isProArea(pathname: string): boolean {
   return pathname === "/pro" || pathname.startsWith("/pro/") || isProMarketingPath(pathname);
 }
@@ -128,11 +128,15 @@ export function AuthRouteGuard({ children }: { children: React.ReactNode }) {
     auth.hydrated && auth.token && auth.isAuthenticated,
   );
   /** Hide chrome while bouncing a logged-in provider off customer marketing/auth. */
+  // Same condition as the redirect below. Previous: every page outside the dashboard was hidden,
+  // but Pro marketing pages (/pros/pricing, /pros/trades/[trade]…) are never redirected, so a
+  // signed-in Pro saw a blank page there (found testing the Compare plans table).
   const providerOffPortal =
     loggedIn &&
     role === "provider" &&
     !isProDashboard(pathname) &&
-    !isPublicEstimateSharePath(pathname);
+    !isPublicEstimateSharePath(pathname) &&
+    (isProAuthPath(pathname) || isProLanding(pathname) || !isProArea(pathname));
   /** Hide pro chrome while bouncing a logged-in customer off /pro. */
   const customerOnPro = loggedIn && role === "customer" && isProArea(pathname);
   /** Technicians only ever see /technical/* — hide anything else while redirecting. */

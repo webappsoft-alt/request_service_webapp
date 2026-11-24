@@ -25,7 +25,7 @@ export default function BlogPage() {
       <BlogHero />
       <div id="articles" className="bg-[#f5f5f5] pt-6 pb-12 md:pt-8 md:pb-16">
         <Container>
-          {/* Customer blog: customer + "both" articles. Pro articles live on /for-pros/blog. */}
+          {/* Customer blog: customer + "both" articles. Pro articles live on /pros/blog. */}
           <BlogIndex site="customer" />
         </Container>
       </div>

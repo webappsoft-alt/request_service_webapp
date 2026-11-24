@@ -51,7 +51,7 @@ import {
 } from "@/store/publicFixedServicesSlice";
 
 /**
- * One visual per pro dashboard tab on /for-pros-v1, each with its own kind of motion: count-ups, a
+ * One visual per pro dashboard tab on /pros, each with its own kind of motion: count-ups, a
  * card deck, an org chart, a route, a printing receipt, a drawn signature, and so on. Sample data.
  * Each sits in an `@container` stage, so secondary pieces drop out on phones.
  */

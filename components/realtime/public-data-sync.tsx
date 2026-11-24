@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { invalidateGetCache } from "@/components/api/apiFuntions";
+import { isProMarketingPath } from "@/lib/pro-paths";
 import { publicApi } from "@/components/api/ApiRoutesFile";
 import { useAppDispatch, useAppStore } from "@/store/hooks";
 import {
@@ -40,7 +41,8 @@ function isCustomerCatalogPath(pathname: string) {
     pathname.startsWith("/services") ||
     pathname.startsWith("/find-a-professional") ||
     pathname.startsWith("/get-a-quote") ||
-    pathname.startsWith("/pros/") ||
+    // Public Pro profiles — not the Pro marketing site that also lives under /pros.
+    (pathname.startsWith("/pros/") && !isProMarketingPath(pathname)) ||
     pathname.startsWith("/locations") ||
     pathname.startsWith("/fixed-services")
   );

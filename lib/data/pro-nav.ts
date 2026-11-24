@@ -106,7 +106,7 @@ export const proResourceGroups = [
   {
     title: "From the desk",
     links: [
-      // Pro blog (/for-pros/blog) — never the customer blog.
+      // Pro blog (/pros/blog) — never the customer blog.
       { href: proBlog, label: "Blog", hint: "Notes for service companies" },
       {
         href: `${proBlog}/why-change-orders-protect-contractors-and-homeowners`,

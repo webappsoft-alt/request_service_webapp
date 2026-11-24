@@ -2,7 +2,7 @@ import { proPaths } from "@/lib/pro-paths";
 
 /**
  * Two blogs, one article store. The admin tags every article with an audience:
- *   customer → the customer blog (/blog) · pro → the Pro blog (/for-pros/blog) · both → listed on both.
+ *   customer → the customer blog (/blog) · pro → the Pro blog (/pros/blog) · both → listed on both.
  * Articles saved before the field existed fall back to their category (same rule as the API).
  */
 export type BlogAudience = "customer" | "pro" | "both";

@@ -1,5 +1,5 @@
 /**
- * City / state directory behind /locations/* and /for-pros/locations/*.
+ * City / state directory behind /locations/* and /pros/locations/*.
  * Built from the Pro Service Areas city list plus the explore markets, so every
  * city a Pro can cover has a landing page.
  */

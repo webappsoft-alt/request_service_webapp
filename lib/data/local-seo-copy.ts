@@ -1,6 +1,6 @@
 /**
  * Templated titles, intros, and FAQs for the programmatic SEO pages
- * (/locations/*, /for-pros/[trade], /for-pros/locations/*).
+ * (/locations/*, /pros/trades/[trade], /pros/locations/*).
  * Keep answers factual to how the product works — they are also emitted as FAQPage JSON-LD.
  */
 

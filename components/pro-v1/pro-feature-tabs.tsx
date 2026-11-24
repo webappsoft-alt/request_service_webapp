@@ -188,7 +188,7 @@ const FEATURES = [
 ] as const;
 
 /**
- * Pro landing (for-pros-v1): the pro dashboard, one sidebar option at a time. Plain text tabs with
+ * Pro landing (/pros): the pro dashboard, one sidebar option at a time. Plain text tabs with
  * a highlight (animated primary border) that slides to the active one, over a soft panel: that
  * tab's own animated visual beside its copy on a white card. Moves to the next tab after one pass,
  * while on screen, until a tab is clicked.

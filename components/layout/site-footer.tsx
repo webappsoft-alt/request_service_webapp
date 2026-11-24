@@ -54,7 +54,7 @@ export function SiteFooter() {
   const dispatch = useAppDispatch();
   const branding = useAppSelector(selectSiteBranding);
   const pathname = usePathname() || "/";
-  // On Pro pages (/for-pros…) the Company "Blog" link opens the Pro blog, not the customer one.
+  // On Pro pages (/pros…) the Company "Blog" link opens the Pro blog, not the customer one.
   const companyLinks = isProMarketingPath(pathname)
     ? footerNav.company.map((item) =>
         item.href === blogPaths.index("customer") ? { ...item, href: blogPaths.index("pro") } : item,

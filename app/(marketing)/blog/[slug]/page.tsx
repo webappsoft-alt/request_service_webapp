@@ -5,7 +5,7 @@ import type { PageParams } from "@/lib/page-props";
 // (A generateStaticParams export made this route static, and the no-store fetch then
 // failed in production with "Page changed from static to dynamic at runtime" → 500.)
 
-/** Customer blog article. Pro-only articles redirect to /for-pros/blog/[slug] (see BlogArticle). */
+/** Customer blog article. Pro-only articles redirect to /pros/blog/[slug] (see BlogArticle). */
 export async function generateMetadata({ params }: PageParams<{ slug: string }>) {
   const { slug } = await params;
   return blogArticleMetadata(slug, "customer");

@@ -288,7 +288,7 @@ export function handleUserLogout(options: LogoutOptions = {}): void {
           path.startsWith("/signup") ||
           path.startsWith("/verify-otp") ||
           path.startsWith("/pro/login") ||
-          path.startsWith("/for-pros/join") ||
+          path.startsWith("/pros/join") ||
           path.startsWith("/pro/verify-otp") ||
           path.startsWith("/forgot-password") ||
           path.startsWith("/verify-forgot-otp") ||

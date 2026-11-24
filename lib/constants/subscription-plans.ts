@@ -31,11 +31,24 @@ export type ProSubscriptionPlan = {
   crewSeats: number;
   /** Subcontractor portal (assigned jobs, change requests, payouts). */
   subcontractorPortal: boolean;
+  /** Pro portal modules the plan unlocks (admin → Subscription Plans), for the Compare plans table. */
+  modules: ProPlanModules;
   features: ProPlanFeature[];
   badge?: string;
   highlighted?: boolean;
   ctaLabel: string;
   sortOrder: number;
+};
+
+export type ProPlanModules = {
+  portal: boolean;
+  leads: boolean;
+  ordersJobs: boolean;
+  estimatesInvoices: boolean;
+  schedulesTimesheets: boolean;
+  crewLogins: boolean;
+  subcontractors: boolean;
+  mobileApp: boolean;
 };
 
 /** Raw plan record from the backend `SubscriptionPlan` model. */
@@ -61,6 +74,12 @@ export type ApiSubscriptionPlan = {
     /** 0 = none, -1 = unlimited. */
     technicianSeatsLimit?: number;
     hasSubcontractorAccess?: boolean;
+    hasPortalAccess?: boolean;
+    hasLeadsAccess?: boolean;
+    hasOrdersJobsAccess?: boolean;
+    hasEstimatesInvoicesAccess?: boolean;
+    hasSchedulesTimesheetsAccess?: boolean;
+    hasMobileAppAccess?: boolean;
   };
 };
 
@@ -93,6 +112,16 @@ export function mapApiSubscriptionPlan(row: ApiSubscriptionPlan): ProSubscriptio
     callingMinutes: row.aiVoiceEnabled ? Math.max(0, Number(row.aiVoiceMinutes) || 0) : 0,
     crewSeats: row.modules?.hasTechnicianCrewLogins === false ? 0 : Number(row.modules?.technicianSeatsLimit) || 0,
     subcontractorPortal: Boolean(row.modules?.hasSubcontractorAccess),
+    modules: {
+      portal: Boolean(row.modules?.hasPortalAccess),
+      leads: Boolean(row.modules?.hasLeadsAccess),
+      ordersJobs: Boolean(row.modules?.hasOrdersJobsAccess),
+      estimatesInvoices: Boolean(row.modules?.hasEstimatesInvoicesAccess),
+      schedulesTimesheets: Boolean(row.modules?.hasSchedulesTimesheetsAccess),
+      crewLogins: Boolean(row.modules?.hasTechnicianCrewLogins),
+      subcontractors: Boolean(row.modules?.hasSubcontractorAccess),
+      mobileApp: Boolean(row.modules?.hasMobileAppAccess),
+    },
     features,
     badge: row.badge || (row.isPopular ? "Most Popular" : undefined),
     highlighted: Boolean(row.isPopular),

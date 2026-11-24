@@ -481,6 +481,12 @@ export function SectionStageButton({
               {dayCount || hourCount ? formatStageDuration({ days: dayCount, hours: hourCount }) : "Enter days or hours"}
             </span>
           </div>
+          {/* Days can stay empty / 0: an hours-only stage is one day on the Schedule, from 9 AM. */}
+          {!dayCount && hourCount ? (
+            <p className="-mt-1 text-xs text-muted-foreground">
+              0 days is fine — this stage goes on the Schedule as one day, starting 9 AM.
+            </p>
+          ) : null}
           {stage?.startDate ? (
             <p className="text-xs text-muted-foreground">On the Schedule: {stageDateRange(stage)}</p>
           ) : null}

@@ -112,7 +112,7 @@ const TECH_SCHEDULE = [
 ] as const;
 
 /**
- * Pro landing (for-pros-v1): the technician portal — copy and features on the left, and on the
+ * Pro landing (/pros): the technician portal — copy and features on the left, and on the
  * right the technician dashboard in a browser frame (live clock-in timer, numbers at a glance,
  * today's schedule, pay). Built from the real /technical views.
  */
@@ -479,7 +479,7 @@ const CONTRACTOR_FEATURES = [
 ] as const;
 
 /**
- * Pro landing (for-pros-v1): the contractor (subcontractor) portal — the preview of the real
+ * Pro landing (/pros): the contractor (subcontractor) portal — the preview of the real
  * contractor dashboard (in the pro brand blue) on the left with its sign-in card overlapping,
  * and the copy in the site's brand colours on the right.
  */

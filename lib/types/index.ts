@@ -737,7 +737,7 @@ export interface PublicBlogItem {
   slug: string;
   description: string;
   category: string;
-  /** customer → /blog, pro → /for-pros/blog, both → both blogs (see lib/data/blog-audience.ts). */
+  /** customer → /blog, pro → /pros/blog, both → both blogs (see lib/data/blog-audience.ts). */
   audience?: "customer" | "pro" | "both" | null;
   content?: string;
   image?: string;

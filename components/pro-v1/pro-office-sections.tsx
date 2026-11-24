@@ -138,7 +138,7 @@ const WEEK = [
 ] as const;
 
 /**
- * Pro landing (for-pros-v1): employees, timesheets, and live tracking — copy on the left, and the
+ * Pro landing (/pros): employees, timesheets, and live tracking — copy on the left, and the
  * pro portal frame on the right with the tracking map (people and a route) over a week's timesheet.
  */
 export function ProTeamTimeSection() {

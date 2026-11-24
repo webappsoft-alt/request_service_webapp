@@ -7,7 +7,7 @@ import { fetchPublicBlogs } from "@/lib/data/public-blogs";
 import type { PublicBlogItem } from "@/lib/types";
 
 interface BlogSectionProps {
-  /** customer → articles for /blog, pro → articles for /for-pros/blog (Pro landing page). */
+  /** customer → articles for /blog, pro → articles for /pros/blog (Pro landing page). */
   site?: BlogSite;
   eyebrow?: string;
   title?: string;

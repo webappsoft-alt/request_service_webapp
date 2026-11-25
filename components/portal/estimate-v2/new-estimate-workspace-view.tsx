@@ -119,7 +119,7 @@ import {
   shouldAskStages,
   stagesNeedDates,
 } from "@/components/portal/estimate-v2/project-stages";
-import { fetchTaxRatePercent } from "@/lib/tax/state-tax";
+import { fetchTaxRatePercent, formatTaxRatePercent } from "@/lib/tax/state-tax";
 import {
   employeeName,
   estimateCanShare,
@@ -3252,7 +3252,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                         </dd>
                       </div>
                       <div className="flex items-center justify-between gap-4">
-                        <dt className="text-slate-600 dark:text-muted-foreground">Tax ({taxRateReady ? taxRatePercent : "…"}%)</dt>
+                        <dt className="text-slate-600 dark:text-muted-foreground">Tax ({taxRateReady ? formatTaxRatePercent(taxRatePercent) : "…"}%)</dt>
                         <dd className="font-medium text-slate-900 tabular-nums dark:text-foreground">
                           {taxRateReady ? formatMoney(taxAmount) : "…"}
                         </dd>

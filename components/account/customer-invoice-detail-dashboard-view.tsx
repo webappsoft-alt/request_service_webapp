@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatTaxRatePercent } from "@/lib/tax/state-tax";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -429,9 +430,7 @@ export function CustomerInvoiceDetailDashboardView({ id }: { id: string }) {
                               {item.kind}
                               {item.taxRate
                                 ? // taxRate is stored as a percent (0.5 = 0.5%, 8.25 = 8.25%).
-                                  ` · Tax ${Number(item.taxRate).toFixed(
-                                    Number(item.taxRate) % 1 ? 2 : 0,
-                                  )}%`
+                                  ` · Tax ${formatTaxRatePercent(Number(item.taxRate))}%`
                                 : ""}
                             </p>
                           ) : null}

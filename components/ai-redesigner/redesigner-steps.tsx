@@ -40,6 +40,7 @@ export function PhotoStep({
   uploading,
   error,
   onPick,
+  compact = false,
 }: {
   roomType: RoomType;
   onRoomType: (room: RoomType) => void;
@@ -47,6 +48,8 @@ export function PhotoStep({
   uploading: boolean;
   error: string | null;
   onPick: () => void;
+  /** Kitchen & Bath studio: hide the photo tips (the dropzone already shows them as chips). */
+  compact?: boolean;
 }) {
   const tips = [
     { icon: Sun, text: "Turn the lights on and open the blinds" },
@@ -115,7 +118,7 @@ export function PhotoStep({
 
       {error ? <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
 
-      <ul className="flex flex-col gap-2.5">
+      <ul className={compact ? "hidden" : "flex flex-col gap-2.5"}>
         {tips.map(({ icon: Icon, text }) => (
           <li key={text} className="flex items-center gap-3 text-sm text-muted-foreground">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">

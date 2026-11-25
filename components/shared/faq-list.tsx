@@ -17,7 +17,11 @@ export function FaqList({
   const cards = variant === "cards";
 
   return (
-    <Accordion type="single" collapsible className={cards ? "gap-2" : "border-t"}>
+    <Accordion
+      type="single"
+      collapsible
+      className={cards ? "gap-2" : "border-t"}
+    >
       {items.map((item, index) => {
         const number = String(index + 1).padStart(2, "0");
         return (

@@ -28,6 +28,7 @@ import {
   type FinishPicks,
   type RedesignContact,
   type RedesignGeneration,
+  type RedesignCatalog,
   type RedesignStyle,
   type RoomType,
 } from "@/lib/api/ai-redesigner-client";
@@ -213,13 +214,29 @@ function takeDraft(): Draft | null {
 
 export function RedesignerWizard({
   showHeader = true,
+  studio = false,
+  initialCatalog = null,
 }: {
   /** false when the page already has its own <h1> + intro (Kitchen & Bath Design page). */
   showHeader?: boolean;
+  /**
+   * Kitchen & Bath Design page (2026-11-25): clean soft-elevated card with a status bar
+   * (room · style · finishes · step), rounded-2xl surfaces and rounded-xl controls. Behaviour is identical.
+   */
+  studio?: boolean;
+  /**
+   * The catalog the page already fetched on the server. Used until the client fetch lands, so the
+   * full designer renders on first paint (2026-11-25: the spinner -> designer swap grew the page by
+   * ~600 px right after load, which felt like a jerk while scrolling the hero).
+   */
+  initialCatalog?: RedesignCatalog | null;
 } = {}) {
   const dispatch = useAppDispatch();
-  const catalog = useAppSelector(selectRedesignCatalog);
-  const status = useAppSelector(selectRedesignCatalogStatus);
+  const storeCatalog = useAppSelector(selectRedesignCatalog);
+  const storeStatus = useAppSelector(selectRedesignCatalogStatus);
+  const useInitial = Boolean(initialCatalog) && storeStatus !== "ready";
+  const catalog = useInitial ? initialCatalog : storeCatalog;
+  const status = useInitial ? ("ready" as const) : storeStatus;
   const authUser = useAppSelector(selectAuthUser);
   const isLoggedIn = useAppSelector(selectIsAuthenticated);
   const router = useRouter();
@@ -340,6 +357,21 @@ export function RedesignerWizard({
   const style = styles.find((item) => item.id === styleId);
   const active = history.find((item) => item.id === activeId) || null;
   const roomWord = roomType === "kitchen" ? "kitchen" : "bathroom";
+  const studioFinishCount = Object.values(picks).filter((pick) => pick?.style || pick?.color).length;
+  const samples = useMemo(() => {
+    if (!studio) return [];
+    const list: Array<{ key: string; roomType: RoomType; image: string; label: string }> = [];
+    const before = catalog?.section?.showcase?.before || "";
+    if (before.startsWith("https://")) list.push({ key: "showcase", roomType: "kitchen", image: before, label: "Kitchen" });
+    for (const room of ["kitchen", "bathroom"] as RoomType[]) {
+      for (const item of catalog?.styles || []) {
+        if (list.filter((entry) => entry.roomType === room).length >= 2) break;
+        if (item.roomType !== room || !item.image?.startsWith("https://")) continue;
+        list.push({ key: item.id, roomType: room, image: item.image, label: `${item.name} ${room}` });
+      }
+    }
+    return list.slice(0, 4);
+  }, [catalog, studio]);
 
   /**
    * Only generating needs an account (the API requires a login and limits runs per person).
@@ -388,6 +420,23 @@ export function RedesignerWizard({
       setUploading(false);
     }
   }, []);
+
+  /** Studio: load a sample room photo (already https in our storage), then go to the Style step. */
+  const loadSample = (sample: { roomType: RoomType; image: string }) => {
+    setPhotoError(null);
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+    if (sample.roomType !== roomType) {
+      setRoomType(sample.roomType);
+      setStyleId("");
+      setPicks(emptyPicks());
+    }
+    setPhoto({ url: sample.image, preview: sample.image });
+    setActiveId(null);
+    setStep(1);
+  };
 
   /* ------------------------------------------------------------ picks */
   const chooseRoom = (room: RoomType) => {
@@ -742,10 +791,53 @@ export function RedesignerWizard({
       {/* Desktop: the card grows with its content and the page scrolls (no inner scrollbars).
           Previous: fixed height lg:h-[min(48rem,calc(100dvh-6rem))] with each panel scrolling on its own,
           which gave two cramped vertical scrollbars. */}
-      <div className="grid overflow-hidden rounded-[28px] border border-input bg-card shadow-[0_30px_70px_-50px_rgba(0,0,0,0.45)] lg:grid-cols-[minmax(0,1.5fr)_minmax(24rem,1fr)]">
+      <div
+        className={cn(
+          studio
+            ? "overflow-hidden rounded-2xl border bg-card shadow-xl shadow-slate-900/[0.07] dark:shadow-black/40"
+            : "contents",
+        )}
+      >
+      {studio ? (
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b bg-card px-4 py-3 md:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Sparkles className="size-4" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 leading-tight">
+              <span className="block text-sm font-semibold text-foreground">AI Design Studio</span>
+              <span className="block truncate text-xs text-muted-foreground capitalize">
+                {roomWord} · {style?.name || "No style yet"}
+              </span>
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <span className="rounded-full bg-muted px-2.5 py-1">
+              {studioFinishCount} finish{studioFinishCount === 1 ? "" : "es"} selected
+            </span>
+            <span className="rounded-full bg-primary/10 px-2.5 py-1 font-semibold text-primary">
+              Step {step + 1} of {STEPS.length} · {STEPS[step]}
+            </span>
+          </div>
+        </div>
+      ) : null}
+      <div
+        className={cn(
+          "grid lg:grid-cols-[minmax(0,1.5fr)_minmax(24rem,1fr)]",
+          !studio && "overflow-hidden rounded-[28px] border border-input bg-card shadow-[0_30px_70px_-50px_rgba(0,0,0,0.45)]",
+        )}
+      >
         {/* Preview */}
-        <div className="flex min-w-0 flex-col gap-4 bg-muted/40 bg-[radial-gradient(circle,rgba(0,0,0,0.07)_1px,transparent_1.2px)] [background-size:18px_18px] p-4 md:p-5 lg:border-r">
-          <div className="flex items-center justify-between gap-2">
+        <div
+          className={cn(
+            "flex min-w-0 flex-col gap-4 p-4 md:p-5 lg:border-r",
+            studio
+              ? "bg-slate-50 md:p-6 dark:bg-slate-900/50"
+              : "bg-muted/40 bg-[radial-gradient(circle,rgba(0,0,0,0.07)_1px,transparent_1.2px)] [background-size:18px_18px]",
+          )}
+        >
+          {/* Studio: no lone "No photo yet" pill above the empty dropzone. */}
+          <div className={cn("flex items-center justify-between gap-2", studio && !shownPhoto && "hidden")}>
             <span className="inline-flex items-center gap-2 rounded-full bg-card px-3.5 py-1.5 text-[13px] font-medium shadow-sm capitalize">
               <span
                 className={cn(
@@ -791,11 +883,18 @@ export function RedesignerWizard({
 
           {/* Stage */}
           {/* Previous: lg:aspect-auto lg:min-h-[30rem] lg:flex-1 (filled the fixed-height card) */}
-          <div className="relative aspect-[4/3] w-full">
+          <div className={cn("relative w-full", studio && !shownPhoto ? "h-60 md:h-64" : "aspect-[4/3]")}>
             {shownPhoto ? (
               // Photo / result fill the whole stage width (cropped to fit) so the design reads big.
               <div className="absolute inset-0">
-                <div className="relative size-full overflow-hidden rounded-2xl shadow-[0_24px_50px_-28px_rgba(0,0,0,0.55)]">
+                <div
+                  className={cn(
+                    "relative size-full overflow-hidden",
+                    studio
+                      ? "rounded-2xl shadow-lg shadow-slate-900/15"
+                      : "rounded-2xl shadow-[0_24px_50px_-28px_rgba(0,0,0,0.55)]",
+                  )}
+                >
                   {done && active ? (
                     // Before / after (Kitchen & Bath Design spec) — drag the handle to compare.
                     // Previous (client feedback at the time): only the redesigned room —
@@ -806,6 +905,9 @@ export function RedesignerWizard({
                       before={active.sourceImage}
                       after={active.resultImage}
                       alt={`${active.style} ${active.roomType}`}
+                      variant={studio ? "glass" : "default"}
+                      beforeLabel={studio ? "Before" : undefined}
+                      afterLabel={studio ? "After" : undefined}
                       className="animate-in fade-in size-full duration-700"
                     />
                   ) : (
@@ -844,7 +946,8 @@ export function RedesignerWizard({
                   if (file) void handleFile(file);
                 }}
                 className={cn(
-                  "absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 text-center transition-colors",
+                  "absolute inset-0 flex flex-col items-center justify-center gap-3 border-2 border-dashed px-6 text-center transition-colors",
+                  "rounded-2xl",
                   dragOver
                     ? "border-primary bg-primary/[0.06]"
                     : "border-input bg-card/60 hover:border-primary/40",
@@ -879,8 +982,39 @@ export function RedesignerWizard({
             )}
           </div>
 
+          {studio && !shownPhoto && samples.length ? (
+            <div className="flex flex-col gap-3 rounded-2xl border bg-card p-3.5 shadow-sm sm:flex-row sm:items-center">
+              <p className="shrink-0 text-sm font-semibold sm:w-36 sm:leading-snug">
+                Or test instantly with a sample room
+              </p>
+              <div className="grid flex-1 grid-cols-2 gap-2.5 sm:grid-cols-4">
+                {samples.map((sample) => (
+                  <button
+                    key={sample.key}
+                    type="button"
+                    onClick={() => loadSample(sample)}
+                    disabled={uploading}
+                    aria-label={`Use the sample ${sample.label} photo`}
+                    className="group relative aspect-[4/3] overflow-hidden rounded-xl bg-muted ring-1 ring-black/5 transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- sample room photo (our storage) */}
+                    <img src={sample.image} alt="" loading="lazy" className="size-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pt-5 pb-1.5 text-left text-[11px] font-semibold text-white capitalize">
+                      {sample.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {/* Your design */}
-          <div className="flex items-center gap-3 rounded-2xl bg-card px-4 py-2.5 shadow-sm">
+          <div
+            className={cn(
+              "flex items-center gap-3 px-4 py-2.5",
+              "rounded-2xl bg-card shadow-sm",
+            )}
+          >
             <span className="shrink-0 text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
               Your design
             </span>
@@ -965,7 +1099,12 @@ export function RedesignerWizard({
             </div>
           ) : null}
 
-          <div className="mt-auto flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div
+            className={cn(
+              "mt-auto flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between",
+              "rounded-2xl bg-card shadow-sm",
+            )}
+          >
             <div>
               <p className="text-sm font-semibold">
                 Love it? {siteConfig.name} pros can build it.
@@ -975,7 +1114,7 @@ export function RedesignerWizard({
                 looks.
               </p>
             </div>
-            <Button asChild className="h-10 shrink-0 rounded-full px-5">
+            <Button asChild className={cn("h-10 shrink-0 px-5", studio ? "rounded-xl" : "rounded-full")}>
               <Link href="/get-a-quote">
                 Book a free consultation
                 <ArrowRight data-icon="inline-end" />
@@ -985,7 +1124,7 @@ export function RedesignerWizard({
         </div>
 
         {/* Steps */}
-        <div className="flex min-w-0 flex-col p-5 md:p-7">
+        <div className={cn("flex min-w-0 flex-col p-5", studio ? "md:p-6" : "md:p-7")}>
           <ol className="mb-6 grid shrink-0 grid-cols-4 gap-3">
             {STEPS.map((label, index) => {
               const isDone = index < step;
@@ -1001,7 +1140,8 @@ export function RedesignerWizard({
                   >
                     <span
                       className={cn(
-                        "flex size-7 items-center justify-center rounded-full text-xs font-semibold transition-colors",
+                        "flex size-7 items-center justify-center text-xs font-semibold transition-colors",
+                        "rounded-full",
                         isDone || isCurrent
                           ? "bg-primary text-primary-foreground"
                           : "border border-input text-muted-foreground",
@@ -1051,6 +1191,7 @@ export function RedesignerWizard({
                 uploading={uploading}
                 error={photoError}
                 onPick={pickPhoto}
+                compact={studio}
               />
             ) : null}
             {step === 1 ? (
@@ -1106,7 +1247,10 @@ export function RedesignerWizard({
                 type="button"
                 onClick={() => setStep((value) => Math.max(0, value - 1))}
                 disabled={busy}
-                className="inline-flex h-12 items-center gap-1.5 rounded-full border border-input px-5 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-50"
+                className={cn(
+                  "inline-flex h-12 items-center gap-1.5 border border-input px-5 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-50",
+                  studio ? "rounded-xl" : "rounded-full",
+                )}
               >
                 <ArrowLeft className="size-4" aria-hidden="true" />
                 Back
@@ -1119,7 +1263,10 @@ export function RedesignerWizard({
               }
               // Step 4: also disabled while the inputs match the last finished design (no duplicate AI run).
               disabled={step < 3 ? !canNext : busy || uploading || upToDate}
-              className="group inline-flex h-12 flex-1 items-center justify-between gap-3 rounded-full bg-primary pr-1.5 pl-6 text-[15px] font-semibold text-primary-foreground shadow-[0_12px_24px_-14px_rgba(0,63,125,0.9)] transition-[opacity,transform] hover:opacity-95 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+              className={cn(
+                "group inline-flex h-12 flex-1 items-center justify-between gap-3 bg-primary pr-1.5 pl-6 text-[15px] font-semibold text-primary-foreground shadow-[0_12px_24px_-14px_rgba(0,63,125,0.9)] transition-[opacity,transform] hover:opacity-95 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50",
+                studio ? "rounded-xl" : "rounded-full",
+              )}
             >
               <span>
                 {step < 3
@@ -1132,7 +1279,12 @@ export function RedesignerWizard({
                         ? `Design a new version` // Previous: `Design my ${roomWord} again` (also with no changes)
                         : `Design my ${roomWord}`}
               </span>
-              <span className="flex size-9 items-center justify-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
+              <span
+                className={cn(
+                  "flex size-9 items-center justify-center bg-white/15 transition-transform group-hover:translate-x-0.5",
+                  studio ? "rounded-lg" : "rounded-full",
+                )}
+              >
                 {step < 3 ? (
                   <ArrowRight className="size-4" aria-hidden="true" />
                 ) : busy ? (
@@ -1165,6 +1317,7 @@ export function RedesignerWizard({
             </button>
           ) : null}
         </div>
+      </div>
       </div>
     </div>
   );

@@ -65,6 +65,227 @@ Modules, layout, notification channels and API conventions: see
 
 Newest first. Format: **what** — why · files.
 
+### 2026-11-25
+- **Admin `/tax`: read-only table + Edit modal (replaces inline editing)**
+  - **Why:** client: rows were editable in place, without a modal. They wanted a read-only list with an Edit button that opens a modal and saves through the API.
+  - **Table:**
+    - City is plain text ("All cities", muted, on state-wide rows).
+    - Rate is plain text (`formatRate`, e.g. `23.00%`, `9.195%`).
+    - Actions are **Edit** (pencil) and **Delete**.
+    - The inline inputs, the blur-save and the Save icon are removed (`RateInput`, the draft state and `commit`).
+  - **Edit modal ("Edit Tax Rate"):**
+    - State is shown read-only.
+    - City: city rows have an editable field with suggestions; a duplicate in the same state is refused. State-wide rows show "All cities (state-wide rate)", with a pointer to "Add tax rate" for adding a city.
+    - Tax rate (%) takes up to 3 decimals and shows the current rate.
+    - Save sends only what changed: state row → `PUT /admin/tax/:stateCode` `{rate, isActive}`; city row → `PUT /admin/tax/cities/:id` `{rate?, city?}`. No change → no request.
+  - **Fix:** the shared `CityField` had `required`, which blocked the Add dialog's "leave City empty = state-wide rate" path. `required` is now a prop: off in Add, on in Edit.
+  - **Data:** frontend only, same endpoints. No backend or DB change.
+  - **Verified:** mocked browser; the API was intercepted, nothing was sent.
+    - The table has 0 inputs, 0 save icons and 49 Edit buttons.
+    - Huntsville → Madison at 9.195% sent `PUT city {rate: 9.195, city: "Madison"}`, and the row shows "Madison | 9.195%".
+    - Texas at 8.125% sent `PUT state TX {rate: 8.125}`.
+    - A no-change save sent nothing.
+    - Add with empty City (Alabama 6.875%) sent `POST state`.
+    - No errors.
+  - **Files:** `admin/src/pages/tax.jsx`.
+- **Tax rates with 3 decimal places (e.g. 9.195%): admin + webapp**
+  - **Why:** client: rates like 9.195% must keep all 3 digits in input, display and dollar maths. The backend side is in the backend log.
+  - **Admin `/tax` and Settings → Tax rates (`admin/src/pages/tax.jsx`):**
+    - The Add modal and inline rate inputs accept up to 3 decimals: input regex `\d{0,3}(\.\d{0,3})?`, `parseRate` rounds to 3.
+    - `formatRate` shows 2 decimals normally and 3 when there is a third ("4.00", "8.25", "9.195"). It is used in the table, the Average Rate KPI, the toasts, the hints and the delete dialog. The `toFixed(2)` calls were removed.
+  - **Admin detail pages:** `formatTaxDisplay` (`admin-detail/labour-material-and-attachments.jsx`) shows up to 3 decimals.
+  - **Admin Vite:** `optimizeDeps.include` gets react, react-dom, react-dom/client, the jsx runtimes and swiper/react. This prevents the duplicate-React blank page.
+  - **Webapp (`lib/tax/state-tax.ts`):**
+    - `formatTaxRatePercent` gives up to 3 decimals, without trailing zeros. It is used by the estimate PDF, invoice file, job costing, job file and record print.
+    - New `impliedTaxRatePercent(tax, taxable)`: it uses the 2-decimal rate when that reproduces the saved cents tax, else 3. So $91.95 on $1,000 → 9.195, and $2.75 on $33.33 stays 8.25. It is used by `storedInvoiceMoney` (invoice "Tax (x%)") and the order sheet.
+    - Live estimate maths (`moneyWithStateTax`, the estimate builder) already used the full rate.
+  - **Fixed spots:**
+    - `toFixed(2)` in `portal/orders/order-detail-sheet.tsx` and `account/customer-invoice-detail-dashboard-view.tsx`;
+    - raw rate renders in `estimate-v2/new-estimate-workspace-view.tsx` and `views/order-detail-page-view.tsx` now go through `formatTaxRatePercent`.
+  - **Verified:**
+    - **Admin (mocked browser, no DB writes):** typing 9.195 in the modal stays 9.195; the POST sends `rate: 9.195`; the table shows 9.195 / 9.125 beside 9.50; the delete dialog shows 9.125%; the KPI shows 6.911%; the admin loads with the new Vite config.
+    - **Webapp helpers (tsx):** format 9.195 → "9.195"; $1,000 @ 9.195% → tax 91.95, total 1,091.95; invoice label 9.195; $33.33 / $2.75 → 8.25.
+    - **Type-check:** clean.
+  - **Files:**
+    - `admin/src/pages/tax.jsx`
+    - `admin/src/components/admin-detail/labour-material-and-attachments.jsx`
+    - `admin/vite.config.js`
+    - `lib/tax/state-tax.ts`
+    - `components/portal/orders/order-detail-sheet.tsx`
+    - `components/account/customer-invoice-detail-dashboard-view.tsx`
+    - `components/portal/estimate-v2/new-estimate-workspace-view.tsx`
+    - `components/portal/views/order-detail-page-view.tsx`
+- **`/kitchen-bath-design` studio: light header bar, shorter card**
+  - **Why:** client: the dark navy studio header didn't look good, and the studio section was too tall.
+  - **Header bar:** `bg-card` with a bottom border, primary-tint icon tile, dark "AI Design Studio" title, muted room · style line, a muted "finishes selected" pill and a primary-tint step pill. It replaces the navy gradient bar.
+  - **Shorter (studio mode only):**
+    - The empty upload box is `h-60 md:h-64`, replacing 16:9.
+    - The lone "No photo yet" pill above the empty box is hidden.
+    - The Photo step's 3 tips are hidden: they repeated the "Wide shot · Good light · Whole room" chips in the upload box. This is a new `PhotoStep` prop, `compact`.
+    - The right panel padding is `md:p-6`.
+  - **Heights:** 814 → 663 px at 1440, 756 → 649 at 1280, 1477 → 1147 at 820, 1608 → 1409 at 390.
+  - **Verified:** headless Chrome, light and dark. Containers are flush, with no overflow or console errors. Sample rooms still load.
+  - **Files:**
+    - `components/ai-redesigner/redesigner-wizard.tsx`
+    - `components/ai-redesigner/redesigner-steps.tsx`
+- **`/kitchen-bath-design`: fixed the "jerk" right after load (designer rendered on first paint)**
+  - **Cause:** measured in headless Chrome. The hero itself never moved (no layout shifts). The Live Studio below showed a spinner first (card 192 px). About 0.6 s later the client catalog fetch swapped in the designer, so the card grew to 756–1608 px depending on width and the page grew by about 600 px. The scrollbar jumped mid-scroll, and the first scroll pass hit a 50–67 ms frame.
+  - **Fix:**
+    - `RedesignerWizard` takes a new optional `initialCatalog` prop. The page passes the catalog it already fetches on the server.
+    - The wizard uses it until the client fetch is ready, then switches to the store copy (same data).
+    - Other callers are unchanged.
+  - **Result:**
+    - Card height is final from the first paint at every width (814 px at 1440 … 1608 px at 390).
+    - Load long tasks went from 3 to 1.
+    - Scrolling the hero: max frame 17 ms, 0 dropped frames.
+    - No hydration or console errors. Sample rooms still load (Step 2 · Style).
+  - **Files:**
+    - `components/ai-redesigner/redesigner-wizard.tsx`
+    - `app/(marketing)/kitchen-bath-design/page.tsx`
+- **`/kitchen-bath-design`: light, compact hero; sleeker customize swatches**
+  - **Why:** client liked the new How it works / customize panel and lookbook (kept as is). The full-bleed navy hero felt heavy under the white navbar.
+  - **Hero:**
+    - background `bg-gradient-to-b from-slate-50/90 via-white to-white` (dark: slate → background) with one faint primary glow;
+    - dark headline with "Design Tool" in brand navy;
+    - muted body copy;
+    - primary navy "Start Designing Free ↓" + outline "Get a Free Quote" (`rounded-xl`);
+    - green ✓ trust items.
+    - Tighter padding (`pt-5/6 pb-12/14`) and equal columns.
+    - Before/after card: `rounded-3xl`, soft `shadow-xl`, `aspect-[16/11] max-h-[400px]`.
+    - "Previewed finishes" is now a light frosted-white floating card (border + shadow; dark: slate-800).
+    - Hero height at 1440 is about 485 px, down from about 625 px.
+  - **Customize panel:** material tiles are `h-16` instead of tall `aspect-[5/4]`.
+  - **Verified:** headless Chrome at 1440 / 820 / 390, light and dark. Containers are flush (144–1296 at 1440), with no overflow and no console errors.
+  - **Files:**
+    - `app/(marketing)/kitchen-bath-design/page.tsx`
+    - `components/ai-redesigner/kitchen-bath-sections.tsx`
+- **`/kitchen-bath-design`: flagship "AI Interior Remodeling Studio" structure**
+  - **Why:** client: still too similar to the standard pages, because only the borders changed. They wanted the structure to be genuinely different, within the brand palette (navy `#082447`–`#0F3868`, slate, white).
+  - **Hero:** deep-navy gradient with soft light pools.
+    - glass pill badge ("AI Interior Remodeling Studio");
+    - white h1 (same SEO text);
+    - white "Start Designing Free ↓" + glass outline "Get a Free Quote";
+    - glass ✓ trust pills.
+    - Before/after sits in a glass-bordered showcase card with a floating "Previewed finishes" bar. It shows the showcase style's default finish names when the admin set a style. The admin's showcase has none yet, so it reads "Same room, new cabinets, counters & fixtures".
+  - **Studio (`RedesignerWizard studio`):**
+    - **Navy bar:** "AI Design Studio", room · style, finishes count, and a white step pill.
+    - **Empty state:** the dropzone is shorter (16:9 from `sm`; 4:3 on phones). Below it, an **"Or test instantly with a sample room"** strip shows up to 4 thumbnails (2 kitchen, 2 bathroom): the admin's showcase "before" photo and style photos.
+    - **Sample click:** sets the room, uses the photo's existing https storage URL as the source (no upload, no write; the API accepts any https `sourceImage`) and jumps to the Style step.
+    - Finish tiles get a tactile highlight and shadow.
+  - **How it works:** replaced the 3 step cards with a split.
+    - Left: vertical timeline with navy icon nodes.
+    - Right: new **`CustomizeShowcase`**, a "What you can customize" card with a navy header, a Kitchen/Bathroom toggle, category tabs (the admin's labels), shape chips and real colour/material tiles from the catalog, plus "Load in Studio".
+  - **Lookbook:** 16:10 photos, finish tags (colour dot + name), "Load in Studio →".
+  - **Quote CTA and FAQ:** two-column, unchanged structure.
+  - **Verified:** headless Chrome at 1440 / 820 / 390, light and dark.
+    - Containers are 144–1296 at 1440 (flush with the logo and "Join as Pro"), 32–788 at 820 and 20–370 at 390.
+    - No overflow and no console errors.
+    - Clicking a sample loaded the kitchen photo and moved to "Step 2 of 4 · Style" with no upload.
+  - **Files:**
+    - `app/(marketing)/kitchen-bath-design/page.tsx`
+    - `components/ai-redesigner/{kitchen-bath-sections,redesigner-wizard,finish-swatch}.tsx`
+- **`/kitchen-bath-design`: rebuilt as clean, soft-elevated SaaS cards (replaces the blueprint/editorial look)**
+  - **Why:** client: the graph-paper grid, square corners and technical labels (`PLATE 01`, `COST / PRIVACY / BUILD`, `No. 01`, `01 —`) looked like CAD, not a consumer remodeling site.
+  - **Hero:**
+    - soft slate-to-white gradient (dark: clean slate), no grid;
+    - rounded pill badge;
+    - h1 with "Design Tool" in navy;
+    - `rounded-xl` CTAs;
+    - inline green ✓ trust items.
+    - Before/after sits in a `rounded-2xl` card with `shadow-xl`, using the new slider variant `"glass"`: frosted `rounded-full` Before/After pills and a circular handle with a soft ring.
+  - **Designer (`studio` prop):**
+    - one `rounded-2xl` card with soft shadow;
+    - status bar with a "Design studio" pill, room · style, and finish/step pills;
+    - plain slate preview panel (no grid);
+    - `rounded-2xl` preview;
+    - `rounded-xl` buttons.
+    - Round step numbers, rounded swatches/chips and the room toggle are restored.
+  - **Sections:**
+    - centred pill eyebrow + title headers;
+    - "How it works" as 3 elevated `rounded-2xl` cards (icon tile + "Step n" pill, hover lift);
+    - style library as `rounded-2xl` cards with photo hover zoom, round finish swatches and an "Open in designer" button, behind a pill room toggle;
+    - quote CTA as a `rounded-3xl` navy gradient with a frosted checklist panel and a white `rounded-xl` button;
+    - FAQ back on the site's standard `cards` variant.
+  - **Removed:**
+    - the `.kb-page` tokens and the `kb-grid` / `kb-display` utilities (`globals.css`);
+    - the FAQ `"architectural"` variant;
+    - the slider `"plate"` variant.
+  - **Fix:** the white quote button uses `data-keep-white`, because the global dark-mode rule repaints `.bg-white`.
+  - **Verified:** headless Chrome, desktop light/dark and mobile.
+    - Containers are 144–1296 px at 1440 (flush with the logo and "Join as Pro") and 20–370 px at 390.
+    - No overflow and no console errors.
+    - Read-only check.
+  - **Files:**
+    - `app/(marketing)/kitchen-bath-design/page.tsx`
+    - `components/ai-redesigner/{kitchen-bath-sections,before-after-slider,redesigner-wizard,redesigner-steps,finish-swatch}.tsx`
+    - `components/shared/faq-list.tsx`
+    - `app/globals.css`
+- **`/kitchen-bath-design`: back to the site font (Geist) everywhere**
+  - **Why:** client feedback on the redesign below: the serif headings and typewriter (mono) labels looked unprofessional.
+  - **Fonts:**
+    - Removed the Newsreader serif (`next/font`) and every `font-mono` label.
+    - Removed the italic accents. The navy colour accent stays.
+    - `.kb-display` now uses the site heading font, semibold with tight tracking.
+    - Step titles are back to the original style.
+    - FAQ numbers use the sans font.
+  - **Headings:** back to the site's normal sizes (h1 2rem → 2.9rem; section h2 2xl → 2rem).
+  - **Unchanged:** layout, colours, studio workbench, lookbook, quote banner, and all functionality.
+  - **Verified:** headless Chrome at desktop (light/dark) and mobile. Every heading resolves to Geist, containers are 144–1296 px at 1440, and there are no overflow or console errors.
+  - **Files:**
+    - `app/(marketing)/kitchen-bath-design/page.tsx`
+    - `components/ai-redesigner/{kitchen-bath-sections,before-after-slider,redesigner-wizard,redesigner-steps}.tsx`
+    - `components/shared/faq-list.tsx`
+    - `app/globals.css`
+- **`/kitchen-bath-design`: editorial "interior architecture studio" redesign**
+  - **Why:** client feedback: "looks very weak … now looks like an accounting page". They wanted it a little different from the other pages, but without lots of colours.
+  - **Palette:** navy + warm stone/alabaster neutrals + charcoal slate ink, with hairline borders.
+    - Tokens are scoped to `.kb-page` in `app/globals.css`: `--kb-stone`, `--kb-linen`, `--kb-sand`, `--kb-ink`, `--kb-navy`, `--kb-line`, etc., with dark-mode values.
+    - Utilities: `kb-grid` (drafting grid) and `kb-display`.
+    - Headings use a Newsreader serif loaded with `next/font` on this page only.
+  - **Hero:**
+    - stone surface with a fine grid;
+    - mono eyebrow badge;
+    - serif h1 (same SEO text);
+    - spec strip: Cost / Privacy / Build;
+    - before/after slider framed as a portfolio plate, with mat, crop marks, "Plate 01" metadata, `BEFORE · EXISTING SPACE` / `AFTER · AI CONCEPT` tags and a larger tactile handle.
+  - **Studio workbench:** `RedesignerWizard` gets a new `studio` prop. The page passes it. It is the only user, and behaviour is unchanged.
+    - studio header bar: room · style · finishes selected · step;
+    - stone drafting-grid canvas;
+    - matted preview;
+    - squarer controls and step markers.
+    - Steps: serif step titles; room toggle as a raised tile.
+    - Finish swatches: sample-board tiles (square cut, bevel).
+  - **How it works:** an editorial process strip replaces the 3 boxes. It has oversized serif numerals, hairline dividers and spec labels (Input / Brief / Output).
+  - **Style library:** lookbook on a stone backdrop.
+    - editorial room tabs with a style count;
+    - cards with a 16:11 photo and hover zoom, a "No. 01" tag, serif name, square material-sample chips and "Open in Studio →".
+  - **Quote banner:** deep navy with a tonal grid, two columns (copy | checklist + CTA), refined borders.
+  - **FAQ:** new `FaqList` variant `"architectural"`, with hairline rows and mono numerals. Other pages keep `"cards"`.
+  - **Section headers:** index + eyebrow + serif title on the left, intro on the right.
+  - **Unchanged:** all designer functions, anchors (#demo), the style → designer hand-off, admin FAQs/styles and JSON-LD.
+  - **Verified:** headless Chrome at 1440 / 820 / 390 px, light and dark.
+    - Every section container is 144–1296 px at 1440, flush with the navbar logo and "Join as Pro".
+    - No horizontal overflow and no console errors.
+    - Read-only check; nothing was written.
+  - **Files:**
+    - `app/(marketing)/kitchen-bath-design/page.tsx`
+    - `components/ai-redesigner/{kitchen-bath-sections,before-after-slider,redesigner-wizard,redesigner-steps,finish-swatch}.tsx`
+    - `components/shared/faq-list.tsx`
+    - `app/globals.css`
+- **Admin `/tax` table: State column first, editable City cell, no "Applies to" toggle**
+  - **Why:** client feedback. City is the default rule; the whole-state option was the old behaviour. The City cell looked cluttered.
+  - **Table:** columns are now State, City, Code, Tax Rate (%), Status, Actions. State-wide rows show an empty City cell (placeholder "All cities"). The "All cities / State default" badge, sub-text and row tint are removed.
+  - **Typing a city into a state row's empty City cell** (Enter or Save) creates a **new** city rule for that state, using the row's rate. The state-wide record is never changed or replaced.
+  - **Add dialog:** the "Applies to" radio is removed. State + City are always shown. Leaving City empty adds a state-wide rate, but only for a state that has none yet.
+  - **Data:** frontend only. No existing record is modified.
+  - **Verified:** headless browser with every API call mocked (no DB writes):
+    - 48 state rows plus Huntsville, AL;
+    - headers in the new order;
+    - add, edit and delete-confirm all work;
+    - typing a city on the Texas row sent `POST city Austin,TX` only;
+    - real data unchanged.
+  - **Files:** `admin/src/pages/tax.jsx`.
+
 ### 2026-11-24
 - **Admin `/tax`: one unified tax table (replaces the City / State tabs)**
   - **Why:** client request. Admins wanted one list with every rule, so nothing is re-entered.

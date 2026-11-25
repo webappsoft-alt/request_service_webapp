@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { formatTaxRatePercent } from "@/lib/tax/state-tax";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -1466,7 +1467,7 @@ export function OrderDetailPageView({ id, viewer = "provider" }: { id: string; v
                         <span className="text-muted-foreground">
                           Estimated Tax{" "}
                           {order.pricing?.taxRate
-                            ? `(${order.pricing.taxRate}%)`
+                            ? `(${formatTaxRatePercent(order.pricing.taxRate)}%)`
                             : ""}
                         </span>
                         <span className="font-mono font-medium">

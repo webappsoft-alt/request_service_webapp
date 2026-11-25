@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { formatTaxRatePercent, impliedTaxRatePercent } from "@/lib/tax/state-tax";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -58,7 +59,7 @@ function orderTaxPercent(pricing?: ProviderOrder["pricing"]) {
   const taxable =
     (Number(pricing?.basePrice) || 0) + (Number(pricing?.changeOrdersTotal) || 0);
   const tax = Number(pricing?.taxAmount) || 0;
-  return taxable > 0 && tax > 0 ? Math.round((tax / taxable) * 10000) / 100 : 0;
+  return impliedTaxRatePercent(tax, taxable);
 }
 
 export function OrderDetailSheet({
@@ -408,7 +409,7 @@ export function OrderDetailSheet({
                     <span className="text-foreground">${order.pricing?.subtotal?.toFixed(2) || "0.00"}</span>
                   </div>
                   <div className="flex justify-between text-muted-foreground">
-                    <span>Sales Tax ({orderTaxPercent(order.pricing).toFixed(2)}%)</span>
+                    <span>Sales Tax ({formatTaxRatePercent(orderTaxPercent(order.pricing))}%)</span>
                     <span className="text-foreground">${order.pricing?.taxAmount?.toFixed(2) || "0.00"}</span>
                   </div>
                   <div className="flex justify-between border-t border-border pt-2 text-sm font-semibold">

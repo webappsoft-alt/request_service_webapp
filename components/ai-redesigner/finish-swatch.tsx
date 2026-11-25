@@ -94,10 +94,12 @@ export function SwatchTile({
       title={finish.name}
       className={cn(
         "relative flex aspect-square w-full items-center justify-center border border-black/10 transition-[box-shadow,transform] duration-150 hover:-translate-y-px",
+        // Tactile tile: light top highlight + soft drop shadow (2026-11-25).
+        "shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_2px_6px_-2px_rgba(15,41,74,0.35)]",
         round ? "rounded-full" : "rounded-xl",
         selected
           ? "ring-2 ring-primary ring-offset-2 ring-offset-card"
-          : "hover:shadow-[0_6px_14px_-8px_rgba(0,0,0,0.45)]",
+          : "hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_10px_18px_-8px_rgba(15,41,74,0.5)]",
       )}
       style={swatchStyle(finish, fallbackPattern)}
     >

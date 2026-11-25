@@ -69,11 +69,26 @@ export function applyTaxRatePercentToItems<T extends { taxRate?: number }>(
   return (items || []).map((item) => ({ ...item, taxRate: rate }));
 }
 
-/** Display helper: always show a numeric percent (including 0). */
+/**
+ * Display helper: always show a numeric percent (including 0), up to 3 decimals, no trailing zeros
+ * ("8", "8.25", "9.195"). 2026-11-25: was rounded to 2 decimals, which showed 9.195 as 9.2.
+ */
 export function formatTaxRatePercent(rate: number | null | undefined) {
   const value = Math.max(0, Number(rate) || 0);
   if (Number.isInteger(value)) return String(value);
-  return String(Math.round(value * 100) / 100);
+  return String(Math.round(value * 1000) / 1000);
+}
+
+/**
+ * The percent a saved cents tax works out to. Uses 2 decimals when that reproduces the tax to the
+ * cent (so 8.25% on $33.33 stays 8.25, not 8.251), otherwise 3 (9.195% on $1,000 = $91.95).
+ */
+export function impliedTaxRatePercent(tax: number, taxable: number) {
+  if (!(taxable > 0) || !(tax > 0)) return 0;
+  const exact = (tax / taxable) * 100;
+  const twoDp = Math.round(exact * 100) / 100;
+  if (Math.round(taxable * twoDp) / 100 === Math.round(tax * 100) / 100) return twoDp;
+  return Math.round(exact * 1000) / 1000;
 }
 
 /**
@@ -102,7 +117,7 @@ export function storedInvoiceMoney(invoice: {
     amountPaid,
     balanceDue: Math.max(0, invoice.balanceDue != null ? cents(invoice.balanceDue) : cents(total - amountPaid)),
     // Tax is charged on the pre-discount subtotal (see moneyWithStateTax).
-    taxRatePercent: subtotal > 0 ? Math.round((tax / subtotal) * 10000) / 100 : 0,
+    taxRatePercent: impliedTaxRatePercent(tax, subtotal),
   };
 }
 

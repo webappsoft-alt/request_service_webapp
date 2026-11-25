@@ -794,12 +794,12 @@ export function RedesignerWizard({
       <div
         className={cn(
           studio
-            ? "overflow-hidden rounded-2xl border bg-card shadow-xl shadow-slate-900/[0.07] dark:shadow-black/40"
+            ? "overflow-hidden rounded-2xl border border-border-card bg-card shadow-[0_1px_2px_rgb(0_63_125/6%),0_6px_14px_-6px_rgb(0_63_125/12%)]"
             : "contents",
         )}
       >
       {studio ? (
-        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b bg-card px-4 py-3 md:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-border/70 bg-card px-4 py-3 md:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <Sparkles className="size-4" aria-hidden="true" />
@@ -830,10 +830,10 @@ export function RedesignerWizard({
         {/* Preview */}
         <div
           className={cn(
-            "flex min-w-0 flex-col gap-4 p-4 md:p-5 lg:border-r",
+            "flex min-w-0 flex-col gap-4 p-4 md:p-5",
             studio
-              ? "bg-slate-50 md:p-6 dark:bg-slate-900/50"
-              : "bg-muted/40 bg-[radial-gradient(circle,rgba(0,0,0,0.07)_1px,transparent_1.2px)] [background-size:18px_18px]",
+              ? "bg-muted/60 md:p-6"
+              : "bg-muted/40 bg-[radial-gradient(circle,rgba(0,0,0,0.07)_1px,transparent_1.2px)] [background-size:18px_18px] lg:border-r",
           )}
         >
           {/* Studio: no lone "No photo yet" pill above the empty dropzone. */}
@@ -946,11 +946,13 @@ export function RedesignerWizard({
                   if (file) void handleFile(file);
                 }}
                 className={cn(
-                  "absolute inset-0 flex flex-col items-center justify-center gap-3 border-2 border-dashed px-6 text-center transition-colors",
-                  "rounded-2xl",
+                  "absolute inset-0 flex flex-col items-center justify-center gap-3 border-dashed px-6 text-center transition-colors",
+                  studio ? "rounded-xl border" : "rounded-2xl border-2",
                   dragOver
                     ? "border-primary bg-primary/[0.06]"
-                    : "border-input bg-card/60 hover:border-primary/40",
+                    : studio
+                      ? "border-border bg-card hover:border-primary/40"
+                      : "border-input bg-card/60 hover:border-primary/40",
                 )}
               >
                 <span className="flex size-20 items-center justify-center rounded-full bg-primary/[0.07]">
@@ -968,7 +970,10 @@ export function RedesignerWizard({
                   {PHOTO_TAGS.map((tag) => (
                     <span
                       key={tag}
-                      className="inline-flex items-center gap-1 rounded-full border border-input bg-card px-2.5 py-1 text-xs text-muted-foreground"
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs text-muted-foreground",
+                        studio ? "bg-muted" : "border border-input bg-card",
+                      )}
                     >
                       <Check
                         className="size-3 text-emerald-600"
@@ -983,8 +988,8 @@ export function RedesignerWizard({
           </div>
 
           {studio && !shownPhoto && samples.length ? (
-            <div className="flex flex-col gap-3 rounded-2xl border bg-card p-3.5 shadow-sm sm:flex-row sm:items-center">
-              <p className="shrink-0 text-sm font-semibold sm:w-36 sm:leading-snug">
+            <div className="flex flex-col gap-3 px-1 sm:flex-row sm:items-center">
+              <p className="shrink-0 text-sm font-medium text-muted-foreground sm:w-36 sm:leading-snug">
                 Or test instantly with a sample room
               </p>
               <div className="grid flex-1 grid-cols-2 gap-2.5 sm:grid-cols-4">
@@ -1011,8 +1016,8 @@ export function RedesignerWizard({
           {/* Your design */}
           <div
             className={cn(
-              "flex items-center gap-3 px-4 py-2.5",
-              "rounded-2xl bg-card shadow-sm",
+              "flex items-center gap-3",
+              studio ? "border-t border-border/70 px-1 pt-4" : "rounded-2xl bg-card px-4 py-2.5 shadow-sm",
             )}
           >
             <span className="shrink-0 text-[11px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">
@@ -1023,7 +1028,10 @@ export function RedesignerWizard({
                 designChips.map((chip) => (
                   <span
                     key={chip.key}
-                    className="inline-flex shrink-0 items-center gap-2 rounded-full border border-input bg-card py-1 pr-3 pl-1 text-[13px] font-medium"
+                    className={cn(
+                      "inline-flex shrink-0 items-center gap-2 rounded-full py-1 pr-3 pl-1 text-[13px] font-medium",
+                      studio ? "bg-card shadow-[0_1px_2px_rgb(0_63_125/8%)]" : "border border-input bg-card",
+                    )}
                   >
                     {"finish" in chip && chip.finish ? (
                       <SwatchDot
@@ -1101,8 +1109,8 @@ export function RedesignerWizard({
 
           <div
             className={cn(
-              "mt-auto flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between",
-              "rounded-2xl bg-card shadow-sm",
+              "mt-auto flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
+              studio ? "border-t border-border/70 px-1 pt-4" : "rounded-2xl bg-card p-4 shadow-sm",
             )}
           >
             <div>
@@ -1144,7 +1152,9 @@ export function RedesignerWizard({
                         "rounded-full",
                         isDone || isCurrent
                           ? "bg-primary text-primary-foreground"
-                          : "border border-input text-muted-foreground",
+                          : studio
+                            ? "bg-muted text-muted-foreground"
+                            : "border border-input text-muted-foreground",
                       )}
                     >
                       {isDone ? (
@@ -1241,15 +1251,22 @@ export function RedesignerWizard({
             ) : null}
           </div>
 
-          <div className="sticky bottom-0 mt-4 flex shrink-0 items-center gap-3 bg-card pt-4 lg:border-t lg:border-border-soft">
+          <div
+            className={cn(
+              "sticky bottom-0 mt-4 flex shrink-0 items-center gap-3 bg-card pt-4",
+              !studio && "lg:border-t lg:border-border-soft",
+            )}
+          >
             {step > 0 ? (
               <button
                 type="button"
                 onClick={() => setStep((value) => Math.max(0, value - 1))}
                 disabled={busy}
                 className={cn(
-                  "inline-flex h-12 items-center gap-1.5 border border-input px-5 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-50",
-                  studio ? "rounded-xl" : "rounded-full",
+                  "inline-flex h-12 items-center gap-1.5 px-5 text-sm font-semibold transition-colors disabled:opacity-50",
+                  studio
+                    ? "rounded-xl bg-muted hover:bg-muted/70"
+                    : "rounded-full border border-input hover:bg-muted",
                 )}
               >
                 <ArrowLeft className="size-4" aria-hidden="true" />

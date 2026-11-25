@@ -62,7 +62,14 @@ export function PhotoStep({
 
       <div className="flex flex-col gap-2.5">
         <p className="text-sm font-semibold">Which room?</p>
-        <div className="grid grid-cols-2 gap-1 rounded-2xl border border-input bg-muted/60 p-1" role="radiogroup" aria-label="Room type">
+        <div
+          className={cn(
+            "grid grid-cols-2 gap-1 p-1",
+            compact ? "rounded-xl bg-muted" : "rounded-2xl border border-input bg-muted/60",
+          )}
+          role="radiogroup"
+          aria-label="Room type"
+        >
           {ROOMS.map((room) => {
             const Icon = room.icon;
             const active = roomType === room.value;
@@ -74,7 +81,8 @@ export function PhotoStep({
                 aria-checked={active}
                 onClick={() => onRoomType(room.value)}
                 className={cn(
-                  "flex h-12 items-center justify-center gap-2 rounded-xl text-[15px] font-semibold transition-all",
+                  "flex h-12 items-center justify-center gap-2 text-[15px] font-semibold transition-all",
+                  compact ? "rounded-lg" : "rounded-xl",
                   active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -104,7 +112,12 @@ export function PhotoStep({
         <button
           type="button"
           onClick={onPick}
-          className="flex items-center gap-4 rounded-2xl border border-dashed border-input bg-muted/30 p-4 text-left transition-colors hover:border-primary/50 hover:bg-primary/[0.04]"
+          className={cn(
+            "flex items-center gap-4 p-4 text-left transition-colors",
+            compact
+              ? "rounded-xl bg-muted/70 hover:bg-primary/[0.06]"
+              : "rounded-2xl border border-dashed border-input bg-muted/30 hover:border-primary/50 hover:bg-primary/[0.04]",
+          )}
         >
           <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <Camera className="size-5" aria-hidden="true" />
@@ -162,7 +175,7 @@ export function StyleStep({
                   "group flex flex-col overflow-hidden rounded-2xl border bg-card p-1.5 text-left transition-all duration-200",
                   selected
                     ? "border-primary ring-2 ring-primary/80"
-                    : "border-input hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-20px_rgba(0,0,0,0.45)]",
+                    : "border-border/70 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-20px_rgba(0,0,0,0.45)]",
                 )}
               >
                 <span className="relative block aspect-[4/3] overflow-hidden rounded-xl bg-muted">

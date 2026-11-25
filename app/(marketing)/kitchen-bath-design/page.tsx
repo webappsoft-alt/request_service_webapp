@@ -2,14 +2,19 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
+  BadgeCheck,
   Camera,
   Check,
-  FileText,
+  LockKeyhole,
   Palette,
+  ShieldCheck,
   Sparkles,
   WandSparkles,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Container, Section } from "@/components/layout/container";
+import { HomeMotion } from "@/components/home/home-motion";
 import { BeforeAfterSlider } from "@/components/ai-redesigner/before-after-slider";
 import { RedesignerWizard } from "@/components/ai-redesigner/redesigner-wizard";
 import { CustomizeShowcase, StyleShowcase, TryItNowButton } from "@/components/ai-redesigner/kitchen-bath-sections";
@@ -26,7 +31,9 @@ import { buildMetadata } from "@/lib/seo";
 
 const PATH = AI_DESIGNER_PATH; // "/kitchen-bath-design"
 const PAGE_NAME = "Kitchen & Bath Design";
-/** Hero fallback until the admin has a before/after showcase pair. */
+/** Hero backdrop: a remodeled kitchen opening onto a bathroom, with finish samples on the island (2026-11-25). */
+const HERO_BACKDROP_IMAGE = "/images/home/kitchen-bath-design-hero.jpg";
+/** Showcase photo until the admin has a before/after pair. */
 const FALLBACK_HERO_IMAGE = "/images/home/rs-ai-kitchen-repair.jpg";
 
 export const metadata = buildMetadata({
@@ -43,25 +50,32 @@ export const metadata = buildMetadata({
   ],
 });
 
-const HOW_IT_WORKS = [
+const HOW_IT_WORKS: { icon: LucideIcon; title: string; body: string; status: string }[] = [
   {
     icon: Camera,
     title: "Snap & upload",
     body: "Take a photo of your current kitchen or bathroom, or upload one you already have.",
+    status: "Photo added",
   },
   {
     icon: Palette,
     title: "Choose your look",
     body: "Pick the room type, a design style, and the cabinets, countertops and finishes you like.",
+    status: "Style · 4 finishes",
   },
   {
     icon: WandSparkles,
     title: "Preview & get quotes",
     body: "See your AI redesign in seconds, then request real written quotes from local pros.",
+    status: "Design ready",
   },
-] as const;
+];
 
-const TRUST = ["Free to try", "Your photo stays private", "Verified local pros"] as const;
+const TRUST: { icon: LucideIcon; label: string }[] = [
+  { icon: BadgeCheck, label: "Free to try" },
+  { icon: LockKeyhole, label: "Your photo stays private" },
+  { icon: ShieldCheck, label: "Verified local pros" },
+];
 
 const QUOTE_POINTS = ["Share your project once", "Itemized written estimates", "Compare local pros side by side"] as const;
 
@@ -101,15 +115,23 @@ const FALLBACK_FAQS: FaqItem[] = [
   },
 ];
 
-/** Editorial section header: index + eyebrow and serif title on the left, the intro on the right. */
-function SectionIntro({ eyebrow, title, body }: { eyebrow: string; title: React.ReactNode; body?: string }) {
+/** Section header in the home page's voice: tracked eyebrow, large tight headline, muted intro. */
+function SectionHeading({
+  eyebrow,
+  title,
+  body,
+  className,
+}: {
+  eyebrow: string;
+  title: React.ReactNode;
+  body?: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 text-center">
-      <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold tracking-wide text-primary uppercase">
-        {eyebrow}
-      </span>
-      <h2 className="text-balance text-2xl font-semibold tracking-tight md:text-[2rem] md:leading-tight">{title}</h2>
-      {body ? <p className="text-pretty text-[15px] leading-7 text-muted-foreground md:text-base">{body}</p> : null}
+    <div className={`flex max-w-3xl flex-col gap-3 ${className ?? ""}`}>
+      <p className="eyebrow text-primary">{eyebrow}</p>
+      <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-[2.5rem] md:leading-[1.1]">{title}</h2>
+      {body ? <p className="text-sm leading-7 text-muted-foreground md:text-base">{body}</p> : null}
     </div>
   );
 }
@@ -132,14 +154,15 @@ function showcaseFinishes(catalog: RedesignCatalog | null, styleName?: string) {
 
 /**
  * Kitchen & Bath Design (/kitchen-bath-design), top to bottom:
- *  1. Light compact hero: SEO h1, "Start Designing Free" (smooth scroll to #demo) + before/after showcase card
- *  2. #demo: the live AI designer (navy studio bar, sample rooms to try instantly; only generating asks for an account)
- *  3. Process timeline + "What you can customize" finish explorer
+ *  1. Photo hero with a navy scrim (same language as the home hero): SEO h1, "Start Designing Free"
+ *     (smooth scroll to #demo), quote link, trust markers + the before/after showcase card
+ *  2. #demo: the live AI designer (studio bar, sample rooms to try instantly; only generating asks for an account)
+ *  3. How it works (home-style timeline) + "What you can customize" finish explorer
  *  4. Style lookbook: the admin's styles; a click loads that style in the designer
- *  5. Quote bridge  6. FAQ (admin panel, Domain / Category "kitchen-bath-design")
- * Look (2026-11-25, client): a flagship "AI interior studio" page that is structurally distinct from
- * the standard pages, within the brand palette (navy #082447–#0F3868, slate, white). Earlier same-day
- * attempts (editorial/blueprint, serif, then plain rounded cards) were rejected.
+ *  5. Navy quote band  6. FAQ (admin panel, Domain / Category "kitchen-bath-design")
+ * Look (2026-11-25, client): aligned with the finalized home page — tracked eyebrows, large tight
+ * headlines, hairline cards, navy #0B2A4F bands, `Section` rhythm. Earlier same-day attempts
+ * (editorial/blueprint, serif, plain rounded cards, light compact hero) were rejected.
  * Old URLs /ai-kitchen-redesign and /ai-kitchen-bath-designer redirect here.
  */
 export default async function KitchenBathDesignPage() {
@@ -164,51 +187,137 @@ export default async function KitchenBathDesignPage() {
       />
       <JsonLd data={faqJsonLd(faqs)} />
 
-      {/* 1. Hero: light and compact, blends into the white navbar (2026-11-25; previously a full-bleed deep-navy hero) */}
-      <section className="relative isolate overflow-hidden border-b bg-gradient-to-b from-slate-50/90 via-white to-white dark:from-slate-900 dark:via-slate-900/70 dark:to-background">
-        <div aria-hidden="true" className="pointer-events-none absolute -top-40 right-[-8%] -z-10 size-[32rem] rounded-full bg-primary/[0.06] blur-3xl dark:bg-primary/10" />
+      <HomeMotion>
+        {/* 1. Hero: full-width photo under a navy scrim, copy left, showcase card right (home hero language) */}
+        <section className="relative isolate overflow-hidden">
+          <Image
+            src={HERO_BACKDROP_IMAGE}
+            alt=""
+            fill
+            preload
+            sizes="100vw"
+            quality={75}
+            className="-z-20 object-cover object-[50%_38%]"
+          />
+          <div className="absolute inset-0 -z-10 bg-[rgba(4,26,54,0.8)] lg:hidden" aria-hidden="true" />
+          <div
+            className="absolute inset-0 -z-10 hidden bg-[linear-gradient(100deg,rgba(4,26,54,0.94)_0%,rgba(4,26,54,0.86)_34%,rgba(4,26,54,0.6)_56%,rgba(4,26,54,0.38)_78%,rgba(4,26,54,0.42)_100%)] lg:block"
+            aria-hidden="true"
+          />
+          <div className="absolute inset-x-0 bottom-0 -z-10 h-32 bg-linear-to-t from-[rgba(4,26,54,0.55)] to-transparent" aria-hidden="true" />
 
-        <div className="container-site grid gap-10 pt-5 pb-12 md:pt-6 md:pb-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center lg:gap-14">
-          <div className="flex flex-col gap-5">
-            <nav aria-label="Breadcrumb">
-              <ol className="flex items-center gap-2 text-sm text-muted-foreground">
-                <li>
-                  <Link href="/" className="transition-colors hover:text-primary">
-                    Home
-                  </Link>
-                </li>
-                <li aria-hidden="true">/</li>
-                <li className="font-medium text-foreground" aria-current="page">
-                  {PAGE_NAME}
-                </li>
-              </ol>
-            </nav>
+          <Container className="grid gap-10 pt-6 pb-12 md:pt-8 md:pb-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-center lg:gap-16 lg:py-16 xl:py-20">
+            <div className="enter-stagger flex flex-col items-start gap-4 text-white">
+              <nav aria-label="Breadcrumb">
+                <ol className="flex items-center gap-2 text-[13px] text-white/60">
+                  <li>
+                    <Link href="/" className="transition-colors hover:text-white">
+                      Home
+                    </Link>
+                  </li>
+                  <li aria-hidden="true">/</li>
+                  <li className="font-medium text-white/85" aria-current="page">
+                    {PAGE_NAME}
+                  </li>
+                </ol>
+              </nav>
 
-            <div className="flex flex-col items-start gap-4 lg:pt-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/15 bg-primary/[0.07] px-3 py-1 text-xs font-semibold tracking-wide text-primary uppercase">
-                <Sparkles className="size-3.5" aria-hidden="true" />
-                AI Interior Remodeling Studio
+              <span className="flex items-center gap-3 pt-2">
+                <span className="h-px w-8 bg-white/50" aria-hidden="true" />
+                <span className="eyebrow text-white/80">AI interior remodeling studio</span>
               </span>
-              <h1 className="text-balance text-[2rem] leading-[1.08] font-semibold tracking-tight text-foreground sm:text-[2.4rem] lg:text-[2.75rem]">
-                AI Kitchen &amp; Bathroom <span className="text-primary">Design Tool</span>
+
+              <h1 className="text-balance text-[2rem] leading-[1.08] font-semibold tracking-tight sm:text-[2.5rem] lg:text-[3rem]">
+                AI Kitchen &amp; Bathroom Design Tool
               </h1>
-              <p className="max-w-xl text-pretty text-[15px] leading-7 text-muted-foreground md:text-base">
+
+              <p className="max-w-xl text-pretty text-sm leading-7 text-white/80 md:text-base">
                 Upload a photo of your kitchen or bathroom and preview it redesigned in seconds, in your style and
                 finishes. Love it? Get written quotes from verified local pros to build it.
               </p>
-              <div className="flex w-full flex-col gap-3 pt-1 sm:w-auto sm:flex-row sm:items-center">
+
+              <div className="flex w-full flex-col gap-3 pt-2 sm:w-auto sm:flex-row sm:items-center">
                 <TryItNowButton
                   label="Start Designing Free"
-                  className="rounded-xl shadow-[0_12px_24px_-14px_rgba(0,63,125,0.9)]"
+                  className="rounded-lg bg-white text-[#0B2A4F] shadow-[0_12px_28px_-14px_rgba(0,0,0,0.6)] hover:bg-white/90"
                 />
-                <Button size="lg" variant="outline" className="h-12 rounded-xl bg-card px-6 text-[15px]" asChild>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-12 rounded-lg border-white/30 bg-transparent px-6 text-[15px] text-white hover:bg-white/10 hover:text-white"
+                  asChild
+                >
                   <Link href="/get-a-quote">Get a Free Quote</Link>
                 </Button>
               </div>
-              <ul className="flex flex-wrap gap-x-5 gap-y-2 pt-1">
-                {TRUST.map((label) => (
+
+              <ul className="flex flex-wrap items-center gap-x-5 gap-y-1.5 pt-1">
+                {TRUST.map(({ icon: Icon, label }) => (
+                  <li key={label} className="flex items-center gap-2 text-sm text-white/75">
+                    <Icon className="size-4 text-white/60" aria-hidden="true" />
+                    {label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Showcase card: the admin's before/after pair (a real run), else a still photo. */}
+            <div className="relative lg:justify-self-end lg:w-full lg:max-w-[36rem]">
+              <div className="overflow-hidden rounded-2xl bg-white p-2 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.65)] dark:bg-slate-900" data-keep-white>
+                {showcase?.before && showcase?.after ? (
+                  <BeforeAfterSlider
+                    before={showcase.before}
+                    after={showcase.after}
+                    alt={showcase.style ? `${showcase.style} AI redesign` : "AI kitchen redesign"}
+                    variant="glass"
+                    className="aspect-[16/11] max-h-[400px] w-full rounded-xl"
+                  />
+                ) : (
+                  <div className="relative aspect-[16/11] max-h-[400px] w-full overflow-hidden rounded-xl">
+                    <Image
+                      src={FALLBACK_HERO_IMAGE}
+                      alt="A kitchen redesigned with the AI design tool"
+                      fill
+                      preload
+                      sizes="(min-width: 1024px) 580px, 100vw"
+                      className="object-cover"
+                    />
+                  </div>
+                )}
+                <div className="flex items-center gap-3 px-3 pt-3 pb-1.5">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <WandSparkles className="size-4" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
+                      {showcase?.style ? `${showcase.style} · previewed finishes` : "Previewed finishes"}
+                    </span>
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {heroFinishes.length ? heroFinishes.join(" · ") : "Same room, new cabinets, counters & fixtures"}
+                    </span>
+                  </span>
+                  <span className="hidden shrink-0 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground sm:inline-flex">
+                    AI preview
+                  </span>
+                </div>
+              </div>
+            </div>
+          </Container>
+        </section>
+
+        {/* 2. The designer (#demo) */}
+        <Section id={DESIGNER_ANCHOR} density="tight" className="scroll-mt-20 bg-background">
+          <Container className="flex flex-col gap-8 lg:gap-10">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <SectionHeading
+                eyebrow="Live studio"
+                title="Design your room, free."
+                body="Upload your own photo, or start instantly with a sample room. Pick a style and finishes, and see it redesigned."
+              />
+              <ul className="flex flex-wrap gap-x-5 gap-y-2 lg:pb-1.5">
+                {["No account to explore", "Sample rooms included", "About a minute"].map((label) => (
                   <li key={label} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span className="flex size-5 items-center justify-center rounded-full bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
+                    <span className="flex size-5 items-center justify-center rounded-full bg-primary/10 text-primary">
                       <Check className="size-3" strokeWidth={3} aria-hidden="true" />
                     </span>
                     {label}
@@ -216,197 +325,146 @@ export default async function KitchenBathDesignPage() {
                 ))}
               </ul>
             </div>
-          </div>
 
-          {/* Showcase card: the admin's before/after pair (a real run), else a still photo. */}
-          <div className="relative pb-6">
-            <div className="relative rounded-3xl border bg-card p-2 shadow-xl shadow-slate-900/10 dark:shadow-black/40">
-              {showcase?.before && showcase?.after ? (
-                <BeforeAfterSlider
-                  before={showcase.before}
-                  after={showcase.after}
-                  alt={showcase.style ? `${showcase.style} AI redesign` : "AI kitchen redesign"}
-                  variant="glass"
-                  className="aspect-[16/11] max-h-[400px] w-full rounded-2xl"
-                />
-              ) : (
-                <div className="relative aspect-[16/11] max-h-[400px] w-full overflow-hidden rounded-2xl">
-                  <Image
-                    src={FALLBACK_HERO_IMAGE}
-                    alt="A kitchen redesigned with the AI design tool"
-                    fill
-                    preload
-                    sizes="(min-width: 1024px) 580px, 100vw"
-                    className="object-cover"
-                  />
-                </div>
-              )}
-              {/* Floating finishes card (light frosted) */}
-              <div
-                className="pointer-events-none absolute inset-x-6 -bottom-6 flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-2.5 shadow-lg shadow-slate-900/10 backdrop-blur-xl dark:border-white/10 dark:bg-slate-800/90 dark:shadow-black/40"
-              >
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <WandSparkles className="size-4" aria-hidden="true" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                    {showcase?.style ? `${showcase.style} · previewed finishes` : "Previewed finishes"}
-                  </span>
-                  <span className="block truncate text-sm font-medium text-foreground">
-                    {heroFinishes.length ? heroFinishes.join(" · ") : "Same room, new cabinets, counters & fixtures"}
-                  </span>
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. The designer (#demo) */}
-      <section id={DESIGNER_ANCHOR} className="scroll-mt-20 bg-slate-50/70 py-14 md:py-20 dark:bg-slate-900/40">
-        <div className="container-site flex flex-col gap-8 md:gap-10">
-          <SectionIntro
-            eyebrow="Live studio"
-            title={
-              <>
-                Design your room, <span className="text-primary">free</span>
-              </>
-            }
-            body="Upload your own photo, or start instantly with a sample room. Pick a style and finishes, and see it redesigned."
-          />
-          {AI_DESIGNER_LIVE ? (
-            <RedesignerWizard showHeader={false} studio initialCatalog={live} />
-          ) : (
-            <div className="flex flex-col items-center gap-4 rounded-2xl border bg-card px-6 py-16 text-center shadow-lg shadow-slate-900/5">
-              <Sparkles className="size-8 text-primary" aria-hidden="true" />
-              <p className="text-lg font-semibold">The designer is coming soon</p>
-              <Button asChild className="rounded-xl">
-                <Link href="/get-a-quote">Get a free quote</Link>
-              </Button>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* 3. Process timeline + material explorer */}
-      <section className="py-14 md:py-20">
-        <div className="container-site grid gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-center lg:gap-16">
-          <div className="flex flex-col gap-8">
-            <div className="flex flex-col items-start gap-3">
-              <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold tracking-wide text-primary uppercase">
-                How it works
-              </span>
-              <h2 className="text-balance text-2xl font-semibold tracking-tight md:text-[2rem] md:leading-tight">
-                From photo to real quotes in three steps
-              </h2>
-            </div>
-            <ol className="relative flex flex-col gap-7">
-              <span aria-hidden="true" className="absolute top-6 bottom-6 left-6 w-px bg-gradient-to-b from-primary/40 via-primary/20 to-transparent" />
-              {HOW_IT_WORKS.map(({ icon: Icon, title, body }, index) => (
-                <li key={title} className="relative flex gap-5">
-                  <span className="relative z-10 flex size-12 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#082447_0%,#0f3868_100%)] text-white shadow-lg shadow-[#082447]/25 ring-4 ring-background">
-                    <Icon className="size-5" aria-hidden="true" />
-                  </span>
-                  <div className="flex flex-col gap-1 pt-1">
-                    <p className="text-xs font-semibold tracking-wide text-primary uppercase">Step {index + 1}</p>
-                    <h3 className="text-lg font-semibold">{title}</h3>
-                    <p className="max-w-md text-[15px] leading-7 text-muted-foreground">{body}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
-          {finishes.length ? (
-            <CustomizeShowcase finishes={finishes} rooms={live?.rooms || []} />
-          ) : null}
-        </div>
-      </section>
-
-      {/* 4. Style lookbook */}
-      {styles.length ? (
-        <section className="bg-slate-50/70 py-14 md:py-20 dark:bg-slate-900/40">
-          <div className="container-site flex flex-col gap-8 md:gap-10">
-            <SectionIntro
-              eyebrow="Style lookbook"
-              title={
-                <>
-                  Curated <span className="text-primary">kitchen &amp; bath styles</span>
-                </>
-              }
-              body="Pick a starting look and load it straight into the studio, then fine-tune every finish."
-            />
-            <StyleShowcase styles={styles} finishes={finishes} rooms={live?.rooms || []} />
-          </div>
-        </section>
-      ) : null}
-
-      {/* 5. Quote bridge */}
-      <section className="py-14 md:py-20">
-        <div className="container-site">
-          <div className="relative overflow-hidden rounded-3xl bg-[linear-gradient(135deg,#0b3b6f_0%,#082447_100%)] text-white shadow-2xl shadow-[#082447]/25">
-            <div aria-hidden="true" className="pointer-events-none absolute -top-24 -right-24 size-80 rounded-full bg-white/[0.07] blur-2xl" />
-            <div aria-hidden="true" className="pointer-events-none absolute -bottom-32 left-1/3 size-80 rounded-full bg-sky-300/10 blur-3xl" />
-            <div className="relative grid gap-8 px-6 py-10 md:px-12 md:py-14 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:items-center lg:gap-12">
-              <div className="flex flex-col gap-4">
-                <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white/12 px-3 py-1 text-xs font-semibold tracking-wide uppercase">
-                  <FileText className="size-3.5" aria-hidden="true" />
-                  Written estimates
-                </span>
-                <h2 className="text-balance text-2xl font-semibold tracking-tight md:text-[2rem] md:leading-tight">
-                  Love your new design? Get real quotes from verified local kitchen &amp; bath contractors.
-                </h2>
-                <p className="max-w-xl text-[15px] leading-7 text-white/75">
-                  Share your project once. Local pros reply with itemized written estimates, so you can compare and
-                  choose with confidence.
-                </p>
-              </div>
-              <div className="flex flex-col gap-5 rounded-2xl border border-white/10 bg-white/[0.06] p-6 backdrop-blur-sm">
-                <ul className="flex flex-col gap-3">
-                  {QUOTE_POINTS.map((point) => (
-                    <li key={point} className="flex items-center gap-3 text-[15px] text-white/90">
-                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-white/15">
-                        <Check className="size-3.5" strokeWidth={3} aria-hidden="true" />
-                      </span>
-                      {point}
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  size="lg"
-                  className="h-12 w-full rounded-xl bg-white px-6 text-[15px] text-[#0b3b6f] hover:bg-white/90"
-                  data-keep-white
-                  asChild
-                >
-                  <Link href="/get-a-quote">
-                    Get free quotes
-                    <ArrowRight className="size-4" aria-hidden="true" />
-                  </Link>
+            {AI_DESIGNER_LIVE ? (
+              <RedesignerWizard showHeader={false} studio initialCatalog={live} />
+            ) : (
+              <div className="flex flex-col items-center gap-4 rounded-2xl border border-border/70 bg-background px-6 py-16 text-center">
+                <Sparkles className="size-8 text-primary" aria-hidden="true" />
+                <p className="text-lg font-semibold">The designer is coming soon</p>
+                <Button asChild className="rounded-lg">
+                  <Link href="/get-a-quote">Get a free quote</Link>
                 </Button>
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
+            )}
+          </Container>
+        </Section>
 
-      {/* 6. FAQ (admin panel → FAQs, Domain / Category "kitchen-bath-design", audience Customer) */}
-      <section className="border-t py-14 md:py-20">
-        <div className="container-site grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-12">
-          <div className="flex flex-col items-start gap-3">
-            <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold tracking-wide text-primary uppercase">
-              Questions
-            </span>
-            <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">Kitchen &amp; Bath Design FAQ</h2>
-            <p className="text-[15px] leading-7 text-muted-foreground">
-              Still unsure?{" "}
-              <Link href="/contact" className="font-medium text-primary hover:underline">
-                Contact us
-              </Link>{" "}
-              and we&apos;ll help.
-            </p>
-          </div>
-          <FaqList items={faqs} variant="cards" />
-        </div>
-      </section>
+        {/* 3. How it works (home timeline language) + material explorer */}
+        <Section tone="muted" density="tight">
+          <Container className="flex flex-col gap-8 lg:gap-10">
+            <SectionHeading
+              eyebrow="How it works"
+              title="From photo to real quotes in three steps."
+              body="No measuring, no design software. Your room's walls and windows stay where they are; only the finishes change."
+            />
+
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start lg:gap-14">
+              <ol className="flex flex-col pt-1" data-stagger>
+                {HOW_IT_WORKS.map(({ icon: Icon, title, body, status }, index) => {
+                  const last = index === HOW_IT_WORKS.length - 1;
+                  return (
+                    <li key={title} className="relative flex gap-4 pb-8 last:pb-0">
+                      {!last ? (
+                        <span aria-hidden="true" className="absolute top-11 bottom-0 left-5 w-0.5 bg-primary/80" />
+                      ) : null}
+                      <span className="relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground ring-4 ring-muted">
+                        <Icon className="size-4.5" aria-hidden="true" />
+                      </span>
+                      <div className="flex min-w-0 flex-1 flex-col gap-1.5 pt-0.5">
+                        <p className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground">
+                          STEP {String(index + 1).padStart(2, "0")}
+                        </p>
+                        <h3 className="text-base font-semibold tracking-tight md:text-lg">{title}</h3>
+                        <p className="max-w-md text-sm leading-6 text-muted-foreground">{body}</p>
+                        <span className="mt-1 inline-flex w-fit items-center rounded-full border border-border/70 bg-background px-2.5 py-0.5 text-xs font-medium text-primary">
+                          {status}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+
+              {finishes.length ? <CustomizeShowcase finishes={finishes} rooms={live?.rooms || []} /> : null}
+            </div>
+          </Container>
+        </Section>
+
+        {/* 4. Style lookbook */}
+        {styles.length ? (
+          <Section density="tight" className="bg-background">
+            <Container>
+              <StyleShowcase
+                styles={styles}
+                finishes={finishes}
+                rooms={live?.rooms || []}
+                header={
+                  <SectionHeading
+                    eyebrow="Style lookbook"
+                    title="Curated kitchen & bath styles."
+                    body="Pick a starting look and load it straight into the studio, then fine-tune every finish."
+                  />
+                }
+              />
+            </Container>
+          </Section>
+        ) : null}
+
+        {/* 5. Quote band (same navy band as the home page's "Ready to solve it?") */}
+        <section className="bg-[#0B2A4F] py-10 text-white md:py-12">
+          <Container className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between lg:gap-12">
+            <div className="flex max-w-2xl flex-col gap-3">
+              <p className="eyebrow text-white/70">Written estimates</p>
+              <h2 className="text-balance text-2xl font-semibold tracking-tight md:text-[2rem] md:leading-[1.15]">
+                Love your new design? Get real quotes from verified local kitchen &amp; bath pros.
+              </h2>
+              <ul className="mt-1 flex flex-wrap gap-x-6 gap-y-2">
+                {QUOTE_POINTS.map((point) => (
+                  <li key={point} className="flex items-center gap-2 text-sm text-white/80">
+                    <Check className="size-4 text-white/60" strokeWidth={2.5} aria-hidden="true" />
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex flex-wrap gap-3 lg:shrink-0">
+              <Button
+                size="lg"
+                className="h-12 rounded-lg bg-white px-6 text-[15px] text-[#0B2A4F] hover:bg-white/90"
+                data-keep-white
+                asChild
+              >
+                <Link href="/get-a-quote">
+                  Get free quotes
+                  <ArrowRight className="size-4" aria-hidden="true" />
+                </Link>
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-12 rounded-lg border-white/30 bg-transparent px-6 text-[15px] text-white hover:bg-white/10 hover:text-white"
+                asChild
+              >
+                <Link href="/find-a-professional">Browse local pros</Link>
+              </Button>
+            </div>
+          </Container>
+        </section>
+
+        {/* 6. FAQ (admin panel → FAQs, Domain / Category "kitchen-bath-design", audience Customer) */}
+        <Section>
+          <Container className="grid items-start gap-12 lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr)] lg:gap-20">
+            <div className="flex flex-col gap-5 lg:sticky lg:top-28">
+              <p className="eyebrow text-primary">FAQ</p>
+              <h2 className="text-3xl font-semibold tracking-tight md:text-[2.5rem] md:leading-[1.1]">
+                Kitchen &amp; Bath Design questions
+              </h2>
+              <p className="max-w-sm text-sm leading-7 text-muted-foreground">
+                How the studio works, what happens to your photo, and how to turn a design into a real written estimate.
+              </p>
+              <Link
+                href="/contact"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-brand transition-colors hover:text-foreground"
+              >
+                Still unsure? Contact us
+                <ArrowRight className="size-3.5" aria-hidden="true" />
+              </Link>
+            </div>
+            <FaqList items={faqs} variant="cards" />
+          </Container>
+        </Section>
+      </HomeMotion>
     </>
   );
 }

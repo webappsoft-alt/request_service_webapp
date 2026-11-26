@@ -3,8 +3,9 @@
 import "./pro-assistant.css";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, ChevronRight, History, Loader2, Maximize2, Minimize2, Minus, RotateCcw, Volume2, VolumeX, Wand2, X } from "lucide-react";
+import { ArrowUpRight, ChevronRight, FileClock, History, Loader2, Maximize2, Minimize2, Minus, PanelLeftOpen, RotateCcw, Search, SquarePen, Volume2, VolumeX, Wand2, X } from "lucide-react";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { ConfirmCard, InfoCard, ListCard } from "./action-cards";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,7 @@ import { selectAuthProvider, selectAuthToken, selectAuthUser } from "@/store/aut
 import { getServiceCategoryById } from "@/lib/data/services";
 import { EstimateDraftCard } from "./estimate-draft-card";
 import { ProAssistantHistory } from "./history-panel";
+import { ProAssistantEstimateHistory } from "./estimate-history-panel";
 import { ProAssistantInput } from "./pro-assistant-input";
 import { PRO_ASSISTANT_TOGGLE_EVENT } from "./pro-assistant-launcher";
 // import { ProAssistantEdgeTab } from "./pro-assistant-launcher"; — right-edge tab, replaced by the bubble
@@ -22,6 +24,8 @@ import {
   cancelAssistantAction,
   confirmAssistantAction,
   getAssistantConversation,
+  listAssistantConversations,
+  getAssistantDraft,
   isSafePortalHref,
   type PaAction,
   type PaMessage,
@@ -29,7 +33,7 @@ import {
 } from "./pro-assistant-api";
 import { useProAssistantSocket } from "./use-pro-assistant-socket";
 import { QuickReplies, SiteScopeCard } from "./site-scope-card";
-import type { PaCustomerOption, PaQuickReply, PaVisionAction } from "./pro-assistant-api";
+import type { PaCreatedEstimate, PaCustomerOption, PaQuickReply, PaVisionAction } from "./pro-assistant-api";
 
 /**
  * Pro operations co-pilot (Pro portal only). Separate from the customer bot: its own socket
@@ -175,6 +179,14 @@ export function ProAssistant() {
     }
   });
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Expanded window: Claude-style conversation sidebar on the left (collapsible).
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Rail "Search" → open the sidebar and focus its search box.
+  const [focusSearchKey, setFocusSearchKey] = useState(0);
+  // Small window: the history button only once the Pro has saved chats (null = not checked yet).
+  const [hasHistory, setHasHistory] = useState<boolean | null>(null);
+  // AI estimate history (Save Draft + drafts generated in chats).
+  const [estimateHistoryOpen, setEstimateHistoryOpen] = useState(false);
   /* Previous: "Read replies aloud" — when on, typed messages were spoken too.
   const [speakOn, setSpeakOn] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -246,6 +258,7 @@ export function ProAssistant() {
     setOpen(false);
     setExpanded(false);
     setHistoryOpen(false);
+    setEstimateHistoryOpen(false);
   }, []);
 
   // The header's Co-pilot button toggles the panel.
@@ -289,6 +302,24 @@ export function ProAssistant() {
     [router, closePanel],
   );
 
+  useEffect(() => {
+    if (!everOpened || !isPro || hasHistory !== null) return;
+    let cancelled = false;
+    listAssistantConversations("")
+      .then((list) => {
+        if (!cancelled) setHasHistory(list.length > 0);
+      })
+      .catch(() => {
+        if (!cancelled) setHasHistory(true); // unknown → keep the button
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [everOpened, isPro, hasHistory]);
+  // A chat saved in this session counts as history too.
+  const showHistory = hasHistory === true || Boolean(conversationId);
+  const sidebarVisible = expanded && sidebarOpen;
+
   const startNew = useCallback(() => {
     setMessages([welcome()]);
     setConversationId(null);
@@ -303,8 +334,53 @@ export function ProAssistant() {
       setMessages(list.length ? list.map((m) => ({ ...m, pending: false })) : [welcome()]);
       setConversationId(conversation.id);
       setHistoryOpen(false);
+      setEstimateHistoryOpen(false);
     } catch {
       /* stays on the history list */
+    } finally {
+      setLoadingConversation(false);
+    }
+  }, []);
+
+  /**
+   * AI estimate history → a saved draft reopens at the end of this chat as an editable card
+   * (customer, property, category, ALL CAPS sections, lines, units, prices and photos as saved).
+   */
+  const openSavedDraft = useCallback(async (id: string) => {
+    setLoadingConversation(true);
+    try {
+      const saved = await getAssistantDraft(id);
+      const message: PaMessage = {
+        id: `d-${saved.id}-${Date.now()}`,
+        role: "assistant",
+        text: saved.created
+          ? `Your saved draft “${saved.title}” — the estimate was already created from it.`
+          : `Here's your saved draft “${saved.title}”. Edit it, tap Save Draft again, or create the estimate.`,
+        action: {
+          type: "estimate_draft",
+          draft: {
+            title: saved.title,
+            customerName: saved.customerName || null,
+            customer: saved.customer,
+            customerCandidates: [],
+            items: saved.items,
+            subtotal: saved.total,
+            notes: saved.notes,
+            pricing: saved.pricing ?? null,
+            savedDraftId: saved.id,
+            savedAt: saved.at,
+            categoryName: saved.categoryName,
+            subcategoryName: saved.subcategoryName,
+            addressId: saved.addressId,
+          },
+        },
+        created: saved.created,
+        at: Date.now(),
+      };
+      setMessages((prev) => [...prev, message]);
+      setEstimateHistoryOpen(false);
+    } catch (error) {
+      toast.error(extractErrorMessage(error) || "Could not open that draft.");
     } finally {
       setLoadingConversation(false);
     }
@@ -461,6 +537,17 @@ export function ProAssistant() {
     laterTitles.add(key);
   }
 
+  // A revised draft (Budget option, + Permit allowance, a chat change…) keeps its title: link it to
+  // the estimate created / updated from the latest earlier version, so it updates that one.
+  const linkedDrafts = new Map<string, PaCreatedEstimate>();
+  const createdByTitle = new Map<string, PaCreatedEstimate>();
+  for (const m of messages) {
+    if (m.action?.type !== "estimate_draft") continue;
+    const key = m.action.draft.title.trim().toLowerCase();
+    if (m.created) createdByTitle.set(key, m.created);
+    else if (createdByTitle.has(key)) linkedDrafts.set(m.id, createdByTitle.get(key)!);
+  }
+
   return createPortal(
     <>
       {/* Launcher — draggable like the customer RS AI launcher; snaps to the nearest side and remembers it. */}
@@ -533,15 +620,42 @@ export function ProAssistant() {
               >
                 {speakOn ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
               </HeaderButton>
-              <HeaderButton label="New conversation" onClick={startNew}>
+              {/* Expanded: "New conversation" lives in the sidebar / its collapsed rail (on phones the
+                  rail is hidden, so the header keeps it there). */}
+              <HeaderButton label="New conversation" onClick={startNew} className={expanded ? "sm:hidden" : undefined}>
                 <RotateCcw className="size-4" />
               </HeaderButton>
-              <HeaderButton label="Conversation history" onClick={() => setHistoryOpen((v) => !v)} active={historyOpen}>
-                <History className="size-4" />
+              {expanded ? null : showHistory ? (
+                // Small window: history popover — only once there are saved chats (client: no clutter
+                // on the first visit).
+                <HeaderButton
+                  label="Conversation history"
+                  onClick={() => {
+                    setEstimateHistoryOpen(false);
+                    setHistoryOpen((v) => !v);
+                  }}
+                  active={historyOpen}
+                >
+                  <History className="size-4" />
+                </HeaderButton>
+              ) : null}
+              <HeaderButton
+                label="AI estimate history"
+                onClick={() => {
+                  setHistoryOpen(false);
+                  setEstimateHistoryOpen((v) => !v);
+                }}
+                active={estimateHistoryOpen}
+              >
+                <FileClock className="size-4" />
               </HeaderButton>
               <HeaderButton
                 label={expanded ? "Restore to small window" : "Expand"}
-                onClick={() => setExpanded((v) => !v)}
+                onClick={() => {
+                  // The sidebar replaces the history popover in the expanded window.
+                  setHistoryOpen(false);
+                  setExpanded((v) => !v);
+                }}
                 active={expanded}
                 className="hidden sm:flex"
               >
@@ -557,8 +671,48 @@ export function ProAssistant() {
             </div>
           </header>
 
-          <div className="relative flex min-h-0 flex-1 flex-col">
-          {historyOpen ? (
+          <div className="flex min-h-0 flex-1">
+          {expanded && !sidebarOpen ? (
+            // Collapsed sidebar → slim icon rail (client: Gemini-style), so it is clear how to reopen it.
+            <nav aria-label="Conversation rail" className="hidden w-12 shrink-0 flex-col items-center gap-1 border-r bg-muted/30 py-2.5 sm:flex dark:bg-muted/10">
+              <HeaderButton label="Expand sidebar" onClick={() => setSidebarOpen(true)}>
+                <PanelLeftOpen className="size-4" />
+              </HeaderButton>
+              <HeaderButton label="New conversation" onClick={startNew}>
+                <SquarePen className="size-4" />
+              </HeaderButton>
+              <HeaderButton
+                label="Search conversations"
+                onClick={() => {
+                  setSidebarOpen(true);
+                  setFocusSearchKey((k) => k + 1);
+                }}
+              >
+                <Search className="size-4" />
+              </HeaderButton>
+            </nav>
+          ) : null}
+          {sidebarVisible ? (
+            <div className="hidden sm:flex">
+              <ProAssistantHistory
+                variant="sidebar"
+                focusSearchKey={focusSearchKey}
+                activeId={conversationId}
+                refreshKey={conversationId}
+                onOpen={(id) => void openConversation(id)}
+                onNew={startNew}
+                onClose={() => setSidebarOpen(false)}
+                onDeleted={(id) => {
+                  if (id === conversationId) {
+                    setMessages([welcome()]);
+                    setConversationId(null);
+                  }
+                }}
+              />
+            </div>
+          ) : null}
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          {historyOpen && !expanded ? (
             <ProAssistantHistory
               activeId={conversationId}
               onOpen={(id) => void openConversation(id)}
@@ -570,6 +724,13 @@ export function ProAssistant() {
                   setConversationId(null);
                 }
               }}
+            />
+          ) : null}
+          {estimateHistoryOpen ? (
+            <ProAssistantEstimateHistory
+              onOpenSaved={(id) => void openSavedDraft(id)}
+              onOpenChat={(id) => void openConversation(id)}
+              onClose={() => setEstimateHistoryOpen(false)}
             />
           ) : null}
           {loadingConversation ? (
@@ -684,6 +845,7 @@ export function ProAssistant() {
                         <EstimateDraftCard
                           draft={m.action.draft}
                           created={m.created}
+                          linkedEstimate={linkedDrafts.get(m.id) || null}
                           conversationId={conversationId}
                           messageId={m.id}
                           // Keep the customer picked on the card across chat edits (same draft title).
@@ -692,9 +854,20 @@ export function ProAssistant() {
                             const key = m.action?.type === "estimate_draft" ? m.action.draft.title.trim().toLowerCase() : "";
                             if (key) setDraftCustomers((prev) => ({ ...prev, [key]: c }));
                           }}
+                          onDraftSaved={(saved) =>
+                            // Keep the saved draft's id on this message (next Save Draft updates the same draft).
+                            setMessages((prev) =>
+                              prev.map((x) =>
+                                x.id === m.id && x.action?.type === "estimate_draft"
+                                  ? { ...x, action: { ...x.action, draft: { ...x.action.draft, savedDraftId: saved.id, savedAt: saved.at } } }
+                                  : x,
+                              ),
+                            )
+                          }
                           onCreated={(result) => {
                             setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, created: result } : x)));
-                            go(result.href);
+                            // Updated in place → stay in the chat ("Estimate … updated" · Open on the card).
+                            if (result.mode !== "updated") go(result.href);
                           }}
                         />
                       ) : null}
@@ -776,6 +949,7 @@ export function ProAssistant() {
               onCancelPhotoHint={() => setMorePhotos(false)}
               prefill={prefill}
             />
+          </div>
           </div>
           </div>
         </section>

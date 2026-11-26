@@ -110,7 +110,8 @@ export function SectionedLineItemsEditor({
   const draftTaken = sectionNameTaken(draftSection);
 
   function handleAddSection() {
-    const name = draftSection.trim();
+    // Section headings are ALL CAPS (client) — new names are saved that way too.
+    const name = draftSection.trim().toUpperCase();
     if (!name || locked || draftTaken) return;
     onChange(addEmptySectionPlaceholder(lines, name, () => createEmptyLine("labor")));
     setDraftSection("");
@@ -128,7 +129,8 @@ export function SectionedLineItemsEditor({
   }
 
   function commitTitle(groupKey: string) {
-    const next = titleDraft.trim() || "General";
+    // Previous: titleDraft.trim() || "General" — headings are ALL CAPS now (client).
+    const next = titleDraft.trim().toUpperCase() || "General";
     setEditingKey(null);
     setTitleDraft("");
     const normalizedNext = next.toLowerCase() === "general" ? "" : next;
@@ -198,7 +200,7 @@ export function SectionedLineItemsEditor({
                   ref={titleInputRef}
                   value={titleDraft}
                   placeholder="General"
-                  className="h-8 max-w-xs border-input bg-white px-2 text-sm font-semibold shadow-none"
+                  className="h-8 max-w-xs border-input bg-white px-2 text-sm font-semibold uppercase shadow-none"
                   onChange={(event) => setTitleDraft(event.target.value)}
                   onBlur={() => commitTitle(group.key)}
                   onKeyDown={(event) => {
@@ -215,7 +217,7 @@ export function SectionedLineItemsEditor({
                 />
               ) : (
                 <div className="flex min-w-0 items-center gap-1.5">
-                  <p className="truncate text-sm font-semibold text-slate-800">
+                  <p className="truncate text-sm font-semibold tracking-wide text-slate-800 uppercase">
                     {group.label}
                   </p>
                   {!locked ? (
@@ -304,7 +306,7 @@ export function SectionedLineItemsEditor({
               )}
             >
               <span className="font-medium text-slate-600">
-                {group.label} total
+                <span className="uppercase">{group.label}</span> total
                 {spreadsheet && group.lines.some((line) => line.optional) ? (
                   <span className="ml-1 text-xs font-normal text-muted-foreground">(optional items not included)</span>
                 ) : null}

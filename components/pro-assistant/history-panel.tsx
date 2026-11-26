@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Loader2, MessageSquare, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Check, Loader2, MessageSquare, PanelLeftClose, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import {
@@ -22,7 +22,10 @@ function when(value: string) {
 
 /**
  * Saved Pro co-pilot conversations: open one to continue it, rename, delete, or start new.
- * Slides over the chat inside the panel.
+ * `overlay` (small window): slides over the chat inside the panel.
+ * `sidebar` (expanded window, client: Claude-style): a left pane next to the chat — "New
+ * conversation" on top, then the list; collapsible. Reloads when `refreshKey` changes (a new chat
+ * got saved, another one was opened).
  */
 export function ProAssistantHistory({
   activeId,
@@ -30,13 +33,21 @@ export function ProAssistantHistory({
   onNew,
   onClose,
   onDeleted,
+  variant = "overlay",
+  refreshKey = null,
+  focusSearchKey = 0,
 }: {
+  /** Changes (> 0) → focus the search box (the collapsed rail's Search button). */
+  focusSearchKey?: number;
   activeId: string | null;
   onOpen: (id: string) => void;
   onNew: () => void;
   onClose: () => void;
   onDeleted: (id: string) => void;
+  variant?: "overlay" | "sidebar";
+  refreshKey?: string | null;
 }) {
+  const sidebar = variant === "sidebar";
   const [rows, setRows] = useState<PaConversationSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +57,10 @@ export function ProAssistantHistory({
   const [busyId, setBusyId] = useState<string | null>(null);
   const requestRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (focusSearchKey > 0) searchRef.current?.focus();
+  }, [focusSearchKey]);
 
   function load(term: string) {
     const request = ++requestRef.current;
@@ -64,11 +79,13 @@ export function ProAssistantHistory({
   }
 
   useEffect(() => {
-    load("");
+    load(query);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, []);
+    // Reload when a chat is saved / switched (sidebar stays open meanwhile).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   async function rename() {
     if (!editing?.title.trim()) return;
@@ -99,27 +116,59 @@ export function ProAssistantHistory({
   }
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-popover animate-in fade-in-0 slide-in-from-right-4 duration-200" role="region" aria-label="Co-pilot history">
-      <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
-        <p className="text-sm font-semibold">Conversation history</p>
-        <div className="flex items-center gap-1">
+    <div
+      className={cn(
+        "flex flex-col bg-popover",
+        sidebar
+          ? "w-72 shrink-0 border-r bg-muted/30 animate-in fade-in-0 slide-in-from-left-4 duration-200 dark:bg-muted/10"
+          : "absolute inset-0 z-30 animate-in fade-in-0 slide-in-from-right-4 duration-200",
+      )}
+      role="region"
+      aria-label={sidebar ? "Conversation sidebar" : "Co-pilot history"}
+    >
+      {sidebar ? (
+        <div className="flex items-center gap-1.5 border-b px-3 py-2.5">
           <button
             type="button"
             onClick={onNew}
-            className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary px-2.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+            className="inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
           >
-            <Plus className="size-3.5" /> New
+            <Plus className="size-3.5" /> New conversation
           </button>
-          <button type="button" onClick={onClose} aria-label="Close history" className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
-            <X className="size-4" />
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Hide conversation sidebar"
+            title="Hide sidebar"
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <PanelLeftClose className="size-4" />
           </button>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
+          <p className="text-sm font-semibold">Conversation history</p>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onNew}
+              className="inline-flex h-8 items-center gap-1 rounded-lg bg-primary px-2.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="size-3.5" /> New conversation
+            </button>
+            <button type="button" onClick={onClose} aria-label="Close history" className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+      )}
+      {sidebar ? <p className="px-3 pt-2.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">Recent conversations</p> : null}
 
       <div className="border-b px-3 py-2">
         <div className="flex items-center gap-1.5 rounded-lg border bg-background px-2.5">
           <Search className="size-3.5 text-muted-foreground" aria-hidden />
           <input
+            ref={searchRef}
             value={query}
             onChange={(event) => {
               const next = event.target.value;
@@ -134,7 +183,7 @@ export function ProAssistantHistory({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto" data-lenis-prevent>
         {loading && !rows.length ? (
           <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /> Loading…
@@ -150,7 +199,14 @@ export function ProAssistantHistory({
         ) : (
           <ul className="divide-y">
             {rows.map((row) => (
-              <li key={row.id} className={cn("group relative", row.id === activeId && "bg-primary/[0.05]")}>
+              <li
+                key={row.id}
+                aria-current={row.id === activeId ? "true" : undefined}
+                className={cn(
+                  "group relative",
+                  row.id === activeId && (sidebar ? "bg-primary/10 shadow-[inset_3px_0_0_var(--color-primary)]" : "bg-primary/[0.05]"),
+                )}
+              >
                 {editing?.id === row.id ? (
                   <div className="flex items-center gap-1.5 px-3 py-2.5">
                     <input

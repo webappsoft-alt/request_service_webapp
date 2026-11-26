@@ -67,6 +67,170 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-26
 
+- **Co-pilot: collapsed sidebar becomes a slim icon rail; narrower Unit / Rate in the expanded
+  table.** Client: collapsing the sidebar hid it completely (unclear how to reopen it), and Unit /
+  Rate were wider than needed.
+  - **Rail** (`components/pro-assistant/pro-assistant.tsx`): with the expanded window's sidebar
+    collapsed, a 48px rail stays on the left, Gemini-style, with three icon buttons and tooltips:
+    - **Expand sidebar** (PanelLeftOpen) reopens the list;
+    - **New conversation** (SquarePen) starts a chat without expanding;
+    - **Search conversations** opens the sidebar and focuses its search box (`focusSearchKey`
+      prop on `history-panel.tsx`).
+    - The header's New conversation button now shows only in the small window (and on phones).
+      The "Show conversation sidebar" header button was removed, because the rail replaces it.
+  - **Widths** (`estimate-draft-card.tsx` `WIDE_LINE_GRID`):
+    - Unit 6.75rem → 5.625rem (90px) and Rate 5.25rem → 5.125rem (82px), so Description gets the
+      space.
+    - The Unit trigger uses 11px text, a 12px chevron and tighter padding, so the longest label
+      ("Labor + Mat.") still fits.
+    - The rate input's left padding was tightened.
+  - **Verified** in headless Chrome, light and dark (faked draft reply, writes blocked):
+    - the rail is 48px with 3 buttons and tooltips;
+    - New conversation keeps the rail collapsed, Search opens the sidebar with the search box
+      focused, and Expand reopens it;
+    - expanded widths are Unit 90 / Rate 82, and Description grows from 391 to 631px with the
+      rail;
+    - no number or unit text is cut (1234.56, 14814.72, "Labor + Mat.");
+    - no errors; tsc and eslint are clean.
+
+- **Co-pilot polish: compact line rows, Claude-style conversation sidebar, history only when there is
+  some.** Client request (3 items; the friendly small-talk replies are the backend change logged
+  the same day).
+  - **Compact rows** (`components/pro-assistant/estimate-draft-card.tsx` `DraftLineRow`):
+    - less row padding and gap;
+    - the controls are 26px tall (type pill, Qty, Unit, Rate, delete);
+    - smaller photo thumbnail and "+ Add image" button.
+    - **Qty and Rate are slimmer:**
+      - narrow grid `2.75rem · 1fr · 5.25rem · auto`, so the Unit dropdown takes the rest;
+      - wide grid columns Qty 3.25rem and Rate 5.25rem.
+      - Both inputs have tighter padding and a smaller "$".
+  - **Expanded window: conversation sidebar** (`history-panel.tsx` `variant="sidebar"`, wired in
+    `pro-assistant.tsx`):
+    - The left pane has "New conversation" on top, then "Recent conversations" with search,
+      title, time and preview, an active highlight (`aria-current`), rename and delete.
+    - It reloads when a chat is saved or switched.
+    - It can be hidden: the header then shows "Show conversation sidebar" and the New
+      conversation button.
+    - The chat and composer are the right pane.
+  - **Small window:**
+    - The Conversation history button shows only once the Pro has saved chats (checked once
+      when the panel first opens, or when this session saves one). First-time Pros get a
+      clean header.
+    - The history popover now says "New conversation".
+  - **Verified** in headless Chrome, light and dark, in both window sizes:
+    - with history simulated empty, there is no history button;
+    - with history, the button is there and the popover lists chats with New conversation;
+    - expanded: a 288px sidebar with New conversation, the list and one active row; hide and
+      show both work;
+    - "ok by", "thanks" and "hi" get the friendly replies from the backend;
+    - in both sizes nothing passes the card's right edge and no input text is cut (1234.56
+      fits);
+    - no errors, and the test conversations were deleted;
+    - tsc and eslint are clean.
+
+- **Co-pilot: a revised draft updates the estimate already created from the chat (no duplicates).**
+  Client: after "Estimate Est-6601 created", revising the draft (Budget option, + Permit
+  allowance, + Premium option, or a chat change) still offered "Create estimate", which made a
+  second estimate.
+  - **Link** (`components/pro-assistant/pro-assistant.tsx`): a draft card is linked to the latest
+    earlier card in the chat with the same title that created or updated an estimate. The created
+    result now keeps `estimateId` and `opportunityId` (`PaCreatedEstimate` in
+    `pro-assistant-api.ts`). Older chats only had the link, so the workspace id is read from it.
+  - **Card** (`estimate-draft-card.tsx`):
+    - The header reads "Revision of Est-6601", and a note says it is linked. Customer, property
+      and category are hidden because they stay as on the estimate.
+    - The main button is **Update Est-6601**. It sends a PUT that replaces the estimate's
+      sections, lines, units, prices, material photos and notes, then shows "Estimate Est-6601
+      updated" with Open. It stays in the chat instead of navigating.
+    - If the estimate became a job, or was approved, declined, expired, closed or archived, the
+      button reads "Est-6601 is locked" (disabled), with a notice and Open link.
+    - "Create a separate estimate instead" (and back) is the explicit way to make a second one.
+    - If the linked estimate was deleted, the card falls back to Create.
+  - **Verified** in headless Chrome, light and dark, with faked AI replies (the Budget option chip
+    included):
+    - creating Est-… and then pressing Budget option gives "Update Est-…", and Update shows
+      "updated";
+    - a simulated lock shows the locked state, and "separate" brings back Create;
+    - the API showed exactly one estimate per run, with the revised lines, photo, CAPS sections
+      and notes.
+    - Both test workspaces were deleted afterwards. No other writes; no errors; tsc and eslint
+      are clean.
+  - Note: the card numbers are the workspace numbers (Est-6601), the same as the existing
+    "created" banner. The estimate page heading shows the estimate's own number (EST-…).
+
+- **Co-pilot card: customer dropdown, and "Pick a customer to create" points to it.** Client: the
+  customer list loaded only after typing, and the button was disabled with no hint where to go.
+  - **Dropdown** (`components/pro-assistant/estimate-draft-card.tsx` `CustomerPicker`):
+    - It is a "Select a customer" dropdown. Page 1 of the Pro's customers (20) loads as soon as
+      the card shows.
+    - Scrolling to the bottom of the menu loads the next page, until all of them are listed
+      ("32 of 32 customers").
+    - The search box in the menu filters, and Change customer reopens it.
+  - **Button:**
+    - "Pick a customer to create" stays clickable. It scrolls to the Customer field, flashes it in
+      amber (`.copilot-attention` in `pro-assistant.css`, plain ring with reduced motion) and
+      opens the dropdown.
+    - With a customer picked, it becomes "Create estimate".
+    - A missing service category flashes the category field the same way.
+    - Other missing items keep the button disabled, as before.
+  - **Save Draft** still works without a customer.
+  - **Verified** in headless Chrome, light and dark (faked AI reply, all writes blocked):
+    - customers API page 1 is called with no click, and the scroll loads page 2;
+    - the button flashes the field and brings it into view with the menu open;
+    - picking a customer turns the button into "Create estimate";
+    - the notes box fits its text;
+    - no errors; tsc and eslint are clean.
+
+- **Co-pilot card: scope notes box grows with the text.** Client: long AI notes (Assumptions…) were
+  squeezed into a 2-row box with a scrollbar. Now it grows with its content (up to 24rem, then scrolls)
+  · `components/pro-assistant/estimate-draft-card.tsx`.
+
+- **Co-pilot estimate card: 3-row lines, ALL CAPS sections, Save Draft + AI estimate history.**
+  Client: in the narrow drawer the line totals could clip on the right, the material photo control
+  was easy to miss, section titles should be ALL CAPS, and a drafted estimate could not be kept
+  without creating it.
+  - **Line layout** (`components/pro-assistant/estimate-draft-card.tsx` `DraftLineRow`): row 1 is
+    description · Type · delete; row 2 is a grid of Qty · Unit (12 units) · $ Rate · Total. The total
+    has its own auto-width column, right-aligned, so it never clips, and the rate gets the larger
+    share with no number spinners, so prices like 1234.56 show in full. Row 3 appears on every
+    Material line with a visible dashed **+ Add image** button (thumbnail, replace, remove, and the
+    photo is carried into the estimate as before). The expanded co-pilot keeps one table row per
+    line, with row 3 spanning underneath.
+  - **ALL CAPS sections:**
+    - The card stores and shows section names in caps (new, renamed, and from the AI).
+    - The Manual Estimate Builder (`components/portal/estimate-v2/sectioned-line-items-editor.tsx`)
+      shows headings and section totals in caps and saves new or renamed sections in caps.
+    - Existing estimates' stored names are not changed; they only display in caps.
+    - The print view already used caps.
+  - **Save Draft** (card): saves the card as it is to the backend, without creating the estimate.
+    - It saves the customer, property, category, sub-service, sections, lines, units, prices,
+      material photos and notes.
+    - The first save creates the draft; later saves update the same draft.
+    - The button shows "Saved" until something changes, then "unsaved changes".
+    - "Create estimate" from a saved draft marks it as created in history.
+  - **AI estimate history** (new `components/pro-assistant/estimate-history-panel.tsx`; header button
+    in `pro-assistant.tsx`): lists saved drafts and estimates drafted in chats, with title,
+    customer, total, date and time, and item count, plus search.
+    - A saved draft reopens at the end of the chat as an editable card. Delete is on saved drafts only.
+    - A chat draft opens its conversation.
+  - **API** (`pro-assistant-api.ts`): `listAssistantEstimateHistory`, `getAssistantDraft`,
+    `saveAssistantDraft`, `deleteAssistantDraft`, `draftId` on create, and new optional draft
+    fields (`savedDraftId`, `savedAt`, `categoryName`, `subcategoryName`, `addressId`).
+  - **Verified** in headless Chrome, light and dark, with a faked AI reply:
+    - nothing goes past the card's right edge, in the narrow and the expanded drawer;
+    - totals and price inputs are not cut;
+    - "+ Add image" shows on both Material rows, with the thumbnail;
+    - sections read DEMOLITION & PREP and PLUMBING;
+    - tsc and eslint are clean.
+    - **Live against the restarted backend:**
+      - Save Draft → 201 ("Saved");
+      - an edit shows "unsaved changes", and saving again sends a PUT to the same draft;
+      - History lists it with customer, total, date and time, and item count, next to "From chat"
+        drafts;
+      - reopening restores the customer, category, ALL CAPS sections, rate and photo;
+      - delete removes it.
+    - Each theme's test draft was deleted afterwards, and no other writes were made.
+
 - **Co-pilot estimate card uses the app's dropdown.** Client: the card showed the browser's
   native `<select>` menus.
   - **Change** (`components/pro-assistant/estimate-draft-card.tsx`): Property, Service category,

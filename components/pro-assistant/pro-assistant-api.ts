@@ -1,4 +1,4 @@
-import { deleteData, getData, patchData, postData } from "@/components/api/sliceHttp";
+import { deleteData, getData, patchData, postData, putData } from "@/components/api/sliceHttp";
 
 /**
  * Pro operations assistant — API + types. Separate from the customer bot (components/bot-ai).
@@ -14,6 +14,9 @@ export const PRO_ASSISTANT_API = {
   conversation: (id: string) => `provider/assistant/conversations/${id}`,
   confirm: (id: string) => `provider/assistant/actions/${id}/confirm`,
   cancel: (id: string) => `provider/assistant/actions/${id}/cancel`,
+  /** Save Draft + AI estimate history. */
+  drafts: "provider/assistant/drafts",
+  draft: (id: string) => `provider/assistant/drafts/${id}`,
 } as const;
 
 export type PaRecord = { id: string; title: string; subtitle: string; href: string };
@@ -50,6 +53,12 @@ export type PaEstimateDraft = {
   items: Array<PaDraftItem & { total?: number }>;
   subtotal: number;
   notes: string;
+  /** Reopened from History (Save Draft): the saved draft's id + the choices saved with it. */
+  savedDraftId?: string | null;
+  savedAt?: string | null;
+  categoryName?: string;
+  subcategoryName?: string;
+  addressId?: string;
   /** Site-photo estimates: how the AI priced it (shown as a note on the card). */
   pricing?: {
     label: string;
@@ -119,6 +128,30 @@ export type PaReply = {
   conversationId?: string;
 };
 
+/**
+ * The estimate a draft card created or updated. `estimateId` / `opportunityId` link revised drafts
+ * in the same chat to it (older chats only have href + number; the workspace id is in the href).
+ */
+export type PaCreatedEstimate = {
+  href: string;
+  number: string;
+  estimateId?: string;
+  opportunityId?: string | null;
+  mode?: "created" | "updated";
+};
+
+/** Lock state of the estimate a revised draft is linked to. */
+export type PaLinkedEstimate = {
+  estimateId: string;
+  opportunityId: string | null;
+  number: string;
+  href: string;
+  status: string;
+  editable: boolean;
+  /** e.g. "is now a job", "was approved", "was declined", "has expired". */
+  lockedReason: string | null;
+};
+
 export type PaConversationSummary = {
   id: string;
   title: string;
@@ -137,8 +170,8 @@ export type PaMessage = {
   images?: string[];
   /** Structured chips on an assistant reply (site-photo loop). */
   quickReplies?: PaQuickReply[];
-  /** Estimate card created → its link. */
-  created?: { href: string; number: string } | null;
+  /** Estimate card created (or a revised card updated it) → its link. */
+  created?: PaCreatedEstimate | null;
   pending?: boolean;
   error?: boolean;
   at: number;
@@ -210,10 +243,82 @@ export async function createAssistantEstimate(body: {
   addressId?: string;
   categoryName: string;
   subcategoryName?: string;
+  /** Saved draft this came from (marked "created" in History). */
+  draftId?: string | null;
 }) {
-  return unwrap<{ opportunityId: string; estimateId: string; number: string; href: string }>(
+  return unwrap<{ opportunityId: string; estimateId: string; number: string; href: string; mode?: "created" }>(
     await postData(PRO_ASSISTANT_API.estimates, body, { silent: true }),
   );
+}
+
+/** One row of the AI estimate history: a saved draft, or a draft the co-pilot generated in a chat. */
+export type PaEstimateHistoryItem = {
+  id: string;
+  source: "saved" | "generated";
+  title: string;
+  customerName: string;
+  total: number;
+  itemCount: number;
+  created: { href: string; number: string } | null;
+  conversationId: string | null;
+  messageId: string;
+  at: string;
+};
+
+/** A saved draft, ready to reload into the card. */
+export type PaSavedDraft = PaEstimateHistoryItem & {
+  customer: PaCustomerOption | null;
+  addressId: string;
+  categoryName: string;
+  subcategoryName: string;
+  items: PaDraftItem[];
+  notes: string;
+  pricing: PaEstimateDraft["pricing"];
+};
+
+export type PaSaveDraftBody = {
+  title: string;
+  customerId?: string | null;
+  addressId?: string;
+  categoryName: string;
+  subcategoryName?: string;
+  items: PaDraftItem[];
+  notes: string;
+  pricing?: PaEstimateDraft["pricing"];
+  conversationId?: string | null;
+  messageId?: string;
+};
+
+export async function listAssistantEstimateHistory(q = "") {
+  const res = (await getData(PRO_ASSISTANT_API.drafts, { q, limit: 50 }, { silent: true, force: true })) as { data?: PaEstimateHistoryItem[] };
+  return Array.isArray(res?.data) ? res.data : [];
+}
+
+export async function getAssistantDraft(id: string) {
+  return unwrap<PaSavedDraft>(await getData(PRO_ASSISTANT_API.draft(id), undefined, { silent: true, force: true }));
+}
+
+/** Save Draft — new (no id) or over the same saved draft. */
+export async function saveAssistantDraft(body: PaSaveDraftBody, id?: string | null) {
+  return unwrap<PaEstimateHistoryItem>(
+    id ? await putData(PRO_ASSISTANT_API.draft(id), body, { silent: true }) : await postData(PRO_ASSISTANT_API.drafts, body, { silent: true }),
+  );
+}
+
+export async function deleteAssistantDraft(id: string) {
+  return deleteData(PRO_ASSISTANT_API.draft(id), { silent: true });
+}
+
+export async function getLinkedAssistantEstimate(id: string) {
+  return unwrap<PaLinkedEstimate>(await getData(`${PRO_ASSISTANT_API.estimates}/${id}/link`, undefined, { silent: true, force: true }));
+}
+
+/** Revised draft → update the linked estimate in place (no duplicate). */
+export async function updateAssistantEstimate(
+  id: string,
+  body: { title: string; items: PaDraftItem[]; notes: string; conversationId?: string | null; messageId?: string; draftId?: string | null },
+) {
+  return unwrap<PaCreatedEstimate>(await putData(`${PRO_ASSISTANT_API.estimates}/${id}`, body, { silent: true }));
 }
 
 /** Only portal pages may be opened from an assistant reply. */

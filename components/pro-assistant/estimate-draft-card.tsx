@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { extractUploadedUrl, uploadFile } from "@/components/api/uploadFile";
 import { PhotoLightbox } from "@/components/marketplace/portfolio-lightbox";
 import { defaultPricingUnit, normalizePricingUnit, pricingUnitOptions } from "@/lib/pricing-units";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
@@ -150,8 +151,63 @@ function SectionHeader({
   );
 }
 
-const fieldClass =
-  "h-8 w-full rounded-lg border bg-background px-2.5 text-xs outline-none focus:border-primary/50 disabled:opacity-70";
+
+/** Radix needs a non-empty value for the "nothing picked" option (Optional / Select category). */
+const NONE_VALUE = "__none__";
+
+/**
+ * The app's dropdown (components/ui/select — same as the estimate builder), sized for the card.
+ * Client: the card used the browser's native <select>. `emptyLabel` adds a first "nothing picked"
+ * option that maps to "" (e.g. Sub-service "Optional"); without it "" shows the placeholder.
+ */
+function CardSelect({
+  value,
+  onChange,
+  options,
+  ariaLabel,
+  placeholder,
+  emptyLabel,
+  disabled,
+  triggerClassName,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+  ariaLabel: string;
+  placeholder?: string;
+  emptyLabel?: string;
+  disabled?: boolean;
+  triggerClassName?: string;
+}) {
+  const current = value ? value : emptyLabel ? NONE_VALUE : undefined;
+  return (
+    <Select value={current} disabled={disabled} onValueChange={(next) => onChange(next === NONE_VALUE ? "" : next)}>
+      <SelectTrigger
+        size="sm"
+        aria-label={ariaLabel}
+        className={cn(
+          "w-full min-w-0 justify-between gap-1 text-xs [&_svg:not([class*='size-'])]:size-3.5 *:data-[slot=select-value]:truncate",
+          triggerClassName,
+        )}
+      >
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      {/* Above the co-pilot panel (z-index 61); data-lenis-prevent so the list scrolls, not the page. */}
+      <SelectContent position="popper" align="start" className="z-[100] min-w-[var(--radix-select-trigger-width)]" data-lenis-prevent>
+        {emptyLabel ? (
+          <SelectItem value={NONE_VALUE} className="text-xs">
+            {emptyLabel}
+          </SelectItem>
+        ) : null}
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value} className="text-xs">
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 /**
  * Wide card: one table row per line, the same columns as the Manual Estimate Builder
@@ -304,30 +360,27 @@ function DraftLineRow({
             </div>
           ) : null}
         </div>
-        <select
-          value={item.kind}
-          disabled={locked}
-          onChange={(event) => {
-            const kind = event.target.value as PaDraftItem["kind"];
-            // Builder rule: only material lines keep a photo.
-            onChange({ kind, ...(kind === "material" ? {} : { images: [] }) });
-          }}
-          aria-label={`${label} type`}
-          className={cn(
-            "mt-0.5 h-7 shrink-0 rounded-full border-0 px-2 text-[11px] outline-none @2xl:w-full",
-            item.kind === "labor"
-              ? "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300"
-              : item.kind === "material"
-                ? "bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300"
-                : "bg-muted text-muted-foreground",
-          )}
-        >
-          {(Object.keys(KIND_LABEL) as PaDraftItem["kind"][]).map((k) => (
-            <option key={k} value={k}>
-              {KIND_LABEL[k]}
-            </option>
-          ))}
-        </select>
+        <div className="mt-0.5 w-[6.5rem] shrink-0 @2xl:w-full">
+          <CardSelect
+            value={item.kind}
+            disabled={locked}
+            onChange={(next) => {
+              const kind = next as PaDraftItem["kind"];
+              // Builder rule: only material lines keep a photo.
+              onChange({ kind, ...(kind === "material" ? {} : { images: [] }) });
+            }}
+            options={(Object.keys(KIND_LABEL) as PaDraftItem["kind"][]).map((k) => ({ value: k, label: KIND_LABEL[k] }))}
+            ariaLabel={`${label} type`}
+            triggerClassName={cn(
+              "h-7! rounded-full border-0 px-2.5 text-[11px] font-medium",
+              item.kind === "labor"
+                ? "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300"
+                : item.kind === "material"
+                  ? "bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300"
+                  : "bg-muted text-muted-foreground",
+            )}
+          />
+        </div>
         {/* Narrow card: remove sits on the first row. */}
         {removeButton("-mt-0.5 flex size-6 shrink-0 max-sm:size-9 @2xl:hidden")}
       </div>
@@ -345,19 +398,16 @@ function DraftLineRow({
             className="h-7 w-14 rounded border bg-background px-1.5 text-right text-xs text-foreground tabular-nums outline-none focus:border-primary/50 @2xl:w-full"
           />
         </label>
-        <select
-          value={unit}
-          disabled={locked}
-          onChange={(event) => onChange({ unit: event.target.value })}
-          aria-label={`${label} unit`}
-          className="h-7 w-[6.75rem] shrink-0 rounded border bg-background px-1.5 text-xs text-foreground outline-none focus:border-primary/50 @2xl:mt-0.5 @2xl:w-full"
-        >
-          {pricingUnitOptions(unit).map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <div className="w-[6.75rem] shrink-0 @2xl:mt-0.5 @2xl:w-full">
+          <CardSelect
+            value={unit}
+            disabled={locked}
+            onChange={(next) => onChange({ unit: next })}
+            options={pricingUnitOptions(unit)}
+            ariaLabel={`${label} unit`}
+            triggerClassName="h-7! rounded px-1.5 text-foreground"
+          />
+        </div>
         <span className="@2xl:hidden">×</span>
         <span className="relative @2xl:mt-0.5">
           <span className="pointer-events-none absolute top-1/2 left-1.5 -translate-y-1/2 text-xs">$</span>
@@ -799,71 +849,52 @@ export function EstimateDraftCard({
         </div>
 
         {customer && addresses.length ? (
-          <label className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1">
             <span className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
               <MapPin className="size-3" aria-hidden /> Property
             </span>
-            <select
+            <CardSelect
               value={selectedAddressId}
               disabled={locked || addresses.length === 1}
-              onChange={(event) => setAddressId(event.target.value)}
-              aria-label="Property address"
-              className={fieldClass}
-            >
-              {addresses.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.label ? `${a.label} — ` : ""}
-                  {a.line || "Address"}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={setAddressId}
+              options={addresses.map((a) => ({ value: a.id, label: `${a.label ? `${a.label} — ` : ""}${a.line || "Address"}` }))}
+              ariaLabel="Property address"
+            />
+          </div>
         ) : null}
 
         <div className="grid grid-cols-2 gap-2">
-          <label className="flex min-w-0 flex-col gap-1">
+          <div className="flex min-w-0 flex-col gap-1">
             <span className="text-[11px] font-medium text-muted-foreground">Service category *</span>
             {providerCategories.length ? (
-              <select
+              <CardSelect
                 value={category}
                 disabled={locked}
-                onChange={(event) => {
-                  setCategoryName(event.target.value);
+                onChange={(next) => {
+                  setCategoryName(next);
                   setSubcategoryName("");
                 }}
-                aria-label="Service category"
-                className={fieldClass}
-              >
-                <option value="">Select category</option>
-                {providerCategories.map((c) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+                options={providerCategories.map((c) => ({ value: c.name, label: c.name }))}
+                placeholder="Select category"
+                ariaLabel="Service category"
+              />
             ) : (
               <Link href={PROFILE_CATEGORIES_HREF} className="text-[11px] font-semibold text-primary underline underline-offset-2">
                 Set your service categories first
               </Link>
             )}
-          </label>
-          <label className="flex min-w-0 flex-col gap-1">
+          </div>
+          <div className="flex min-w-0 flex-col gap-1">
             <span className="text-[11px] font-medium text-muted-foreground">Sub-service</span>
-            <select
+            <CardSelect
               value={validSubcategory}
               disabled={locked || !subcategoryOptions.length}
-              onChange={(event) => setSubcategoryName(event.target.value)}
-              aria-label="Sub-service"
-              className={fieldClass}
-            >
-              <option value="">{category ? (subcategoryOptions.length ? "Optional" : "None listed") : "Pick a category first"}</option>
-              {subcategoryOptions.map((s) => (
-                <option key={s.name} value={s.name}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={setSubcategoryName}
+              options={subcategoryOptions.map((sub) => ({ value: sub.name, label: sub.name }))}
+              emptyLabel={category ? (subcategoryOptions.length ? "Optional" : "None listed") : "Pick a category first"}
+              ariaLabel="Sub-service"
+            />
+          </div>
         </div>
 
         {/* Line items by work / trade section (same `section` field as the estimate builder).

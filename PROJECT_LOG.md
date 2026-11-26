@@ -67,6 +67,30 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-26
 
+- **Co-pilot estimate card uses the app's dropdown.** Client: the card showed the browser's
+  native `<select>` menus.
+  - **Change** (`components/pro-assistant/estimate-draft-card.tsx`): Property, Service category,
+    Sub-service, line Type and line Unit now use `components/ui/select`, the same as the estimate
+    builder, through a small `CardSelect` wrapper.
+    - **Menus:** open at `z-[100]`, above the co-pilot panel (z-index 61), with
+      `data-lenis-prevent` so long lists scroll inside the menu.
+    - **Empty values:** "Select category" is a placeholder; "Optional" / "None listed" / "Pick a
+      category first" is a real first option mapped to "".
+    - **Type** keeps its coloured pill (sky = Labor, amber = Material).
+    - No native `<select>` is left in the card, and the unused `fieldClass` was removed.
+  - **Checked** in headless Chrome as the test provider, light + dark:
+    - **Fully faked:** the assistant reply was answered in the browser, the socket was blocked,
+      and nothing was sent or saved.
+    - **All five menus open above the panel:**
+      - category: the Pro's 6 categories;
+      - sub-service: Optional + 10;
+      - property: 2 addresses;
+      - type: 3;
+      - unit: the 12 units.
+    - **Picks applied:** Vanity replacement, Rental address, Material (its "Add image" appeared)
+      and Sq. Ft.
+    - No console errors. `tsc` and eslint are clean.
+
 - **Closed estimates are fully read-only, starting with "Set schedule".**
   - **Bug:** "Set schedule" stayed clickable on converted / paid estimates (EST-210), so I
     audited every control on the estimate page across the lifecycle.

@@ -67,6 +67,130 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-26
 
+- **Admin AI Pricing & Labor: Add button in the toolbar, icon-only row actions, added categories
+  hidden from Add** (`admin/src/pages/ai-pricing.jsx`). Client: HVAC already had a benchmark but
+  was still in the Add dropdown.
+  - **+ Add Benchmark** moved from the page header to the table toolbar, on the right, opposite the
+    search (DataTable `extraFilters`). The header keeps only "Load US defaults".
+  - Row **Edit / Delete** are now icon-only (pencil, red trash; `aria-label` and tooltip "Edit" /
+    "Delete").
+  - The Add dropdown no longer lists a category that already has a benchmark (backend change, see
+    the backend log). The hint now says to edit those from the table.
+  - **Verified:** eslint is clean and the build passes. Mocked-API browser run, light and dark
+    (real service functions over stub models):
+    - the picker leaves out every added category;
+    - Plumbing drops out right after it is added;
+    - Edit (no category fields) and the Delete confirmation still work.
+
+
+- **Admin AI Pricing & Labor → CRUD table with Add / Edit / Delete modals** (replaces the
+  all-categories table from earlier today). Client: list only what was added, with no Status
+  column and no "Needs setup" rows.
+  - **Table** (`admin/src/pages/ai-pricing.jsx`, shared `DataTable` in server mode): saved
+    benchmarks only. Columns:
+    - Service category (+ "Whole category" or "Sub-service: …", and a Paused badge if off);
+    - Hourly rate;
+    - Rate range;
+    - Task hour rules (pills, "+N more");
+    - Max hrs (other tasks);
+    - Actions: **Edit** and **Delete** buttons.
+  - Search is debounced (350 ms) and sent to the API (`?search=&page=&limit=`), with page /
+    page-size controls; a new search resets to page 1, and deleting the last row of a page steps
+    back.
+  - Header: **+ Add Benchmark** (primary) and **Load US defaults** (secondary; it keeps the "Add
+    missing only / Reset" dialog). The banner is removed.
+  - Empty state: an Add button plus a note that the Co-pilot uses the built-in US values until
+    then.
+  - **Add modal:**
+    - A Service category dropdown with server search and load-more on scroll (20 per page). It
+      lists only categories that still have something to add.
+    - Then **Applies to**: "Whole category" (only if not added) or one of its un-added
+      sub-services.
+    - Picking a standard category (Plumbing, Electrical, HVAC, Handyman, Bathroom) pre-fills its
+      US values and rules, with a note.
+    - Rate fields, Active checkbox and task rules as before.
+  - **Edit modal:** the same form pre-filled, with no category / sub-service fields (the name is
+    in the title); saves via PATCH.
+  - **Delete:** a confirmation, "Are you sure you want to delete the AI pricing benchmark for X?",
+    then DELETE.
+  - The table refreshes after each change (RTK tag).
+  - `store/api/aiPricingApi.js`: `getAiPricingBenchmarks({ search, page, limit })` and the new
+    lazy `getAiPricingCategoryOptions`.
+  - **Verified:**
+    - eslint is clean and the build passes;
+    - headless Chrome, light and dark, at 1600 px and 390 px (no horizontal scroll). The mocked
+      API ran the **real new service functions** over in-memory stub models (no backend / DB),
+      with 12 saved benchmarks and 30 categories:
+      - the table showed 10 + 2 across 2 pages, and the columns had no Status;
+      - searching "tile" made the call `GET ?search=tile&page=1&limit=10` and returned the
+        Bathroom sub-service row;
+      - the Add picker loaded 20 categories, then 30 after scrolling (page 2 call);
+      - "plum" narrowed it to Plumbing, which pre-filled $125 and 8 rules;
+      - Plumbing was added at $135 / $115–$160 (count 12 → 13);
+      - Bathroom offered only its 2 un-added sub-services;
+      - Edit had no category fields; $145 was saved and shown in the row;
+      - the Delete confirmation removed Plumbing (count back to 12).
+
+
+- **Admin AI Pricing & Labor: CRM table + pre-filled editor** (`admin/src/pages/ai-pricing.jsx`).
+  Client: the card grid and the "built-in" vs "Not set" banner were confusing, and opening a
+  built-in category showed "No task rules yet".
+  - **Table** (the shared `DataTable`, like Pro Wallets): tabs All / Configured / Needs Setup
+    with counts, plus search by category, sub-service, task or keyword. Columns:
+    - Service category (sub-service count, and how many have their own rates);
+    - Hourly rate with a Custom / US Default badge;
+    - Rate range;
+    - Task hour rules as pills ("Faucet · 1.5–4.5h", "+5 more", full name in the tooltip);
+    - Max hrs (other tasks);
+    - Status: an Active / Paused switch for saved benchmarks (PATCH `isActive`), "Active ·
+      default" for built-in ones, "Needs setup" otherwise;
+    - Action: **Edit Rules** (or **Set up** for categories with nothing).
+  - The banner and the cards are removed. "Load US standard defaults" stays at the top right.
+  - **Editor:** a category still on the built-in US values now opens with those values filled in
+    (rates, cap, every task rule and keyword), with a "US default" badge and a note. Save creates
+    the admin benchmark from them.
+  - Editor footer pinned to the sheet's bottom edge (rule inputs showed below it).
+  - `components/data-table/data-table.jsx`: new opt-in `hideActionsColumn` prop (default off;
+    other pages unchanged) so this page shows its own Action column instead of OPTIONS.
+  - **Verified:**
+    - eslint is clean on the page; the 5 errors in `data-table.jsx` were already there;
+    - the production build passes;
+    - checked in headless Chrome at 1600 px and 390 px, light and dark, against mocked API
+      responses only (no admin login; nothing reached the backend or DB):
+      - Plumbing opens pre-filled ($125, $95–$165, 8 h, 8 rules);
+      - Save sends POST Plumbing with all 8 rules and the edited $135;
+      - the switch sends PATCH `{ isActive: false }`;
+      - the tabs show 9 / 5 / 4;
+      - searching "faucet" leaves only Plumbing;
+      - no horizontal scroll at 390 px.
+  - Backend: see "AI pricing list returns the full built-in defaults" in the backend log
+    (restart needed).
+
+
+- **Admin AI Pricing & Labor: card "Configure →" and header button; live Co-pilot verification.**
+  - **Polish** (`admin/src/pages/ai-pricing.jsx`):
+    - "Load US standard defaults" can't wrap or shrink (`shrink-0 whitespace-nowrap`).
+    - Every category card has a footer, "Set up / Edit rates & task rules · Configure →", that
+      turns primary on hover (the arrow nudges), plus a light tint on hover and a focus ring.
+    - eslint is clean.
+  - **Not done:** the browser check of the page and the admin steps of the test (save Plumbing
+    $135 → Co-pilot → change to $145 → delete). No admin login was available, the client chose
+    "Co-pilot only", and no admin token was created.
+  - **Live Co-pilot verification** (backend started 17:55 with the final code; real AI; test
+    conversations deleted; the saved Bathroom Remodeling $20/hr benchmark was not touched):
+    - "Create an estimate: replace a kitchen faucet and check under-sink shutoff valves", and the
+      same with "Draft a plumbing estimate…", both returned:
+      - Replace kitchen faucet 2.5 h (faucet rule 1.5–4.5 h);
+      - Check under-sink shutoff valves 1.5 h (valve rule 0.5–2 h);
+      - both at $101.68/hr = $406.72. That is this Pro's own plumbing rate from past estimates,
+        kept because it is inside the built-in Plumbing range ($95–$165).
+    - With an admin Plumbing benchmark of $135 (min $115), the same Pro rate would be outside the
+      range, so the lines would get $135/hr.
+    - The exact wording "Replace a kitchen faucet and check under-sink shutoff valves" (no word
+      "estimate") is routed as a service request: the Co-pilot asks for the customer first. That
+      is existing routing, unrelated to the benchmarks.
+
+
 - **Admin portal: AI Pricing & Labor page** (in the `admin` app — the admin portal lives there, not
   in this webapp). Backend: see the backend log, "Admin AI Pricing & Labor benchmarks".
   - **Page:** `admin/src/pages/ai-pricing.jsx` at `/ai-pricing`, under **AI Tools** in the

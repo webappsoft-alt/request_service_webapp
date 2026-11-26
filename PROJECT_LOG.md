@@ -67,6 +67,33 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-26
 
+- **Admin portal: AI Pricing & Labor page** (in the `admin` app — the admin portal lives there, not
+  in this webapp). Backend: see the backend log, "Admin AI Pricing & Labor benchmarks".
+  - **Page:** `admin/src/pages/ai-pricing.jsx` at `/ai-pricing`, under **AI Tools** in the
+    sidebar (`lib/navigation.js`), permission module `ai_pricing` (`lib/permissions.js`,
+    `App.jsx` route guard).
+  - **API:** RTK Query `store/api/aiPricingApi.js` (list / create / update / delete / seed),
+    registered in `store/store.js`.
+  - **Cards:**
+    - One card per platform category, with search and a Configured / Not configured filter.
+    - Each card shows the hourly rate, or "built-in" for standard categories not saved yet, the
+      task rule count, sub-service benchmarks, and Paused / Not on platform badges.
+    - A banner lists the standard categories still on the built-in US values.
+  - **Editor** (side sheet):
+    - Scope: the whole category or one of its sub-services.
+    - Rate fields: default / min / max rate and the max hours for any other labor line, plus an
+      Active switch.
+    - A task rules list: task name, keyword tags (type + Enter), unit (12 units), Min / Typical /
+      Max hrs and an optional rate override; add and delete rows.
+    - Checks Min ≤ Typical ≤ Max and the rate range before saving, with a toast on save.
+    - Delete benchmark asks for confirmation.
+  - **"Load US standard defaults":** loads at once when nothing is saved; otherwise it asks
+    "Add missing only" or "Reset those categories".
+  - Light and dark use the app's own tokens and badge tones.
+  - **Verified:** eslint is clean and the production build passes (built to a scratch folder). It
+    was not opened in the browser — that needs an admin login.
+
+
 - **Co-pilot expanded view: wider chat column.** Client: too much empty space left and right of the chat.
   The message stream and composer went from `max-w-4xl` (896px) to `max-w-6xl` (1152px), still
   centered and aligned (`components/pro-assistant/pro-assistant.tsx`). Verified at 1800px in light and

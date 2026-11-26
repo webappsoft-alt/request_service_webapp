@@ -67,6 +67,27 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-26
 
+- **Crawl-trap rules in robots, slower search debounce, admin "Clear Public Cache" button.**
+  Part of the client's bot-traffic and performance pass. See the backend log for 2026-11-26.
+  - **`app/robots.ts`:**
+    - also disallows `/dashboard/`, `/admin/`, `/*?*sortBy=` and `/*?*subCategory=`;
+    - `/` stays allowed, pagination stays crawlable, and the sitemap is unchanged;
+    - today's directory URLs don't use those two params, so these rules are a guard for later.
+  - **Search debounce:** the services directory and category explorer went from 220 ms to
+    **350 ms** (`SEARCH_DEBOUNCE_MS`), so typing sends one request. The location-wait delay is
+    unchanged.
+  - **Server fetches:** already use `revalidate` (300–3600 s) for public catalog data, so no
+    change. Client fetches have no cache-busting.
+  - **Admin** (`admin/src/pages/settings.jsx`, `admin/src/store/api/cmsApi.js`): a **Clear
+    Public Cache** button in the Settings header. It calls `POST /admin/clear-cache` and shows
+    only to users who can edit settings.
+  - **Checked:**
+    - `tsc` clean for the changed files;
+    - the eslint errors are existing ones (refs during render in `services-directory.tsx`, and
+      the unused `_` in `cmsApi.js`), none on changed lines.
+  - Files: `app/robots.ts`, `components/marketplace/{services-directory,category-explorer}.tsx`,
+    `admin/src/pages/settings.jsx`, `admin/src/store/api/cmsApi.js`.
+
 - **API no longer uses Redis (stack line updated).** Redis was removed from the backend; see the
   backend log for 2026-11-26. The webapp and admin never used Redis, so neither app changed.
   Files: this log only.

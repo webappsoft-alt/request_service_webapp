@@ -61,6 +61,9 @@ import {
   type PublicProfessionalsQuery,
 } from "@/store/publicProfessionalsSlice";
 
+/** Wait after the last search / filter change before calling the API (typing = one request). */
+const SEARCH_DEBOUNCE_MS = 350;
+
 export type ExplorerMatch = {
   job: string;
   zip?: string;
@@ -486,7 +489,7 @@ export function CategoryExplorer({
       ).finally(() => {
         setPendingRefresh(false);
       });
-    }, 220);
+    }, SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [customerLocation.detecting, dispatch, liveQueryKey, useLive]);
 

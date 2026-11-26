@@ -95,6 +95,9 @@ import {
 } from "@/store/publicProfessionalsSlice";
 import type { ServiceJobListing } from "@/components/marketplace/service-job-card";
 
+/** Wait after the last search / filter change before calling the API (typing = one request). */
+const SEARCH_DEBOUNCE_MS = 350;
+
 type SortKey = "price-asc" | "price-desc" | "rating";
 type ViewKey = "grid" | "list";
 
@@ -940,7 +943,7 @@ export function ServicesDirectory({
           },
         }),
       );
-    }, customerLocation.detecting ? LOCATION_WAIT_MS : 220);
+    }, customerLocation.detecting ? LOCATION_WAIT_MS : SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [
     answers,

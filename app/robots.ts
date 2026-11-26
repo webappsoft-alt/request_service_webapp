@@ -16,6 +16,11 @@ const PRIVATE_PATHS = [
   "/verify-forgot-otp",
   "/verify-otp",
   "/reset-password",
+  "/dashboard/",
+  "/admin/",
+  // Crawl traps: sort / sub-filter permutations of the same listing (pagination stays crawlable).
+  "/*?*sortBy=",
+  "/*?*subCategory=",
 ];
 
 /** AI search / assistant crawlers (OpenAI, Anthropic, Perplexity) — explicitly welcome. */

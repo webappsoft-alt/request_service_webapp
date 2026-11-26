@@ -15,7 +15,7 @@ pro portal, and give their technicians and subcontractors their own logins.
 | App | Folder | Stack | Runs on |
 |---|---|---|---|
 | Website + all portals | `request_service_webapp/` | Next.js 16 (App Router), React 19, Tailwind v4, Redux Toolkit, socket.io-client | `localhost:3000` |
-| API | `request-service-backend/` | Node.js, Express 5, MongoDB (Mongoose 8), Redis, socket.io, Twilio, OpenAI, Firebase (push) | `src/server.js` |
+| API | `request-service-backend/` | Node.js, Express 5, MongoDB (Mongoose 8), socket.io, Twilio, OpenAI, Firebase (push) | `src/server.js` |
 | Super admin console | `admin/` | Vite + React 19, Tailwind v4, Redux Toolkit | `localhost:5173` |
 
 > Next.js 16 has breaking changes. Before writing Next code, read the guide in
@@ -64,6 +64,12 @@ Modules, layout, notification channels and API conventions: see
 ## Change log
 
 Newest first. Format: **what** — why · files.
+
+### 2026-11-26
+
+- **API no longer uses Redis (stack line updated).** Redis was removed from the backend; see the
+  backend log for 2026-11-26. The webapp and admin never used Redis, so neither app changed.
+  Files: this log only.
 
 ### 2026-11-25
 - **Admin `/tax`: read-only table + Edit modal (replaces inline editing)**

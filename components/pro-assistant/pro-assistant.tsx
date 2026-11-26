@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, ChevronRight, FileClock, History, Loader2, Maximize2, Minimize2, Minus, PanelLeftOpen, RotateCcw, Search, SquarePen, Volume2, VolumeX, Wand2, X } from "lucide-react";
+import { ArrowUpRight, ChevronRight, FileClock, FileText, Receipt, TrendingUp, UserCheck, History, Loader2, Maximize2, Minimize2, Minus, PanelLeftOpen, RotateCcw, Search, SquarePen, Volume2, VolumeX, Wand2, X } from "lucide-react";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
 import { ConfirmCard, InfoCard, ListCard } from "./action-cards";
 import { cn } from "@/lib/utils";
@@ -161,6 +161,23 @@ export function ProAssistant() {
     return list.length ? list : [GENERIC_ESTIMATE_STARTER];
   }, [categoryIds]);
   const [showAllEstimateStarters, setShowAllEstimateStarters] = useState(false);
+  // Expanded empty state (client): up to 3 "Draft a … estimate" cards from the Pro's categories, then
+  // the operations prompts — 6 cards. Each sends the same message as the matching chip.
+  const heroPrompts = useMemo(() => {
+    const estimates = estimateStarters.slice(0, 3).map((send) => {
+      const name = send.match(/^Create an estimate for (.+)$/)?.[1];
+      // "an" before a vowel sound: Electrical, HVAC (aitch-vac).
+      const article = name && (/^[aeiou]/i.test(name) || /^[FHLMNRSX][A-Z]/.test(name)) ? "an" : "a";
+      return { send, label: name ? `Draft ${article} ${name} estimate` : "Draft a new estimate", hint: "Estimate", icon: "estimate" as const };
+    });
+    const ops = OPS_STARTERS.map((send) => ({
+      send,
+      label: send,
+      hint: /invoice/i.test(send) ? "Money" : /job|tech/i.test(send) ? "Team" : "Insights",
+      icon: (/invoice/i.test(send) ? "money" : /job|tech/i.test(send) ? "team" : "insights") as "money" | "team" | "insights",
+    }));
+    return [...estimates, ...ops].slice(0, 6);
+  }, [estimateStarters]);
 
   // Client only (portal to <body>, sessionStorage).
   const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
@@ -318,7 +335,8 @@ export function ProAssistant() {
   }, [everOpened, isPro, hasHistory]);
   // A chat saved in this session counts as history too.
   const showHistory = hasHistory === true || Boolean(conversationId);
-  const sidebarVisible = expanded && sidebarOpen;
+  // Only the greeting so far (new / empty conversation).
+  const emptyChat = messages.length === 0 || (messages.length === 1 && messages[0].id === "welcome");
 
   const startNew = useCallback(() => {
     setMessages([welcome()]);
@@ -672,9 +690,17 @@ export function ProAssistant() {
           </header>
 
           <div className="flex min-h-0 flex-1">
-          {expanded && !sidebarOpen ? (
+          {expanded ? (
+          // One tinted left pane (client): 270px sidebar ⇄ 48px icon rail, width animates.
+          <div
+            className={cn(
+              "hidden shrink-0 overflow-hidden border-r border-slate-200/80 bg-slate-50/80 transition-[width] duration-300 ease-out sm:flex dark:border-white/10 dark:bg-slate-900/60",
+              sidebarOpen ? "w-[270px]" : "w-12",
+            )}
+          >
+          {!sidebarOpen ? (
             // Collapsed sidebar → slim icon rail (client: Gemini-style), so it is clear how to reopen it.
-            <nav aria-label="Conversation rail" className="hidden w-12 shrink-0 flex-col items-center gap-1 border-r bg-muted/30 py-2.5 sm:flex dark:bg-muted/10">
+            <nav aria-label="Conversation rail" className="flex w-12 shrink-0 flex-col items-center gap-1 py-2.5 animate-in fade-in-0 duration-300">
               <HeaderButton label="Expand sidebar" onClick={() => setSidebarOpen(true)}>
                 <PanelLeftOpen className="size-4" />
               </HeaderButton>
@@ -691,9 +717,7 @@ export function ProAssistant() {
                 <Search className="size-4" />
               </HeaderButton>
             </nav>
-          ) : null}
-          {sidebarVisible ? (
-            <div className="hidden sm:flex">
+          ) : (
               <ProAssistantHistory
                 variant="sidebar"
                 focusSearchKey={focusSearchKey}
@@ -709,7 +733,8 @@ export function ProAssistant() {
                   }
                 }}
               />
-            </div>
+          )}
+          </div>
           ) : null}
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {historyOpen && !expanded ? (
@@ -738,8 +763,53 @@ export function ProAssistant() {
               <Loader2 className="size-5 animate-spin text-primary" />
             </div>
           ) : null}
-          <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-3" aria-live="polite">
-            <div className={cn("mx-auto flex w-full flex-col gap-3", expanded && "max-w-7xl")}>
+          <div
+            ref={listRef}
+            // Expanded: scrollbar space on both sides so the centered column lines up with the composer.
+            className={cn("flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-3", expanded && "[scrollbar-gutter:stable_both-edges]")}
+            aria-live="polite"
+          >
+            {expanded && emptyChat ? (
+              // Expanded, nothing asked yet (client): centered welcome + starter cards instead of the
+              // greeting pinned top-left.
+              <div className="m-auto flex w-full max-w-3xl flex-col items-center gap-6 px-2 py-8 text-center animate-in fade-in-0 duration-300">
+                <span className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/15">
+                  <Avatar className="size-10" />
+                </span>
+                <div className="flex flex-col gap-2">
+                  <h2 className="text-2xl font-semibold tracking-tight text-foreground">How can I help run your business today?</h2>
+                  <p className="mx-auto max-w-xl text-sm text-muted-foreground">
+                    Ask about your numbers, team and schedule — or describe a job and I&apos;ll draft the estimate. I always ask before
+                    changing anything.
+                  </p>
+                </div>
+                <div className="grid w-full gap-2.5 sm:grid-cols-2 lg:grid-cols-3" role="list" aria-label="Starter prompts">
+                  {heroPrompts.map((prompt) => {
+                    const Icon = prompt.icon === "estimate" ? FileText : prompt.icon === "money" ? Receipt : prompt.icon === "team" ? UserCheck : TrendingUp;
+                    return (
+                      <button
+                        key={prompt.send}
+                        type="button"
+                        role="listitem"
+                        disabled={busy}
+                        onClick={() => void ask(prompt.send)}
+                        className="group flex min-h-[4.5rem] items-start gap-3 rounded-xl border bg-card p-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md disabled:opacity-60"
+                      >
+                        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+                          <Icon className="size-4" aria-hidden />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-foreground">{prompt.label}</span>
+                          <span className="mt-0.5 block text-[11px] text-muted-foreground">{prompt.hint}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+            // Previous: max-w-7xl, then max-w-4xl (too much empty space left / right) — max-w-6xl now (client).
+            <div className={cn("mx-auto flex w-full flex-col gap-3", expanded && "max-w-6xl")}>
               {messages.map((m) =>
                 m.role === "user" ? (
                   <div key={m.id} className="flex flex-col items-end gap-1.5">
@@ -936,9 +1006,11 @@ export function ProAssistant() {
                 ),
               )}
             </div>
+            )}
           </div>
 
-          <div className={cn(expanded && "sm:px-[max(0px,calc((100%-80rem)/2))]")}>
+          {/* Previous: sm:px-[max(0px,calc((100%-80rem)/2))], then max-w-4xl — composer matches the 6xl chat column. */}
+          <div className={cn(expanded && "mx-auto w-full max-w-6xl")}>
             <ProAssistantInput
               onSend={(text, meta) => void ask(text, meta)}
               onListenStart={stopSpeaking}

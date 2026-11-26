@@ -20,6 +20,29 @@ function when(value: string) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+/** Sidebar date groups (client): Today · Yesterday · Previous 7 days · Older (in list order). */
+function dateGroups(rows: PaConversationSummary[]) {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const day = 86_400_000;
+  const bucket = (value: string) => {
+    const at = new Date(value).getTime();
+    if (Number.isNaN(at)) return "Older";
+    if (at >= startOfToday.getTime()) return "Today";
+    if (at >= startOfToday.getTime() - day) return "Yesterday";
+    if (at >= startOfToday.getTime() - 7 * day) return "Previous 7 days";
+    return "Older";
+  };
+  const groups: Array<{ key: string; label: string; rows: PaConversationSummary[] }> = [];
+  for (const row of rows) {
+    const label = bucket(row.lastMessageAt);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.rows.push(row);
+    else groups.push({ key: `${label}-${groups.length}`, label, rows: [row] });
+  }
+  return groups;
+}
+
 /**
  * Saved Pro co-pilot conversations: open one to continue it, rename, delete, or start new.
  * `overlay` (small window): slides over the chat inside the panel.
@@ -120,7 +143,7 @@ export function ProAssistantHistory({
       className={cn(
         "flex flex-col bg-popover",
         sidebar
-          ? "w-72 shrink-0 border-r bg-muted/30 animate-in fade-in-0 slide-in-from-left-4 duration-200 dark:bg-muted/10"
+          ? "w-[270px] shrink-0 bg-transparent animate-in fade-in-0 duration-300"
           : "absolute inset-0 z-30 animate-in fade-in-0 slide-in-from-right-4 duration-200",
       )}
       role="region"
@@ -162,7 +185,7 @@ export function ProAssistantHistory({
           </div>
         </div>
       )}
-      {sidebar ? <p className="px-3 pt-2.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">Recent conversations</p> : null}
+
 
       <div className="border-b px-3 py-2">
         <div className="flex items-center gap-1.5 rounded-lg border bg-background px-2.5">
@@ -197,14 +220,21 @@ export function ProAssistantHistory({
             <p className="text-xs text-muted-foreground">Your chats with the co-pilot are saved here automatically.</p>
           </div>
         ) : (
-          <ul className="divide-y">
-            {rows.map((row) => (
+          <div className={cn(sidebar && "flex flex-col gap-3 px-2 py-2")}>
+          {(sidebar ? dateGroups(rows) : [{ key: "all", label: "", rows }]).map((group) => (
+          <div key={group.key} role={group.label ? "group" : undefined} aria-label={group.label || undefined}>
+          {group.label ? (
+            <p className="px-2 pb-1 text-[10px] font-semibold tracking-[0.08em] text-muted-foreground/80 uppercase">{group.label}</p>
+          ) : null}
+          <ul className={cn(sidebar ? "flex flex-col gap-0.5" : "divide-y")}>
+            {group.rows.map((row) => (
               <li
                 key={row.id}
                 aria-current={row.id === activeId ? "true" : undefined}
                 className={cn(
                   "group relative",
-                  row.id === activeId && (sidebar ? "bg-primary/10 shadow-[inset_3px_0_0_var(--color-primary)]" : "bg-primary/[0.05]"),
+                  sidebar && "rounded-lg",
+                  row.id === activeId && (sidebar ? "bg-primary/10 dark:bg-primary/20" : "bg-primary/5"),
                 )}
               >
                 {editing?.id === row.id ? (
@@ -247,15 +277,27 @@ export function ProAssistantHistory({
                   </div>
                 ) : (
                   <>
-                    <button type="button" onClick={() => onOpen(row.id)} className="block w-full px-3 py-2.5 pr-20 text-left hover:bg-muted/60">
+                    <button
+                      type="button"
+                      onClick={() => onOpen(row.id)}
+                      className={cn(
+                        "block w-full text-left",
+                        sidebar
+                          ? "rounded-lg px-2.5 py-2 transition group-hover:pr-16 hover:bg-slate-200/60 dark:hover:bg-white/5"
+                          : "px-3 py-2.5 pr-20 hover:bg-muted/60",
+                      )}
+                    >
                       <span className="flex items-baseline justify-between gap-2">
-                        <span className="truncate text-sm font-medium">{row.title}</span>
+                        <span className={cn("truncate font-medium", sidebar ? "text-[13px]" : "text-sm", row.id === activeId && sidebar && "text-primary dark:text-foreground")}>
+                          {row.title}
+                        </span>
                       </span>
                       <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                        {when(row.lastMessageAt)} · {row.messageCount} messages{row.preview ? ` · ${row.preview}` : ""}
+                        {/* Sidebar: time + count only (no preview) so rows stay clean. */}
+                        {when(row.lastMessageAt)} · {row.messageCount} messages{!sidebar && row.preview ? ` · ${row.preview}` : ""}
                       </span>
                     </button>
-                    <div className="absolute top-1/2 right-2 flex -translate-y-1/2 gap-0.5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+                    <div className="absolute top-1/2 right-1.5 flex -translate-y-1/2 gap-0.5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
                       <button type="button" onClick={() => setEditing({ id: row.id, title: row.title })} aria-label={`Rename ${row.title}`} className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground">
                         <Pencil className="size-3.5" />
                       </button>
@@ -268,6 +310,9 @@ export function ProAssistantHistory({
               </li>
             ))}
           </ul>
+          </div>
+          ))}
+          </div>
         )}
       </div>
     </div>

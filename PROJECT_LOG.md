@@ -67,6 +67,38 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-26
 
+- **Co-pilot expanded view: wider chat column.** Client: too much empty space left and right of the chat.
+  The message stream and composer went from `max-w-4xl` (896px) to `max-w-6xl` (1152px), still
+  centered and aligned (`components/pro-assistant/pro-assistant.tsx`). Verified at 1800px in light and
+  dark: column and composer are both 1152px, offset 0, no errors.
+
+- **Co-pilot expanded workspace polish (Claude / Gemini style).** Client request (4 items).
+  - **Tinted left pane with animation** (`pro-assistant.tsx`):
+    - The sidebar (270px) and the icon rail (48px) share one container: `bg-slate-50/80
+      dark:bg-slate-900/60` with a border separator.
+    - Its width animates (`transition-[width] duration-300`), and the rail and list fade in.
+  - **Date groups** (`history-panel.tsx` `dateGroups`, sidebar only):
+    - Today / Yesterday / Previous 7 days / Older headers.
+    - Rows have `rounded-lg` hover and active states, show time and message count only (no
+      preview), and keep rename / delete hidden until hover.
+  - **Centered welcome** (expanded, empty conversation only; the small window keeps the chips):
+    - The Co-pilot badge, "How can I help run your business today?" and a short subtitle.
+    - A 3-column grid (2 on medium) of up to 6 starter cards:
+      - "Draft a/an <category> estimate" from the Pro's categories, which sends the same message
+        as the chip;
+      - How's business today?, Show overdue invoices, and Who should take my next job?
+  - **Centered column:** in the expanded view the message stream and the composer are
+    `max-w-4xl mx-auto` (was max-w-7xl and a padding calc). The list reserves scrollbar space
+    on both sides so the column lines up exactly with the composer.
+  - **Verified** in headless Chrome at 1600px, light and dark (faked draft reply, writes blocked):
+    - the sidebar is 270px, tinted with a border, with Today and Previous 7 days groups, 8px row
+      radius, and actions hidden until hover;
+    - collapse animates 270 → 105 (mid) → 48, and expand 48 → 214 → 270;
+    - the hero is centered at offset 0,0 with 3 columns and 6 cards, and a card sends its
+      message;
+    - the chat column and composer are both 896px and line up exactly;
+    - no errors; tsc and eslint are clean.
+
 - **Co-pilot: collapsed sidebar becomes a slim icon rail; narrower Unit / Rate in the expanded
   table.** Client: collapsing the sidebar hid it completely (unclear how to reopen it), and Unit /
   Rate were wider than needed.

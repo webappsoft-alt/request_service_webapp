@@ -690,6 +690,7 @@ export function ProjectPanel({
   lines,
   onLinesChange,
   locked,
+  closed = false,
   preview,
   linkedInvoice,
   companyFiles,
@@ -709,6 +710,11 @@ export function ProjectPanel({
   lines: JobCostLine[];
   onLinesChange: (lines: JobCostLine[]) => void;
   locked: boolean;
+  /**
+   * Closed estimate (converted, declined, expired, lost): the Schedule tab is view-only — no
+   * dragging events and no crew reassignment from here (the job page / calendar still can).
+   */
+  closed?: boolean;
   /** The customer document built from the sheet (null without line items). */
   preview: {
     snapshot: EstimateShareSnapshot;
@@ -731,6 +737,10 @@ export function ProjectPanel({
   canSend: boolean;
 }) {
   const { job } = data;
+  /** Same lock as the job page's Change orders: once invoiced, completed or paid, nothing new is decided. */
+  const jobBillingLocked = Boolean(
+    job && (linkedInvoice || job.invoiceId || ["completed", "invoiced", "paid"].includes(job.status)),
+  );
   const needsJob =
     view === "progress" || view === "change-orders" || view === "requests";
   if (needsJob && data.jobLoading) {
@@ -794,6 +804,8 @@ export function ProjectPanel({
         <section className={PANEL_CARD}>
           {/* Same table as the job's Requests tab (approve / reject, create the change order). */}
           <JobRequestsTab
+            // Client: no Accept / Reject once the job is invoiced, completed or paid (view only).
+            readOnly={jobBillingLocked}
             // Client: clearly not the same as Change orders.
             title="Change requests"
             description="Requests from your technicians and contractors for extra work or materials. Approving one adds it to Scope changes; declining it closes the request."
@@ -841,16 +853,13 @@ export function ProjectPanel({
               0,
             )}
             invoiceId={linkedInvoice?.id || job.invoiceId}
-            locked={
-              Boolean(linkedInvoice || job.invoiceId) ||
-              ["completed", "invoiced", "paid"].includes(job.status)
-            }
+            locked={jobBillingLocked}
             onJobUpdated={(next) => data.replaceJob(next)}
           />
         </section>
       ) : null;
     case "schedule":
-      return <SchedulePanel data={data} />;
+      return <SchedulePanel data={data} readOnly={closed} />;
     case "invoices":
       return (
         <InvoicesPanel
@@ -2080,12 +2089,13 @@ function ChangeOrdersPanel({ job }: { job: Job | null }) {
 }
 
 /** This project's visits and job dates on the company calendar — the same calendar as Schedule. */
-function SchedulePanel({ data }: { data: ProjectData }) {
+function SchedulePanel({ data, readOnly = false }: { data: ProjectData; readOnly?: boolean }) {
   const { employees, employeeLabel, assign } = usePortalCrew();
   const [editing, setEditing] = useState<PortalCalendarEvent | null>(null);
   const { schedule, setSchedule, reloadSchedule } = data;
 
   async function moveEvent(event: PortalCalendarEvent, move: CalendarMove) {
+    if (readOnly) return;
     const before = eventTimes(event);
     const sameTimes =
       move.startMinutes === before.start && move.endMinutes === before.end;
@@ -2131,7 +2141,13 @@ function SchedulePanel({ data }: { data: ProjectData }) {
   return (
     <Panel
       label="Schedule"
-      aside={schedule.length ? `${schedule.length} on the calendar` : undefined}
+      aside={
+        schedule.length
+          ? `${schedule.length} on the calendar${readOnly ? " · view only" : ""}`
+          : readOnly
+            ? "View only"
+            : undefined
+      }
     >
       {data.scheduleLoading ? (
         <EventCalendarSkeleton />
@@ -2141,11 +2157,13 @@ function SchedulePanel({ data }: { data: ProjectData }) {
           employees={employees}
           employeeLabel={employeeLabel}
           onMove={moveEvent}
-          onEventOpen={setEditing}
+          // Closed estimate: cards open their record (read-only calendar), no reassign dialog.
+          onEventOpen={readOnly ? undefined : setEditing}
+          readOnly={readOnly}
         />
       )}
       <AssignEventDialog
-        open={Boolean(editing)}
+        open={Boolean(editing) && !readOnly}
         onOpenChange={(open) => !open && setEditing(null)}
         event={editing}
         events={schedule}

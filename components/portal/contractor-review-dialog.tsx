@@ -49,6 +49,7 @@ export function ContractorReviewDialog({
   onApproved,
   onDecided,
   initialMode = "review",
+  readOnly = false,
 }: {
   request: ContractorRequest | null;
   open: boolean;
@@ -59,12 +60,14 @@ export function ContractorReviewDialog({
   onDecided?: (request: ContractorRequest) => void;
   /** "reject" opens straight on the reason form (Reject action in a table row). */
   initialMode?: Mode;
+  /** View only: a pending request shows without the approve / reject form (closed job or estimate). */
+  readOnly?: boolean;
 }) {
   const busy = useAppSelector((state) => Boolean(request && state.contractorReviews.acting[request.id]));
   return (
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
       {/* Keyed so the form starts fresh for every request (content unmounts while closed). */}
-      {request ? <ReviewContent key={`${request.id}:${initialMode}`} request={request} onOpenChange={onOpenChange} onApproved={onApproved} onDecided={onDecided} initialMode={initialMode} /> : null}
+      {request ? <ReviewContent key={`${request.id}:${initialMode}`} request={request} onOpenChange={onOpenChange} onApproved={onApproved} onDecided={onDecided} initialMode={initialMode} readOnly={readOnly} /> : null}
     </Dialog>
   );
 }
@@ -75,16 +78,18 @@ function ReviewContent({
   onApproved,
   onDecided,
   initialMode,
+  readOnly = false,
 }: {
   request: ContractorRequest;
   onOpenChange: (open: boolean) => void;
   onApproved?: (request: ContractorRequest) => void;
   onDecided?: (request: ContractorRequest) => void;
   initialMode: Mode;
+  readOnly?: boolean;
 }) {
   const dispatch = useAppDispatch();
   const acting = useAppSelector((state) => state.contractorReviews.acting[request.id]);
-  const [mode, setMode] = useState<Mode>(request.status === "pending_pro_approval" ? initialMode : "review");
+  const [mode, setMode] = useState<Mode>(request.status === "pending_pro_approval" && !readOnly ? initialMode : "review");
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
   const [title, setTitle] = useState(() => request.description.slice(0, 120));
@@ -103,7 +108,8 @@ function ReviewContent({
   const [touched, setTouched] = useState(false);
 
   const isCompletion = request.type === "completion";
-  const pending = request.status === "pending_pro_approval";
+  // Read-only: a pending request is shown like a decided one (no approve / reject form).
+  const pending = request.status === "pending_pro_approval" && !readOnly;
   const busy = Boolean(acting);
   const reasonError = reason.trim().length < 3 ? "Tell them why (at least a few words)." : null;
   const linesError = !isCompletion && !filledLines.length ? "Add at least one line with a description." : null;
@@ -219,7 +225,14 @@ function ReviewContent({
           </>
         )}
 
-        {!pending ? (
+        {readOnly && request.status === "pending_pro_approval" ? (
+          <div className="rounded-md border border-input px-3 py-2 text-sm">
+            <p className="font-medium">Not decided — this job is closed</p>
+            <p className="mt-0.5 text-muted-foreground">
+              The job is invoiced, completed or paid, so requests can&apos;t be approved or rejected any more.
+            </p>
+          </div>
+        ) : !pending ? (
           <div className="rounded-md border border-input px-3 py-2 text-sm">
             <p className="font-medium">
               {request.status === "rejected"

@@ -13,6 +13,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { AssessmentWorkItem, AssessmentWorkItemType } from "@/lib/api/estimate-v2-client";
 import { formatMoney } from "@/lib/format";
+import { defaultPricingUnit, normalizePricingUnit, pricingUnitOptions } from "@/lib/pricing-units";
 import { cn } from "@/lib/utils";
 import type { JobCostKind, JobCostLine } from "@/components/portal/use-job-costing";
 
@@ -22,15 +23,10 @@ const WORK_ITEM_TYPES: Array<{ value: AssessmentWorkItemType; label: string }> =
   { value: "equipment", label: "Equipment" },
 ];
 
-const LABOR_UNITS = [{ value: "hr", label: "Hour" }] as const;
-const MATERIAL_UNITS = [
-  { value: "ea", label: "Each" },
-  { value: "ft", label: "Feet" },
-  { value: "sq ft", label: "Sqft" },
-] as const;
-
+// Client: the same 12 units on every line type (lib/pricing-units.ts). Was Hour for labour and
+// Each / Feet / Sqft for materials & equipment.
 function defaultUnit(type: AssessmentWorkItemType) {
-  return type === "labor" ? "hr" : "ea";
+  return defaultPricingUnit(type);
 }
 
 function newLocalId() {
@@ -89,7 +85,8 @@ export function WorkItemsEditor({
       items.map((item, i) => {
         if (i !== index) return item;
         const merged = { ...item, ...next };
-        if (next.type && next.type !== item.type && !next.unit) {
+        // Any unit fits any type: keep the Pro's unit, default only when there is none.
+        if (next.type && next.type !== item.type && !next.unit && !String(item.unit || "").trim()) {
           merged.unit = defaultUnit(normalizeType(next.type));
         }
         if (merged.type) merged.type = normalizeType(merged.type);
@@ -164,13 +161,8 @@ export function WorkItemsEditor({
             {items.length ? (
               items.map((item, index) => {
                 const type = normalizeType(item.type);
-                const unitOptions = type === "labor" ? LABOR_UNITS : MATERIAL_UNITS;
-                const currentUnit =
-                  type === "labor"
-                    ? "hr"
-                    : item.unit && ["ea", "ft", "sq ft"].includes(item.unit)
-                      ? item.unit
-                      : "ea";
+                const currentUnit = normalizePricingUnit(item.unit, defaultUnit(type));
+                const unitOptions = pricingUnitOptions(currentUnit);
                 const softField =
                   "h-8 border-[#94a3b8] bg-[#fafbfc] shadow-none focus-visible:bg-card";
                 const numberField =

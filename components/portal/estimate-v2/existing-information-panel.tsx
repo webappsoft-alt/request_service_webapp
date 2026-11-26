@@ -67,6 +67,8 @@ type ExistingInformationPanelProps = {
   hasEstimate?: boolean;
   onSave: () => void | Promise<void>;
   onContinue: () => void | Promise<void>;
+  /** Closed estimate (converted / declined / expired / lost): view only, nothing can be added or removed. */
+  readOnly?: boolean;
 };
 
 export function ExistingInformationPanel({
@@ -78,13 +80,16 @@ export function ExistingInformationPanel({
   onAttachmentsChange,
   workItems,
   onWorkItemsChange,
-  saving = false,
+  saving: savingProp = false,
+  readOnly = false,
   collapsed = false,
   onCollapsedChange,
   hasEstimate = false,
   onSave,
   onContinue,
 }: ExistingInformationPanelProps) {
+  // Read-only reuses the "busy" lock: every input / button below is disabled while saving.
+  const saving = savingProp || readOnly;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -160,6 +165,7 @@ export function ExistingInformationPanel({
   }
 
   async function uploadFiles(files: FileList | File[] | null) {
+    if (readOnly) return;
     if (!files?.length || saving) return;
     setUploading(true);
     try {
@@ -190,10 +196,12 @@ export function ExistingInformationPanel({
   }
 
   function removeAttachment(url: string) {
+    if (readOnly) return;
     onAttachmentsChange(attachments.filter((item) => item.url !== url));
   }
 
   function addMeasurement() {
+    if (readOnly) return;
     if (!measurementLabel.trim()) {
       toast.error("Enter what you are measuring.");
       return;
@@ -215,6 +223,7 @@ export function ExistingInformationPanel({
   }
 
   function removeMeasurement(index: number) {
+    if (readOnly) return;
     onMeasurementsChange(measurements.filter((_, i) => i !== index));
   }
 

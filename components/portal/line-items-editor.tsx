@@ -27,15 +27,11 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatMoney } from "@/lib/format";
+import { defaultPricingUnit, normalizePricingUnit, pricingUnitOptions } from "@/lib/pricing-units";
 import { cn } from "@/lib/utils";
 
-const MATERIAL_UNITS = [
-  { value: "ea", label: "Each" },
-  { value: "ft", label: "Feet" },
-  { value: "sq ft", label: "Sqft" },
-] as const;
-
-const LABOR_UNITS = [{ value: "hr", label: "Hour" }] as const;
+// Client: one 12-unit list for every line type (lib/pricing-units.ts). Was Hour for labour and
+// Each / Feet / Sqft for materials & equipment.
 
 /** Material line items allow exactly one image. */
 const MAX_MATERIAL_IMAGES = 1;
@@ -47,7 +43,7 @@ export function createEmptyLine(kind: JobCostKind): JobCostLine {
     description: "",
     kind,
     quantity: 1,
-    unit: kind === "labor" ? "hr" : "ea",
+    unit: defaultPricingUnit(kind),
     unitPrice: 0,
     ...(kind === "materials" ? { images: [] } : {}),
   };
@@ -96,7 +92,8 @@ function colWidths(wide: boolean) {
       // Fixed widths — table-fixed + w-px collapses Type into Qty.
       type: "w-[6.75rem]",
       qty: "w-14",
-      unit: "w-[4.75rem]",
+      // Fits the longest unit ("Labor + Mat.").
+      unit: "w-[6.25rem]",
       price: "w-[4.75rem]",
       total: "w-[4.75rem]",
       remove: "w-8",
@@ -305,13 +302,10 @@ function LineItemRow({
   const [uploading, setUploading] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const cols = colWidths(wideDescription);
-  const currentUnit =
-    line.kind === "labor"
-      ? "hr"
-      : line.unit && ["ea", "ft", "sq ft"].includes(line.unit)
-        ? line.unit
-        : "ea";
-  const unitOptions = line.kind === "labor" ? LABOR_UNITS : MATERIAL_UNITS;
+  // Saved legacy spellings show as their unit ("hour" → Hourly); the stored value only changes
+  // when the Pro picks another unit. Unknown legacy units stay as an extra option.
+  const currentUnit = normalizePricingUnit(line.unit, defaultPricingUnit(line.kind));
+  const unitOptions = pricingUnitOptions(currentUnit);
   const images = line.kind === "materials" ? (line.images ?? []).slice(0, MAX_MATERIAL_IMAGES) : [];
   const materialImage = images[0];
   const showImages = allowMaterialImages && line.kind === "materials";
@@ -338,8 +332,10 @@ function LineItemRow({
     }
   }
 
+  // dark:disabled — locked rows (signed / converted estimates, closed jobs) read as locked in dark mode
+  // too; light mode already greys them.
   const softField =
-    "h-8 border-[#94a3b8] bg-[#fafbfc] shadow-none focus-visible:bg-card";
+    "h-8 border-[#94a3b8] bg-[#fafbfc] shadow-none focus-visible:bg-card disabled:cursor-not-allowed dark:disabled:opacity-60";
   const numberField =
     "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
   const compact = wideDescription;
@@ -466,32 +462,38 @@ function LineItemRow({
           {showImages ? (
             <>
               <div className="flex flex-wrap items-center gap-1">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(event) => void onUpload(event.target.files)}
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  disabled={locked || uploading}
-                  className="h-7 gap-1 px-1.5 text-xs text-primary hover:bg-secondary"
-                  onClick={() => fileRef.current?.click()}
-                >
-                  {uploading ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <ImagePlus className="size-3.5" />
-                  )}
-                  {uploading
-                    ? "Uploading…"
-                    : materialImage
-                      ? "Replace image"
-                      : "Add image"}
-                </Button>
+                {/* Locked (signed / converted): no Add / Replace image at all — it looked clickable
+                    even when disabled. The photo itself still opens from the thumbnail. */}
+                {!locked ? (
+                  <>
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => void onUpload(event.target.files)}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={uploading}
+                      className="h-7 gap-1 px-1.5 text-xs text-primary hover:bg-secondary"
+                      onClick={() => fileRef.current?.click()}
+                    >
+                      {uploading ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <ImagePlus className="size-3.5" />
+                      )}
+                      {uploading
+                        ? "Uploading…"
+                        : materialImage
+                          ? "Replace image"
+                          : "Add image"}
+                    </Button>
+                  </>
+                ) : null}
                 {optionalControl}
               </div>
               <PhotoLightbox
@@ -516,7 +518,8 @@ function LineItemRow({
           value={line.kind}
           onValueChange={(value) => {
             const kind = value as JobCostKind;
-            const unit = kind === "labor" ? "hr" : line.unit === "hr" || !line.unit ? "ea" : line.unit;
+            // Any unit fits any type now: keep the Pro's unit, default only when there is none.
+            const unit = line.unit?.trim() ? line.unit : defaultPricingUnit(kind);
             onChange(line.id, {
               kind,
               unit,

@@ -171,6 +171,9 @@ type AppliedTemplate = {
 type TemplateMemory = { applied: AppliedTemplate | null; prompted: string };
 
 /** Per-estimate template state, kept in this browser so reloads don't re-prompt. */
+/** Estimate statuses where nothing can change any more (see estimateClosed). Backend: estimates/service.js CLOSED_ESTIMATE_STATUSES. */
+const CLOSED_ESTIMATE_STATUSES = new Set(["converted_to_job", "rejected", "expired"]);
+
 function templateMemoryKey(opportunityId: string) {
   return `rs:estimate-template:${opportunityId}`;
 }
@@ -1101,7 +1104,17 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
   const [crewMode, setCrewMode] = useState<EstimateCrewMode | null>(null);
   const [removingCrew, setRemovingCrew] = useState<EstimateCrewMode | null>(null);
   // Accepted estimates keep Assign technician / contractor until they become a job (then the job has the crew).
-  const crewLocked = opportunity?.status === "lost" || Boolean(estimate?.jobId);
+  /**
+   * Closed estimate: converted to a job (incl. completed / paid jobs and invoices), declined,
+   * expired, or the opportunity was lost. Nothing on it changes any more — crew, schedule, lines.
+   * (Approved but not converted stays schedulable: the work still goes on the calendar first.)
+   */
+  const estimateClosed =
+    opportunity?.status === "lost" ||
+    Boolean(estimate?.jobId) ||
+    CLOSED_ESTIMATE_STATUSES.has(String(estimate?.status || ""));
+  // Was: lost || jobId only — a declined or expired estimate still offered Change / Remove technician.
+  const crewLocked = estimateClosed;
   const openVisitCount = visits.filter((visit) => !["completed", "cancelled", "no_show"].includes(visit.status)).length;
   const technicianId = opportunity?.assignedEmployeeId || "";
   const technicianLabel = useMemo(() => {
@@ -2560,8 +2573,10 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                   <button
                     key={option.id}
                     type="button"
-                    disabled={saving}
+                    // Closed estimate: the prep choice is shown, not changed.
+                    disabled={saving || estimateClosed}
                     onClick={() => {
+                      if (estimateClosed) return;
                       void setPrepChoice(option.id);
                       setView("estimate");
                     }}
@@ -2608,6 +2623,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                   lines={lines}
                   onLinesChange={setLines}
                   locked={estimateLocked}
+                  closed={estimateClosed}
                   preview={centreView === "preview" ? buildPrintJob() : null}
                   linkedInvoice={linkedInvoice}
                   companyFiles={prepAttachments}
@@ -2743,6 +2759,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           {showVisits ? (
             <div className={cn(partsView && "hidden")}>
             <SiteVisitsPanel
+              readOnly={estimateClosed}
               opportunityId={opportunity.id}
               opportunityTitle={opportunity.title}
               opportunityDescription={opportunity.description || ""}
@@ -2775,6 +2792,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
           {showPrepInfo ? (
             <div ref={prepInfoRef} id="project-files" className={cn("scroll-mt-4", partsView && "hidden")}>
               <ExistingInformationPanel
+                readOnly={estimateClosed}
                 findings={prepFindings}
                 onFindingsChange={setPrepFindings}
                 measurements={prepMeasurements}
@@ -3035,6 +3053,8 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                       sectionActions={(section) =>
                         estimate?.id ? (
                           <SectionStageButton
+                            // Client: "Set schedule" stayed clickable on converted / paid estimates.
+                            readOnly={estimateClosed}
                             estimateId={estimate.id}
                             section={section.key}
                             label={section.label}
@@ -3168,7 +3188,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
                   </p>
                 </div>
                 {estimate?.stages?.length ? (
-                  <ProjectStagesSummary stages={estimate.stages} onSchedule={() => setStagesOpen(true)} />
+                  <ProjectStagesSummary stages={estimate.stages} onSchedule={estimateClosed ? undefined : () => setStagesOpen(true)} />
                 ) : null}
 
                 <div className="grid border-t border-slate-100 lg:grid-cols-[minmax(0,1fr)_360px] dark:border-border-soft">
@@ -3361,7 +3381,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
       {estimate?.id ? (
         <>
           <ProjectStagesDialog
-            open={stagesOpen}
+            open={stagesOpen && !estimateClosed}
             onOpenChange={onStagesOpenChange}
             requireDates={sendAfterDates}
             estimateId={estimate.id}
@@ -3374,7 +3394,7 @@ export function NewEstimateWorkspaceView({ opportunityId }: { opportunityId: str
             }}
           />
           <ProjectStagesPrompt
-            open={Boolean(stagePrompt)}
+            open={Boolean(stagePrompt) && !estimateClosed}
             estimateId={estimate.id}
             sectionCount={lineSections.filter(Boolean).length}
             onSetUp={() => {

@@ -67,6 +67,123 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-26
 
+- **Closed estimates are fully read-only, starting with "Set schedule".**
+  - **Bug:** "Set schedule" stayed clickable on converted / paid estimates (EST-210), so I
+    audited every control on the estimate page across the lifecycle.
+  - **Closed** (`estimateClosed` in `new-estimate-workspace-view.tsx`) means any of:
+    - status Converted to job, Declined (`rejected`) or Expired;
+    - the estimate has a job (which covers completed / paid jobs and invoices);
+    - the opportunity is Lost.
+  - Estimates have no Paid / Completed / Cancelled status of their own; those belong to the job
+    and invoice that only exist after conversion. **Approved but not converted** stays
+    schedulable, because the work still goes on the calendar before it becomes a job. Its line
+    items were already locked.
+  - **Now locked when closed:**
+    - **Set / Change schedule** on each section header (`project-stages.tsx`
+      `SectionStageButton readOnly`): a section that has a schedule shows a plain chip (time +
+      progress dot, title says read-only); a section without one shows nothing.
+    - **"Set start date / Reschedule stages"** in the summary is hidden, and the stages dialog
+      and prompt can't open.
+    - **Technician / contractor Change / Remove**, in the banner and in More actions. Before,
+      they locked only on Lost or with a job; now Declined and Expired lock them too.
+    - **Schedule tab** (`project-panels.tsx` `SchedulePanel readOnly`): view only. No drag,
+      right-click or reassign dialog; clicking an item opens its record; the header says
+      "view only".
+    - **Preparation:** the prep-choice buttons are disabled. The findings / measurements /
+      files / work-items panel (`existing-information-panel.tsx`) and the site-visits panel
+      (`site-visits-panel.tsx`) take a `readOnly` prop: every write handler returns early and
+      their controls are disabled. Site visits show a "view only" note.
+    - **Change requests tab** (`job-requests-tab.tsx` / `contractor-review-dialog.tsx`
+      `readOnly`): once the job is invoiced, completed or paid (the same rule the Change orders
+      tab already used), there's no Accept / Reject. The dialog opens view-only and says "Not
+      decided — this job is closed".
+    - **Line items** (`line-items-editor.tsx`): locked rows no longer show "Add image" (it
+      looked clickable while disabled). Disabled fields are now dimmed in dark mode too.
+  - **Already locked, checked:** line items, scope, tax, discount, Save draft, Send, Build
+    estimate, In-person presentation.
+  - **Kept** (navigation / info): Open job, Open invoice, Print / PDF, View on map, Copy share
+    link, Chat, Activity, Photos & files viewing, Customer. **Notes & updates** stays writable:
+    it's office / crew notes, not a change to the estimate.
+  - **Calendar hint** (`event-calendar.tsx`): read-only calendars now say "View only. Click an
+    item to open it." The contractor and technician schedule pages, already read-only,
+    previously said "Right-click for options. Drag and drop…".
+  - **Checked** in headless Chrome as the test provider on EST-210 (converted → JOB-983, invoice
+    INV-874 Paid), light + dark, with every non-GET API call blocked:
+    - no Set / Change schedule or Reschedule buttons;
+    - Change / Remove technician disabled;
+    - 24/24 line-item controls disabled, scope disabled;
+    - no Save, Send or Build;
+    - Open job / Open invoice present;
+    - More actions = Print / PDF, View on map, Copy share link;
+    - Schedule tab "view only";
+    - no Accept / Reject on Change requests;
+    - no console errors;
+    - `tsc` and eslint report 0 errors (one older unused-variable warning).
+    - **Blocked:** only the page's "actions seen" pings. The test also allowed the test
+      login's sign-in and token refresh.
+  - Files: `components/portal/estimate-v2/{new-estimate-workspace-view,project-stages,project-panels,existing-information-panel,site-visits-panel}.tsx`,
+    `components/portal/{job-requests-tab,contractor-review-dialog,line-items-editor,event-calendar}.tsx`.
+
+- **12 standard pricing units everywhere; Co-pilot estimate card matches the builder and takes
+  material photos.** Client request.
+  - **Units** (new `lib/pricing-units.ts`): Fixed, Hourly, Daily, Unit, Sq. Ft., Lin. Ft., Labor,
+    Materials, Labor + Mat., T&M, Custom, Recurring — in that order, for **every** line type.
+    - Before: labour lines could only pick Hour, and material / equipment lines only Each / Feet / Sqft.
+    - **Stored values:** the four old units keep their codes (`hr`, `ea`, `sq ft`, `ft`), so
+      saved records, AI pricing (labour = `hr`) and documents behave exactly as before. The new
+      units store their label (`Fixed`, `Daily`, `T&M`, …).
+    - **Legacy spellings** (hour, each, sqft, lf, day, …) show as the matching unit.
+    - **Unknown saved units** (e.g. `gal`) stay as an extra option on that one line, so nothing
+      is lost.
+    - **Changing a line's type** keeps its unit; a default (`hr` for labour, `ea` otherwise) is
+      used only when the unit is empty.
+    - **Where:**
+      - `components/portal/line-items-editor.tsx`, which covers the Manual Estimate Builder,
+        job costing, invoices and change orders. The unit column is widened to fit "Labor + Mat.".
+      - `components/portal/estimate-v2/work-items-editor.tsx` (site-visit work items).
+      - `invoice-file.tsx` unit labels.
+      - The Co-pilot card.
+    - Not changed: site-visit *measurement* units (dimensions), and the Fixed Service
+      "Per job / visit / hour" price basis. That one is a backend-validated enum shown on
+      public listings, not a line-item unit.
+    - `use-job-costing.ts` `repairCostLineKind` no longer turns `hr` lines into labour, since
+      materials can now be billed Hourly. It checks the description only.
+  - **Co-pilot estimate card** (`components/pro-assistant/estimate-draft-card.tsx`, new
+    `DraftLineRow`):
+    - **Columns:** same as the builder (Description · Type · Qty · Unit · Rate · Total).
+      Narrow window: two rows per line.
+    - **Fields:** editable title/description, qty, the 12-unit dropdown, rate and line total.
+    - **Material photo**, same as the builder: "Add image" / "Replace image", a thumbnail that
+      opens full size, and a remove ×. One photo per line.
+    - **Switching a line away from Material** drops its photo (builder rule).
+    - **On Create**, the material photos and units go to the new estimate's lines.
+      `PaDraftItem.images` was added in `pro-assistant-api.ts`.
+  - **Checked** in headless Chrome as the test provider, light + dark:
+    - **Card:** 3 lines, all 12 units in order, and `gal` kept as a 13th option on its line.
+      Units changed to Daily / Sq. Ft.
+    - **Photo:** upload showed a thumbnail + "Replace image", remove cleared it, and re-upload
+      worked.
+    - **Create:** the request carried `unit: "Daily"`, `unit: "sq ft"`, `unit: "gal"` and the
+      photo on the material line.
+    - **Narrow layout:** "Add image" is visible.
+    - **Builder (EST-726):** saved `hr` lines show "Hourly", and the dropdown lists the 12 units.
+    - `tsc` and eslint report 0 errors. The 3 remaining warnings are older unused variables.
+    - **Nothing was saved:**
+      - the AI reply, image upload and "Create estimate" calls were answered inside the test
+        browser;
+      - the socket was blocked;
+      - every other write to the API was blocked;
+      - no estimate or upload was created.
+    - **One exception:** on the first test run the socket block didn't take effect, and one
+      real Co-pilot conversation ("Draft an estimate for Test Customer: replace kitchen
+      faucet", 4 messages) was saved for the test provider. I deleted exactly that one record
+      (`6b08011434d6f53849dec758`, matched by id, owner and text). There were no other
+      records: 0 actions, no estimate.
+  - Files: `lib/pricing-units.ts` (new), `components/portal/line-items-editor.tsx`,
+    `components/portal/estimate-v2/work-items-editor.tsx`, `components/portal/invoice-file.tsx`,
+    `components/portal/use-job-costing.ts`, `components/pro-assistant/estimate-draft-card.tsx`,
+    `components/pro-assistant/pro-assistant-api.ts`.
+
 - **Business Profile columns balance themselves, so the Premium card no longer leaves a gap.**
   - **Client:** the layout should look the same whether or not there's a Premium card. A big
     empty space opened under Working hours because the right column (Premium + Wallet +

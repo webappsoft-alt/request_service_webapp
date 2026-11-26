@@ -121,6 +121,8 @@ function toLocalInput(value?: string | null) {
 }
 
 type SiteVisitsPanelProps = {
+  /** Closed estimate (converted / declined / expired / lost): visits show, nothing can be booked or changed. */
+  readOnly?: boolean;
   opportunityId: string;
   opportunityTitle?: string;
   /** From estimate create — used to prefill initial assessment fields when visit copies are empty. */
@@ -147,7 +149,8 @@ export function SiteVisitsPanel({
   opportunityInternalNotes = "",
   visits,
   employees,
-  saving,
+  saving: savingProp,
+  readOnly = false,
   onRefresh,
   onSavingChange,
   showBuildEstimate = false,
@@ -156,6 +159,8 @@ export function SiteVisitsPanel({
   collapsed,
   onCollapsedChange,
 }: SiteVisitsPanelProps) {
+  // Read-only reuses the "busy" lock: buttons and fields that wait on saving are disabled.
+  const saving = Boolean(savingProp) || readOnly;
   const photoInputRef = useRef<HTMLInputElement>(null);
   const auth = useAppSelector(selectAuth);
   const { employees: liveEmployees } = usePortalCrew();
@@ -275,6 +280,7 @@ export function SiteVisitsPanel({
   const showTechnicianDropdown = Boolean(auth.token) || assignableEmployees.length > 0;
 
   function openCreateEmployee(target: "visit" | "followUp") {
+    if (readOnly) return;
     setCreateEmployeeTarget(target);
     setCreateEmployeeOpen(true);
   }
@@ -373,6 +379,7 @@ export function SiteVisitsPanel({
     ["scheduled", "rescheduled", "in_progress"].includes(selected?.status || "");
 
   async function saveVisit(patch: { complete?: boolean } = {}) {
+    if (readOnly) return;
     if (!selected) return;
     onSavingChange(true);
     try {
@@ -444,6 +451,7 @@ export function SiteVisitsPanel({
   }
 
   async function addMeasurement() {
+    if (readOnly) return;
     if (!selected) return;
     if (!measurementLabel.trim()) {
       toast.error("Enter what you measured (e.g. Square footage, Pipe length).");
@@ -477,6 +485,7 @@ export function SiteVisitsPanel({
   }
 
   async function removeMeasurement(index: number) {
+    if (readOnly) return;
     if (!selected) return;
     const previous = measurements;
     const next = measurements.filter((_, i) => i !== index);
@@ -490,6 +499,7 @@ export function SiteVisitsPanel({
   }
 
   async function uploadPhotos(files: FileList | File[] | null) {
+    if (readOnly) return;
     if (!files || !files.length || !selected) return;
     setUploadingPhoto(true);
     try {
@@ -515,6 +525,7 @@ export function SiteVisitsPanel({
   }
 
   async function removePhoto(url: string) {
+    if (readOnly) return;
     if (!selected) return;
     onSavingChange(true);
     try {
@@ -530,6 +541,7 @@ export function SiteVisitsPanel({
   }
 
   async function scheduleFollowUp() {
+    if (readOnly) return;
     if (openVisit) {
       toast.error(openVisitMessage);
       return;
@@ -569,6 +581,7 @@ export function SiteVisitsPanel({
   }
 
   async function confirmReschedule() {
+    if (readOnly) return;
     if (!selected || !rescheduleAt) {
       toast.error("Pick the new date and time.");
       return;
@@ -593,6 +606,7 @@ export function SiteVisitsPanel({
   }
 
   async function confirmDeleteVisit() {
+    if (readOnly) return;
     if (!selected) return;
     const deletedId = selected.id;
     const label = `Visit #${selected.sequenceNumber || "—"}`;
@@ -614,6 +628,7 @@ export function SiteVisitsPanel({
   }
 
   async function handleBuildEstimate() {
+    if (readOnly) return;
     setDetailOpen(false);
     setVisitsCollapsed(true);
     await onBuildEstimate?.();
@@ -679,6 +694,11 @@ export function SiteVisitsPanel({
       <div className="overflow-hidden rounded-2xl border border-[#94a3b8] dark:border-border bg-white dark:bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         {visitsHeader(true)}
         <div className="border-t border-slate-200 p-5 dark:border-border-soft">
+        {readOnly ? (
+          <p className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-border dark:bg-muted/40 dark:text-muted-foreground">
+            This estimate is closed, so its site visits are view only.
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <p className="max-w-xl text-sm leading-relaxed text-slate-500">
             One estimate can have many visits. Reschedule changes the same appointment; follow-up creates a new visit.

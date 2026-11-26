@@ -52,6 +52,7 @@ import {
   paymentStatusLabel,
 } from "@/lib/data/portal";
 import { formatDate, formatLocation, formatMoney } from "@/lib/format";
+import { pricingUnitLabel } from "@/lib/pricing-units";
 import { formatTaxRatePercent, storedInvoiceMoney } from "@/lib/tax/state-tax";
 import type { Estimate, Invoice, InvoiceStatus, Job, Payment, PaymentMethodType } from "@/lib/types";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -1177,14 +1178,9 @@ function MoneyStat({
   );
 }
 
-/** Match Labour & Material editor unit labels. */
+/** Same unit labels as the line-item editors (the 12-unit list in lib/pricing-units.ts). */
 function lineUnitLabel(unit?: string) {
-  const key = String(unit || "ea").trim().toLowerCase();
-  if (key === "hr" || key === "hour") return "Hour";
-  if (key === "ea" || key === "each") return "Each";
-  if (key === "ft" || key === "feet") return "Feet";
-  if (key === "sq ft" || key === "sqft" || key === "square feet") return "sqft";
-  return unit || "Each";
+  return pricingUnitLabel(unit);
 }
 
 function Detail({ label, value }: { label: string; value: ReactNode }) {

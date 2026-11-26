@@ -328,6 +328,7 @@ export function SectionStageButton({
   sections,
   onSaved,
   attention = true,
+  readOnly = false,
 }: {
   estimateId: string;
   /** Section key ("" = General). */
@@ -339,6 +340,11 @@ export function SectionStageButton({
   onSaved: (stages: ProjectStage[]) => void;
   /** Blink (blue) while this section has no schedule yet (default on; client wants it on every estimate). */
   attention?: boolean;
+  /**
+   * Closed estimate (converted to a job, declined, expired, lost): the schedule shows as a plain
+   * chip with no way to set, change or remove it (client: "Set schedule" stayed clickable).
+   */
+  readOnly?: boolean;
 }) {
   const stage = stages.find((item) => item.section === section) || null;
   const needsSchedule = !stage && attention;
@@ -384,6 +390,33 @@ export function SectionStageButton({
 
   const dayCount = Math.max(0, Math.floor(Number(days) || 0));
   const hourCount = Math.max(0, Math.min(24, Number(hours) || 0));
+
+  if (readOnly) {
+    if (!stage) return null;
+    return (
+      <span
+        className="inline-flex h-7 items-center gap-1 rounded-md border border-border-soft bg-muted/40 px-2 text-xs text-muted-foreground"
+        title={`${label}: ${stageStatusLabel(stageDisplayStatus(stage))}${stage.startDate ? ` · ${stageDateRange(stage)}` : ""} (read-only)`}
+        aria-label={`${label} schedule: ${formatStageDuration({ days: stage.durationDays, hours: stage.durationHours })}, ${stageStatusLabel(stageDisplayStatus(stage))} (read-only)`}
+      >
+        <Clock3 className="size-3" aria-hidden />
+        {formatStageDuration({ days: stage.durationDays, hours: stage.durationHours })}
+        <span
+          className={cn(
+            "size-1.5 rounded-full",
+            stage.status === "completed"
+              ? "bg-emerald-500"
+              : isStageLate(stage)
+                ? "bg-rose-500"
+                : stage.status === "in_progress"
+                  ? "bg-sky-500"
+                  : "bg-slate-300",
+          )}
+          aria-hidden
+        />
+      </span>
+    );
+  }
 
   return (
     <>
@@ -532,7 +565,8 @@ export function SectionStageButton({
 /** Element id of the stages summary (Send scrolls here when the start date is missing). */
 export const STAGES_SUMMARY_ID = "estimate-project-stages";
 
-export function ProjectStagesSummary({ stages, onSchedule }: { stages: ProjectStage[]; onSchedule: () => void }) {
+/** `onSchedule` omitted (closed estimate) → no Set start date / Reschedule button, summary only. */
+export function ProjectStagesSummary({ stages, onSchedule }: { stages: ProjectStage[]; onSchedule?: () => void }) {
   const scheduled = stages.some((stage) => stage.startDate);
   const late = stages.filter((stage) => isStageLate(stage)).length;
   return (
@@ -555,15 +589,17 @@ export function ProjectStagesSummary({ stages, onSchedule }: { stages: ProjectSt
           </span>
         ) : null}
       </p>
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-8 gap-1.5 border-primary/30 bg-primary/[0.06] text-xs font-semibold text-primary hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
-        onClick={onSchedule}
-      >
-        <CalendarRange className="size-3.5" />
-        {scheduled ? "Reschedule stages" : "Set start date"}
-      </Button>
+      {onSchedule ? (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 gap-1.5 border-primary/30 bg-primary/[0.06] text-xs font-semibold text-primary hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
+          onClick={onSchedule}
+        >
+          <CalendarRange className="size-3.5" />
+          {scheduled ? "Reschedule stages" : "Set start date"}
+        </Button>
+      ) : null}
     </div>
   );
 }

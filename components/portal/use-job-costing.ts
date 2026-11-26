@@ -80,10 +80,9 @@ export function classifyJobLine(item: JobItem): JobCostKind {
 /** Repair misclassified lines (e.g. localStorage seeded before labour spelling was handled). */
 export function repairCostLineKind(line: JobCostLine): JobCostLine {
   const text = line.description.toLowerCase();
-  const looksLikeLabor =
-    text.includes("labor") ||
-    text.includes("labour") ||
-    String(line.unit || "").trim().toLowerCase() === "hr";
+  // Description only: any line type can now be billed "Hourly" (unit "hr"), so the unit no longer
+  // means labour (was: … || unit === "hr", which turned hourly materials into labour).
+  const looksLikeLabor = text.includes("labor") || text.includes("labour");
   if (looksLikeLabor && line.kind !== "labor") {
     return { ...line, kind: "labor" };
   }

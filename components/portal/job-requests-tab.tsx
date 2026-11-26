@@ -76,6 +76,7 @@ export function JobRequestsTab({
   onDecided,
   title = "Requests",
   description = "Completion proof and material / change order requests from the technicians and contractors on this job.",
+  readOnly = false,
 }: {
   jobId: string;
   /** The job's change orders — extras created from these requests are shown inline. */
@@ -89,6 +90,8 @@ export function JobRequestsTab({
   /** Heading and line under it (the estimate page says "Change requests"). */
   title?: string;
   description?: string;
+  /** View only (job invoiced / completed / paid): no Accept / Reject, the dialog just shows the request. */
+  readOnly?: boolean;
 }) {
   // Socket `contractor:requests` bumps this so the list stays live.
   const version = useAppSelector((state) => state.contractorReviews.version);
@@ -276,7 +279,7 @@ export function JobRequestsTab({
         ]}
         actions={(row) => [
           { label: "View", icon: <Eye />, onSelect: () => setPicked({ request: row, mode: "review" }) },
-          ...(row.status === "pending_pro_approval"
+          ...(row.status === "pending_pro_approval" && !readOnly
             ? [
                 {
                   label: row.type === "completion" ? "Approve" : "Accept",
@@ -295,6 +298,7 @@ export function JobRequestsTab({
       />
 
       <ContractorReviewDialog
+        readOnly={readOnly}
         request={active?.request ?? null}
         open={Boolean(active)}
         initialMode={active?.mode}

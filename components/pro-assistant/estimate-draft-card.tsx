@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, FileText, FolderPlus, Loader2, MapPin, Pencil, Plus, Search, Trash2, UserRound, X } from "lucide-react";
+import Image from "next/image";
+import { AlertTriangle, CheckCircle2, FileText, FolderPlus, ImagePlus, Loader2, MapPin, Pencil, Plus, Search, Trash2, UserRound, X } from "lucide-react";
+import { toast } from "sonner";
+import { extractUploadedUrl, uploadFile } from "@/components/api/uploadFile";
+import { PhotoLightbox } from "@/components/marketplace/portfolio-lightbox";
+import { defaultPricingUnit, normalizePricingUnit, pricingUnitOptions } from "@/lib/pricing-units";
 import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { extractErrorMessage } from "@/components/api/extractErrorMessage";
@@ -147,6 +152,235 @@ function SectionHeader({
 
 const fieldClass =
   "h-8 w-full rounded-lg border bg-background px-2.5 text-xs outline-none focus:border-primary/50 disabled:opacity-70";
+
+/**
+ * Wide card: one table row per line, the same columns as the Manual Estimate Builder
+ * (Description · Type · Qty · Unit · Rate · Total). Narrow card: two rows.
+ */
+const WIDE_LINE_GRID = "@2xl:grid-cols-[minmax(0,1fr)_6.5rem_4.25rem_6.75rem_6.5rem_5.5rem_1.75rem]";
+
+/** Same as the builder: a material line carries one photo (stored on the estimate line). */
+const MAX_LINE_IMAGES = 1;
+
+/** One editable line: description (+ material photo), type, qty, unit (12 units), rate, total. */
+function DraftLineRow({
+  item,
+  label,
+  locked,
+  canRemove,
+  divider,
+  onChange,
+  onRemove,
+}: {
+  item: CardItem;
+  label: string;
+  locked: boolean;
+  canRemove: boolean;
+  divider: boolean;
+  onChange: (patch: Partial<PaDraftItem>) => void;
+  onRemove: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const unit = normalizePricingUnit(item.unit, defaultPricingUnit(item.kind));
+  const isMaterial = item.kind === "material";
+  const image = isMaterial ? (item.images ?? [])[0] : undefined;
+
+  async function onUpload(files: FileList | null) {
+    const file = files?.[0];
+    if (!file || locked) return;
+    setUploading(true);
+    try {
+      const response = await uploadFile(file);
+      const url = extractUploadedUrl(response.data);
+      if (!url) {
+        toast.error("Could not upload material image.");
+        return;
+      }
+      onChange({ images: [url] });
+      toast.success("Material image uploaded.");
+    } catch (err) {
+      toast.error((err as { message?: string })?.message || "Could not upload material image.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  const removeButton = (className: string) =>
+    !locked && canRemove ? (
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove ${label}`}
+        className={cn("items-center justify-center rounded text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10", className)}
+      >
+        <Trash2 className="size-3.5" />
+      </button>
+    ) : null;
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-1.5 px-2.5 py-2 @2xl:grid @2xl:items-start @2xl:gap-2 @2xl:py-1.5",
+        WIDE_LINE_GRID,
+        divider && "border-t",
+      )}
+    >
+      <div className="flex items-start gap-1.5 @2xl:contents">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <textarea
+            value={item.description}
+            disabled={locked}
+            rows={1}
+            placeholder="Title / description of the work or material"
+            onChange={(event) => onChange({ description: event.target.value })}
+            aria-label={`${label} description`}
+            className="min-h-7 min-w-0 resize-none rounded border border-transparent bg-transparent px-1 py-1 text-xs leading-snug font-medium outline-none [field-sizing:content] placeholder:font-normal placeholder:text-muted-foreground/70 hover:border-border focus:border-primary/50 focus:bg-background"
+          />
+          {/* Material photo — same as the builder's "+ Add image" (upload, preview, replace, remove). */}
+          {isMaterial ? (
+            <div className="flex flex-wrap items-center gap-1.5 px-1">
+              {image ? (
+                <span className="relative inline-block">
+                  <button
+                    type="button"
+                    onClick={() => setLightboxOpen(true)}
+                    title="View full image"
+                    aria-label={`View ${label} image`}
+                    className="relative block h-8 w-11 overflow-hidden rounded border bg-white"
+                  >
+                    <Image
+                      src={image}
+                      alt="Material photo"
+                      fill
+                      sizes="44px"
+                      className="object-cover"
+                      unoptimized={/^(https?:|data:|blob:)/i.test(image.trim())}
+                    />
+                  </button>
+                  {!locked ? (
+                    <button
+                      type="button"
+                      onClick={() => onChange({ images: [] })}
+                      aria-label={`Remove ${label} image`}
+                      className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-background text-foreground ring-1 ring-border"
+                    >
+                      <X className="size-2.5" />
+                    </button>
+                  ) : null}
+                </span>
+              ) : null}
+              {!locked ? (
+                <>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    aria-label={`${label} image file`}
+                    onChange={(event) => void onUpload(event.target.files)}
+                  />
+                  <button
+                    type="button"
+                    disabled={uploading}
+                    onClick={() => fileRef.current?.click()}
+                    className="inline-flex h-6 items-center gap-1 rounded px-1 text-[11px] font-medium text-primary hover:bg-primary/5 disabled:opacity-60 max-sm:h-8"
+                  >
+                    {uploading ? <Loader2 className="size-3 animate-spin" /> : <ImagePlus className="size-3" />}
+                    {uploading ? "Uploading…" : image ? "Replace image" : "Add image"}
+                  </button>
+                </>
+              ) : null}
+              <PhotoLightbox
+                photos={image ? [{ src: image, alt: "Material photo" }] : []}
+                title="Material image"
+                open={lightboxOpen && Boolean(image)}
+                onOpenChange={setLightboxOpen}
+                index={0}
+                onIndexChange={() => undefined}
+              />
+            </div>
+          ) : null}
+        </div>
+        <select
+          value={item.kind}
+          disabled={locked}
+          onChange={(event) => {
+            const kind = event.target.value as PaDraftItem["kind"];
+            // Builder rule: only material lines keep a photo.
+            onChange({ kind, ...(kind === "material" ? {} : { images: [] }) });
+          }}
+          aria-label={`${label} type`}
+          className={cn(
+            "mt-0.5 h-7 shrink-0 rounded-full border-0 px-2 text-[11px] outline-none @2xl:w-full",
+            item.kind === "labor"
+              ? "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300"
+              : item.kind === "material"
+                ? "bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300"
+                : "bg-muted text-muted-foreground",
+          )}
+        >
+          {(Object.keys(KIND_LABEL) as PaDraftItem["kind"][]).map((k) => (
+            <option key={k} value={k}>
+              {KIND_LABEL[k]}
+            </option>
+          ))}
+        </select>
+        {/* Narrow card: remove sits on the first row. */}
+        {removeButton("-mt-0.5 flex size-6 shrink-0 max-sm:size-9 @2xl:hidden")}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground @2xl:contents">
+        <label className="flex shrink-0 items-center gap-1 @2xl:mt-0.5 @2xl:block">
+          <span className="@2xl:hidden">Qty</span>
+          <input
+            type="number"
+            min={0.01}
+            step="any"
+            value={item.quantity}
+            disabled={locked}
+            onChange={(event) => onChange({ quantity: Number(event.target.value) })}
+            aria-label={`${label} quantity`}
+            className="h-7 w-14 rounded border bg-background px-1.5 text-right text-xs text-foreground tabular-nums outline-none focus:border-primary/50 @2xl:w-full"
+          />
+        </label>
+        <select
+          value={unit}
+          disabled={locked}
+          onChange={(event) => onChange({ unit: event.target.value })}
+          aria-label={`${label} unit`}
+          className="h-7 w-[6.75rem] shrink-0 rounded border bg-background px-1.5 text-xs text-foreground outline-none focus:border-primary/50 @2xl:mt-0.5 @2xl:w-full"
+        >
+          {pricingUnitOptions(unit).map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <span className="@2xl:hidden">×</span>
+        <span className="relative @2xl:mt-0.5">
+          <span className="pointer-events-none absolute top-1/2 left-1.5 -translate-y-1/2 text-xs">$</span>
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            value={item.unitPrice}
+            disabled={locked}
+            onChange={(event) => onChange({ unitPrice: Number(event.target.value) })}
+            aria-label={`${label} unit price`}
+            className="h-7 w-20 rounded border bg-background pr-1.5 pl-4 text-right text-xs text-foreground tabular-nums outline-none focus:border-primary/50 @2xl:w-full"
+          />
+        </span>
+        <span className="ml-auto shrink-0 text-xs font-semibold text-foreground tabular-nums @2xl:mt-1.5 @2xl:ml-0 @2xl:text-right">
+          {formatMoney(lineTotal(item))}
+        </span>
+        {/* Wide card: remove is the last column. */}
+        {removeButton("hidden size-7 @2xl:flex") ?? <span className="hidden @2xl:block" />}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Pick one of the Pro's customers — the same list as the Customers tab, 20 at a time; scrolling to
@@ -357,7 +591,7 @@ export function EstimateDraftCard({
   const [subcategoryName, setSubcategoryName] = useState("");
   // Lines keep a local key (stable React keys while sections are added / removed / renamed).
   const [items, setItems] = useState<CardItem[]>(() =>
-    draft.items.map(({ description, kind, quantity, unit, unitPrice, section }) => ({
+    draft.items.map(({ description, kind, quantity, unit, unitPrice, section, images }) => ({
       key: nextKey(),
       description,
       kind,
@@ -365,6 +599,7 @@ export function EstimateDraftCard({
       unit,
       unitPrice,
       section: String(section || "").trim(),
+      images: kind === "material" && Array.isArray(images) ? images.slice(0, MAX_LINE_IMAGES) : [],
     })),
   );
   const groups = useMemo(() => groupBySection(items), [items]);
@@ -415,7 +650,7 @@ export function EstimateDraftCard({
   /** New line at the end of its section (sections stay together, like the estimate builder). */
   function addItem(section: string, kind: PaDraftItem["kind"] = "labor") {
     setItems((prev) => {
-      const line: CardItem = { key: nextKey(), description: "", kind, quantity: 1, unit: kind === "labor" ? "hr" : "", unitPrice: 0, section };
+      const line: CardItem = { key: nextKey(), description: "", kind, quantity: 1, unit: defaultPricingUnit(kind), unitPrice: 0, section, images: [] };
       const last = prev.map((i) => i.section).lastIndexOf(section);
       return last < 0 ? [...prev, line] : [...prev.slice(0, last + 1), line, ...prev.slice(last + 1)];
     });
@@ -455,13 +690,15 @@ export function EstimateDraftCard({
         items: groups.flatMap((g) =>
           g.items
             .filter((i) => i.description.trim() && Number(i.quantity) > 0)
-            .map(({ description, kind, quantity, unit, unitPrice }) => ({
+            .map(({ description, kind, quantity, unit, unitPrice, images }) => ({
               description,
               kind,
               unit,
               quantity: money2(quantity),
               unitPrice: money2(unitPrice),
               section: g.key,
+              // Material photos go onto the created estimate's lines (same field as the builder).
+              ...(kind === "material" && images?.length ? { images: images.slice(0, MAX_LINE_IMAGES) } : {}),
             })),
         ),
         addressId: selectedAddressId || undefined,
@@ -648,113 +885,28 @@ export function EstimateDraftCard({
                 onRename={(name) => renameSection(group.key, name)}
                 onRemove={groups.length > 1 ? () => setItems((prev) => prev.filter((i) => i.section !== group.key)) : undefined}
               />
-              {/* Column labels (wide card only). */}
-              <div className="hidden border-b px-2.5 py-1 text-[10px] font-medium text-muted-foreground @2xl:grid @2xl:grid-cols-[minmax(0,1fr)_6.5rem_8rem_7.5rem_6rem_1.75rem] @2xl:gap-2">
+              {/* Column labels (wide card only) — same columns as the Manual Estimate Builder. */}
+              <div className={cn("hidden border-b px-2.5 py-1 text-[10px] font-medium text-muted-foreground @2xl:grid @2xl:gap-2", WIDE_LINE_GRID)}>
                 <span>Description</span>
                 <span>Type</span>
                 <span className="text-right">Qty</span>
+                <span>Unit</span>
                 <span className="text-right">Rate</span>
                 <span className="text-right">Total</span>
                 <span />
               </div>
-              {group.items.map((item, index) => {
-                const n = `${group.label} line ${index + 1}`;
-                return (
-                  <div
-                    key={item.key}
-                    className={cn("flex flex-col gap-1.5 px-2.5 py-2 @2xl:grid @2xl:grid-cols-[minmax(0,1fr)_6.5rem_8rem_7.5rem_6rem_1.75rem] @2xl:items-center @2xl:gap-2 @2xl:py-1.5", index > 0 && "border-t")}
-                  >
-                    <div className="flex items-start gap-1.5 @2xl:contents">
-                      <textarea
-                        value={item.description}
-                        disabled={locked}
-                        rows={1}
-                        placeholder="Describe the work or material"
-                        onChange={(event) => update(item.key, { description: event.target.value })}
-                        aria-label={`${n} description`}
-                        className="min-w-0 flex-1 resize-none bg-transparent text-xs leading-snug font-medium outline-none [field-sizing:content] placeholder:font-normal placeholder:text-muted-foreground/70"
-                      />
-                      <select
-                        value={item.kind}
-                        disabled={locked}
-                        onChange={(event) => update(item.key, { kind: event.target.value as PaDraftItem["kind"] })}
-                        aria-label={`${n} type`}
-                        className={cn(
-                          "h-6 shrink-0 rounded-full border-0 px-2 text-[10px] outline-none",
-                          item.kind === "labor"
-                            ? "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300"
-                            : item.kind === "material"
-                              ? "bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300"
-                              : "bg-muted text-muted-foreground",
-                        )}
-                      >
-                        {(Object.keys(KIND_LABEL) as PaDraftItem["kind"][]).map((k) => (
-                          <option key={k} value={k}>
-                            {KIND_LABEL[k]}
-                          </option>
-                        ))}
-                      </select>
-                      {/* Narrow card: remove sits on the first row. */}
-                      {!locked && items.length > 1 ? (
-                        <button
-                          type="button"
-                          onClick={() => setItems((prev) => prev.filter((i) => i.key !== item.key))}
-                          aria-label={`Remove ${n}`}
-                          className="-mt-0.5 flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-rose-50 hover:text-rose-600 max-sm:size-9 @2xl:hidden"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      ) : null}
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground @2xl:contents">
-                      <span className="flex shrink-0 items-center gap-1.5 @2xl:justify-end">
-                        <span className="@2xl:hidden">Qty</span>
-                        <input
-                          type="number"
-                          min={0.01}
-                          step="any"
-                          value={item.quantity}
-                          disabled={locked}
-                          onChange={(event) => update(item.key, { quantity: Number(event.target.value) })}
-                          aria-label={`${n} quantity`}
-                          className="h-7 w-14 rounded border bg-background px-1.5 text-right text-xs text-foreground tabular-nums outline-none focus:border-primary/50"
-                        />
-                        {item.unit ? <span className="max-w-9 truncate @2xl:w-9">{item.unit}</span> : <span className="hidden w-9 @2xl:block" />}
-                      </span>
-                      <span className="@2xl:hidden">×</span>
-                      <span className="relative @2xl:justify-self-end">
-                        <span className="pointer-events-none absolute top-1/2 left-1.5 -translate-y-1/2 text-xs">$</span>
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={item.unitPrice}
-                          disabled={locked}
-                          onChange={(event) => update(item.key, { unitPrice: Number(event.target.value) })}
-                          aria-label={`${n} unit price`}
-                          className="h-7 w-20 rounded border bg-background pr-1.5 pl-4 text-right text-xs text-foreground tabular-nums outline-none focus:border-primary/50 @2xl:w-24"
-                        />
-                      </span>
-                      <span className="ml-auto shrink-0 text-xs font-semibold text-foreground tabular-nums @2xl:ml-0 @2xl:text-right">
-                        {formatMoney(lineTotal(item))}
-                      </span>
-                      {/* Wide card: remove is the last column. */}
-                      {!locked && items.length > 1 ? (
-                        <button
-                          type="button"
-                          onClick={() => setItems((prev) => prev.filter((i) => i.key !== item.key))}
-                          aria-label={`Remove ${n}`}
-                          className="hidden size-7 items-center justify-center rounded text-muted-foreground hover:bg-rose-50 hover:text-rose-600 @2xl:flex"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      ) : (
-                        <span className="hidden @2xl:block" />
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {group.items.map((item, index) => (
+                <DraftLineRow
+                  key={item.key}
+                  item={item}
+                  label={`${group.label} line ${index + 1}`}
+                  locked={locked}
+                  canRemove={items.length > 1}
+                  divider={index > 0}
+                  onChange={(patch) => update(item.key, patch)}
+                  onRemove={() => setItems((prev) => prev.filter((i) => i.key !== item.key))}
+                />
+              ))}
               <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-muted/30 px-2.5 py-1.5">
                 {!locked ? (
                   <span className="flex flex-wrap items-center gap-3">

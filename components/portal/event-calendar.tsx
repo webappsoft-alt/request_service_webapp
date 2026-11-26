@@ -878,9 +878,12 @@ export function EventCalendar({
           );
         })}
         <span className="text-muted-foreground">
-          {view === "month"
-            ? "Click an item to open details. Right-click for options. Drag and drop to move dates."
-            : "30-minute slots, 6 AM–midnight. Click to open details. Right-click for options."}
+          {readOnly
+            ? // View-only calendar (e.g. a closed estimate's Schedule tab): no right-click menu or dragging.
+              "View only. Click an item to open it."
+            : view === "month"
+              ? "Click an item to open details. Right-click for options. Drag and drop to move dates."
+              : "30-minute slots, 6 AM–midnight. Click to open details. Right-click for options."}
         </span>
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { CalendarDays, Globe, MapPin, Phone, ShieldCheck, Users } from "lucide-react";
 import Image from "next/image";
@@ -82,6 +82,106 @@ function DetailRow({
 }
 
 const softCardClass = "rounded-md border-border-soft";
+
+type FlexCardKey = "coverage" | "hours" | "services" | "jobs";
+type ColumnMap = Record<FlexCardKey, "left" | "right">;
+const FLEX_CARD_ORDER: FlexCardKey[] = ["coverage", "hours", "services", "jobs"];
+/** Mobile / tablet order, and the desktop start before measuring (the previous fixed layout). */
+const DEFAULT_COLUMNS: ColumnMap = { coverage: "left", hours: "left", services: "right", jobs: "right" };
+const COLUMN_GAP_PX = 16; // gap-4
+const sameColumns = (a: ColumnMap, b: ColumnMap) => FLEX_CARD_ORDER.every((key) => a[key] === b[key]);
+
+/**
+ * Two-column layout that balances itself on desktop (lg+): the movable cards are split between the
+ * columns so they end as close as possible, and the last card of each column stretches to the
+ * bottom so both columns end on one line (no empty gap). Re-runs only when the page width, the height of the fixed top cards (e.g.
+ * the Premium card loading, or Premium on / off) or the data (`contentKey`) changes, so moving a
+ * card can't trigger another move.
+ */
+function useBalancedColumns(contentKey: string) {
+  const gridRef = useRef<HTMLDivElement>(null);
+  const leftFixedRef = useRef<HTMLDivElement>(null);
+  const rightFixedRef = useRef<HTMLDivElement>(null);
+  const cards = useRef<Partial<Record<FlexCardKey, HTMLDivElement | null>>>({});
+  const [columnOf, setColumnOf] = useState<ColumnMap>(DEFAULT_COLUMNS);
+  const lastInputs = useRef("");
+
+  const cardRef = useCallback(
+    (key: FlexCardKey) => (node: HTMLDivElement | null) => {
+      cards.current[key] = node;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid || typeof ResizeObserver === "undefined") return;
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    let frame = 0;
+    lastInputs.current = "";
+
+    const balance = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (!desktop.matches) {
+          lastInputs.current = "";
+          setColumnOf((prev) => (sameColumns(prev, DEFAULT_COLUMNS) ? prev : DEFAULT_COLUMNS));
+          return;
+        }
+        const leftTop = leftFixedRef.current?.offsetHeight ?? 0;
+        const rightTop = rightFixedRef.current?.offsetHeight ?? 0;
+        const inputs = [grid.clientWidth, Math.round(leftTop / 8), Math.round(rightTop / 8), contentKey].join("|");
+        if (inputs === lastInputs.current) return;
+        lastInputs.current = inputs;
+
+        // Natural heights: switch the bottom stretch off just for this read (same frame, no paint).
+        const nodes = FLEX_CARD_ORDER.map((key) => cards.current[key] ?? null);
+        nodes.forEach((node) => node && (node.style.flex = "none"));
+        const heights = nodes.map((node) => (node?.offsetHeight ?? 0) + COLUMN_GAP_PX);
+        nodes.forEach((node) => node && (node.style.flex = ""));
+
+        // 4 movable cards = 16 ways to split them; keep the one where the columns end closest
+        // (ties keep the default layout). Order inside each column stays the same.
+        let best = DEFAULT_COLUMNS;
+        let bestDiff = Number.POSITIVE_INFINITY;
+        for (let mask = 0; mask < 1 << FLEX_CARD_ORDER.length; mask += 1) {
+          let left = leftTop;
+          let right = rightTop;
+          const next = { ...DEFAULT_COLUMNS };
+          FLEX_CARD_ORDER.forEach((key, index) => {
+            if (mask & (1 << index)) {
+              next[key] = "right";
+              right += heights[index];
+            } else {
+              next[key] = "left";
+              left += heights[index];
+            }
+          });
+          const diff = Math.abs(left - right);
+          if (diff < bestDiff - 1 || (Math.abs(diff - bestDiff) <= 1 && sameColumns(next, DEFAULT_COLUMNS))) {
+            best = next;
+            bestDiff = diff;
+          }
+        }
+        setColumnOf((prev) => (sameColumns(prev, best) ? prev : best));
+      });
+    };
+
+    const observer = new ResizeObserver(balance);
+    observer.observe(grid);
+    if (leftFixedRef.current) observer.observe(leftFixedRef.current);
+    if (rightFixedRef.current) observer.observe(rightFixedRef.current);
+    desktop.addEventListener("change", balance);
+    balance();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      desktop.removeEventListener("change", balance);
+    };
+  }, [contentKey]);
+
+  return { gridRef, leftFixedRef, rightFixedRef, cardRef, columnOf };
+}
 
 export function BusinessProfileDetailView() {
   const dispatch = useAppDispatch();
@@ -192,6 +292,126 @@ export function BusinessProfileDetailView() {
   const setupItems = getProfileSetupItems(user, authProvider, officeHours);
   const setup = profileSetupProgress(setupItems);
 
+  const { gridRef, leftFixedRef, rightFixedRef, cardRef, columnOf } = useBalancedColumns(
+    [neighborhoods.length, officeHours.length, categories.length, offeredJobs.length].join("|"),
+  );
+  // Client: the page must look the same with or without the Premium card. The top cards stay put
+  // (profile + about left, Premium + wallet right); these four go to whichever column is shorter.
+  const flexCards: Record<FlexCardKey, ReactNode> = {
+    coverage: (
+      <Card className={softCardClass}>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
+          <CardTitle>Coverage areas</CardTitle>
+          <SectionEdit href="/pro/dashboard/profile?step=business" />
+        </CardHeader>
+        <CardContent className="pt-4">
+          {neighborhoods.length ? (
+            <div className="flex flex-wrap gap-2">
+              {neighborhoods.map((area) => (
+                <span
+                  key={area}
+                  className="rounded-md bg-secondary px-2.5 py-1 text-xs font-medium"
+                >
+                  {area}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No coverage neighborhoods selected yet.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    ),
+    hours: (
+      <Card className={softCardClass}>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
+          <CardTitle>Working hours</CardTitle>
+          <SectionEdit href="/pro/dashboard/profile?step=hours" />
+        </CardHeader>
+        <CardContent className="pt-4">
+          {officeHours.length ? (
+            <ul className="flex flex-col gap-1.5 text-sm">
+              {officeHours.map((hours) => (
+                <li key={hours.day} className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">
+                    {formatWorkingDay(hours.day)}
+                  </span>
+                  <span className="font-medium tabular-nums">
+                    {formatHoursValue(hours)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">Hours not listed yet.</p>
+          )}
+        </CardContent>
+      </Card>
+    ),
+    services: (
+      <Card className={softCardClass}>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
+          <CardTitle>Services</CardTitle>
+          <SectionEdit href="/pro/dashboard/profile?step=categories" />
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4 pt-4">
+          {categories.length ? (
+            <div className="flex flex-wrap gap-2">
+              {categories.map((category) => (
+                <Badge key={category.id} variant="secondary">
+                  {category.name}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No service categories selected yet.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    ),
+    jobs: (
+      <Card className={softCardClass}>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
+          <CardTitle>Jobs you offer</CardTitle>
+          <SectionEdit href="/pro/dashboard/profile?step=subservices" />
+        </CardHeader>
+        <CardContent className="pt-4">
+          {offeredJobs.length ? (
+            <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+              {offeredJobs.slice(0, 8).map((job) => (
+                <li key={job}>• {job}</li>
+              ))}
+              {offeredJobs.length > 8 ? (
+                <li>+{offeredJobs.length - 8} more</li>
+              ) : null}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No jobs selected yet.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    ),
+  };
+  const renderFlex = (column: "left" | "right") => {
+    const keys = FLEX_CARD_ORDER.filter((key) => columnOf[key] === column);
+    return keys.map((key, index) => (
+      <div
+        key={key}
+        ref={cardRef(key)}
+        // Desktop: the column's last card fills down to the other column's end (no gap below it).
+        className={cn("flex min-w-0 flex-col *:flex-1", index === keys.length - 1 && "lg:flex-1")}
+      >
+        {flexCards[key]}
+      </div>
+    ));
+  };
+
   return (
     <PortalPage
       eyebrow="Public listing"
@@ -226,227 +446,140 @@ export function BusinessProfileDetailView() {
           </CardContent>
         </Card>
       ) : null}
-      {/* Balanced 7/5 split; min-w-0 keeps wide content (gallery, long URLs) inside its column. */}
-      <div className="grid items-start gap-4 lg:grid-cols-12">
+      {/* Balanced 7/5 split; min-w-0 keeps wide content (gallery, long URLs) inside its column.
+          Columns balance themselves (useBalancedColumns), so the Premium card — shown or not, long or
+          short — never leaves a gap under one column. */}
+      <div ref={gridRef} className="grid items-start gap-4 lg:grid-cols-12 lg:items-stretch">
         <div className="flex min-w-0 flex-col gap-4 lg:col-span-7">
-          <Card className={softCardClass}>
-            <CardHeader className="border-b border-border-soft">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-4">
-                <Avatar className="size-16 border border-border-soft">
-                  {avatar ? <AvatarImage src={avatar} alt={displayName} /> : null}
-                  <AvatarFallback className="bg-primary text-lg font-semibold text-primary-foreground">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-                    Business profile
-                  </p>
-                  <h2 className="mt-1 flex flex-wrap items-center gap-2 text-xl font-semibold tracking-tight text-foreground">
-                    {provider.companyName || "Your company"}
-                    {isPremium ? <PremiumBadge size="xs" /> : null}
-                  </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {displayName}
-                    {role ? ` · ${role}` : ""}
-                  </p>
+          <div ref={leftFixedRef} className="flex min-w-0 flex-col gap-4">
+            <Card className={softCardClass}>
+              <CardHeader className="border-b border-border-soft">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-4">
+                  <Avatar className="size-16 border border-border-soft">
+                    {avatar ? <AvatarImage src={avatar} alt={displayName} /> : null}
+                    <AvatarFallback className="bg-primary text-lg font-semibold text-primary-foreground">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                      Business profile
+                    </p>
+                    <h2 className="mt-1 flex flex-wrap items-center gap-2 text-xl font-semibold tracking-tight text-foreground">
+                      {provider.companyName || "Your company"}
+                      {isPremium ? <PremiumBadge size="xs" /> : null}
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {displayName}
+                      {role ? ` · ${role}` : ""}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <SectionEdit href="/pro/dashboard/profile?step=account" />
-              </div>
-            </CardHeader>
-            <CardContent className="pt-1">
-              <DetailRow label="Owner">{displayName}</DetailRow>
-              {role ? <DetailRow label="Role">{role}</DetailRow> : null}
-              <DetailRow label="Phone">
-                {phone ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Phone className="size-3.5 text-muted-foreground" aria-hidden />
-                    {phone}
-                  </span>
-                ) : (
-                  <span className="font-normal text-muted-foreground">Not listed</span>
-                )}
-              </DetailRow>
-              <DetailRow label="Email">
-                {email || (
-                  <span className="font-normal text-muted-foreground">Not listed</span>
-                )}
-              </DetailRow>
-              <DetailRow label="Address">
-                <span className="inline-flex items-start gap-1.5">
-                  <MapPin className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                  <span>
-                    {provider.street ? <span className="block">{provider.street}</span> : null}
-                    <span className="font-normal text-muted-foreground">
-                      {formatLocation(provider.city, provider.state, provider.zip) ||
-                        "Not listed"}
+                <SectionEdit href="/pro/dashboard/profile?step=account" />
+                </div>
+              </CardHeader>
+              <CardContent className="pt-1">
+                <DetailRow label="Owner">{displayName}</DetailRow>
+                {role ? <DetailRow label="Role">{role}</DetailRow> : null}
+                <DetailRow label="Phone">
+                  {phone ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Phone className="size-3.5 text-muted-foreground" aria-hidden />
+                      {phone}
+                    </span>
+                  ) : (
+                    <span className="font-normal text-muted-foreground">Not listed</span>
+                  )}
+                </DetailRow>
+                <DetailRow label="Email">
+                  {email || (
+                    <span className="font-normal text-muted-foreground">Not listed</span>
+                  )}
+                </DetailRow>
+                <DetailRow label="Address">
+                  <span className="inline-flex items-start gap-1.5">
+                    <MapPin className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                    <span>
+                      {provider.street ? <span className="block">{provider.street}</span> : null}
+                      <span className="font-normal text-muted-foreground">
+                        {formatLocation(provider.city, provider.state, provider.zip) ||
+                          "Not listed"}
+                      </span>
                     </span>
                   </span>
-                </span>
-              </DetailRow>
-              <DetailRow label="Website">
-                {website ? (
-                  <a
-                    href={website.startsWith("http") ? website : `https://${website}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 text-primary hover:underline"
-                  >
-                    <Globe className="size-3.5" aria-hidden />
-                    {website.replace(/^https?:\/\//, "")}
-                  </a>
-                ) : (
-                  <span className="font-normal text-muted-foreground">Not listed</span>
-                )}
-              </DetailRow>
-            </CardContent>
-          </Card>
-
-          <Card className={softCardClass}>
-            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
-              <CardTitle>About the company</CardTitle>
-              <SectionEdit href="/pro/dashboard/profile?step=profile" />
-            </CardHeader>
-            <CardContent className="pt-4">
-              <p className="text-sm leading-6 text-foreground">
-                {about || (
-                  <span className="text-muted-foreground">
-                    No company description yet.
-                  </span>
-                )}
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {years != null ? (
-                  <Badge variant="secondary">
-                    <CalendarDays className="size-3.5" aria-hidden />
-                    {years} years in business
-                  </Badge>
-                ) : null}
-                {team ? (
-                  <Badge variant="secondary">
-                    <Users className="size-3.5" aria-hidden />
-                    Team · {team}
-                  </Badge>
-                ) : null}
-                {provider.licensed ? (
-                  <Badge variant="secondary">
-                    <ShieldCheck className="size-3.5" aria-hidden />
-                    Licensed
-                  </Badge>
-                ) : null}
-                {provider.insured ? (
-                  <Badge variant="secondary">
-                    <ShieldCheck className="size-3.5" aria-hidden />
-                    Insured
-                  </Badge>
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className={softCardClass}>
-            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
-              <CardTitle>Coverage areas</CardTitle>
-              <SectionEdit href="/pro/dashboard/profile?step=business" />
-            </CardHeader>
-            <CardContent className="pt-4">
-              {neighborhoods.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {neighborhoods.map((area) => (
-                    <span
-                      key={area}
-                      className="rounded-md bg-secondary px-2.5 py-1 text-xs font-medium"
+                </DetailRow>
+                <DetailRow label="Website">
+                  {website ? (
+                    <a
+                      href={website.startsWith("http") ? website : `https://${website}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-primary hover:underline"
                     >
-                      {area}
+                      <Globe className="size-3.5" aria-hidden />
+                      {website.replace(/^https?:\/\//, "")}
+                    </a>
+                  ) : (
+                    <span className="font-normal text-muted-foreground">Not listed</span>
+                  )}
+                </DetailRow>
+              </CardContent>
+            </Card>
+
+            <Card className={softCardClass}>
+              <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
+                <CardTitle>About the company</CardTitle>
+                <SectionEdit href="/pro/dashboard/profile?step=profile" />
+              </CardHeader>
+              <CardContent className="pt-4">
+                <p className="text-sm leading-6 text-foreground">
+                  {about || (
+                    <span className="text-muted-foreground">
+                      No company description yet.
                     </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No coverage neighborhoods selected yet.
+                  )}
                 </p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className={softCardClass}>
-            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
-              <CardTitle>Working hours</CardTitle>
-              <SectionEdit href="/pro/dashboard/profile?step=hours" />
-            </CardHeader>
-            <CardContent className="pt-4">
-              {officeHours.length ? (
-                <ul className="flex flex-col gap-1.5 text-sm">
-                  {officeHours.map((hours) => (
-                    <li key={hours.day} className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">
-                        {formatWorkingDay(hours.day)}
-                      </span>
-                      <span className="font-medium tabular-nums">
-                        {formatHoursValue(hours)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">Hours not listed yet.</p>
-              )}
-            </CardContent>
-          </Card>
-
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {years != null ? (
+                    <Badge variant="secondary">
+                      <CalendarDays className="size-3.5" aria-hidden />
+                      {years} years in business
+                    </Badge>
+                  ) : null}
+                  {team ? (
+                    <Badge variant="secondary">
+                      <Users className="size-3.5" aria-hidden />
+                      Team · {team}
+                    </Badge>
+                  ) : null}
+                  {provider.licensed ? (
+                    <Badge variant="secondary">
+                      <ShieldCheck className="size-3.5" aria-hidden />
+                      Licensed
+                    </Badge>
+                  ) : null}
+                  {provider.insured ? (
+                    <Badge variant="secondary">
+                      <ShieldCheck className="size-3.5" aria-hidden />
+                      Insured
+                    </Badge>
+                  ) : null}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          {renderFlex("left")}
         </div>
 
         <div className="flex min-w-0 flex-col gap-4 lg:col-span-5">
-          {/* Client: read-only wallet balance (collected − payouts − expenses), calculated by the API. */}
-          {/* Client: Premium Business Profile — top of city / state searches, paid from the wallet. */}
-          <PremiumProfileCard />
-          <WalletBalanceCard />
-          <Card className={softCardClass}>
-            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
-              <CardTitle>Services</CardTitle>
-              <SectionEdit href="/pro/dashboard/profile?step=categories" />
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4 pt-4">
-              {categories.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {categories.map((category) => (
-                    <Badge key={category.id} variant="secondary">
-                      {category.name}
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No service categories selected yet.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className={softCardClass}>
-            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border-soft">
-              <CardTitle>Jobs you offer</CardTitle>
-              <SectionEdit href="/pro/dashboard/profile?step=subservices" />
-            </CardHeader>
-            <CardContent className="pt-4">
-              {offeredJobs.length ? (
-                <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-                  {offeredJobs.slice(0, 8).map((job) => (
-                    <li key={job}>• {job}</li>
-                  ))}
-                  {offeredJobs.length > 8 ? (
-                    <li>+{offeredJobs.length - 8} more</li>
-                  ) : null}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No jobs selected yet.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          <div ref={rightFixedRef} className="flex min-w-0 flex-col gap-4">
+            {/* Client: Premium Business Profile — top of city / state searches, paid from the wallet. */}
+            <PremiumProfileCard />
+            {/* Client: read-only wallet balance (collected − payouts − expenses), calculated by the API. */}
+            <WalletBalanceCard />
+          </div>
+          {renderFlex("right")}
         </div>
       </div>
 

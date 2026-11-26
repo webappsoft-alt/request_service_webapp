@@ -42,8 +42,9 @@ export function useProviderPremium(load = false) {
 function SummaryRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className={cn("flex items-center justify-between gap-3 py-1.5 text-sm", strong && "font-semibold")}>
-      <span className={strong ? "text-foreground" : "text-muted-foreground"}>{label}</span>
-      <span className="tabular-nums">{value}</span>
+      <span className={cn("shrink-0", strong ? "text-foreground" : "text-muted-foreground")}>{label}</span>
+      {/* min-w-0 + wrap: a long value wraps inside the card instead of widening it. */}
+      <span className="min-w-0 text-right tabular-nums wrap-break-word">{value}</span>
     </div>
   );
 }
@@ -110,7 +111,11 @@ export function PremiumProfileCard({ className }: { className?: string }) {
   return (
     <Card
       id="premium"
-      className={cn("scroll-mt-20 overflow-hidden rounded-md border-border-soft", data?.isPremium && "border-amber-300/70", className)}
+      className={cn(
+        "min-w-0 scroll-mt-20 overflow-hidden rounded-md border-border-soft",
+        data?.isPremium && "border-amber-300/70",
+        className,
+      )}
     >
       <CardHeader
         className={cn(
@@ -245,9 +250,19 @@ export function PremiumProfileCard({ className }: { className?: string }) {
 
         {data?.charges.length ? (
           <div className="mt-4 border-t border-border-soft pt-3">
-            <p className="text-[11px] font-semibold tracking-[0.08em] text-slate-400 uppercase">Premium payments</p>
-            <ul className="mt-1 divide-y divide-border-soft">
-              {data.charges.slice(0, 5).map((charge) => (
+            <p className="flex items-center justify-between gap-2 text-[11px] font-semibold tracking-[0.08em] text-slate-400 uppercase">
+              Premium payments
+              {data.charges.length > 3 ? (
+                <span className="font-medium tracking-normal normal-case">{data.charges.length} payments</span>
+              ) : null}
+            </p>
+            {/* Client: fixed-height scroller, so a growing history doesn't stretch the right column. */}
+            <ul
+              data-premium-payments
+              data-lenis-prevent
+              className="mt-1 max-h-[210px] divide-y divide-border-soft overflow-y-auto overscroll-contain pr-1"
+            >
+              {data.charges.map((charge) => (
                 <li key={charge.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                   <span className="min-w-0">
                     <span className="block truncate font-medium">

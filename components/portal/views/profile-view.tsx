@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BadgeCheck, Camera, Loader2 } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Camera, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AuthPhoneInput } from "@/components/auth/auth-phone-input";
 import { putData, showApiErrorToast } from "@/components/api/apiFuntions";
@@ -805,8 +805,24 @@ export function ProfileView() {
               })}
             </ol>
           </nav>
-          {/* Own row under the step tabs, right-aligned, same size (user: not on the tab line). */}
-          <div className="flex shrink-0 items-center justify-end gap-2">
+          {/* Own row under the step tabs (user: not on the tab line). Client: Back (previous step)
+              sits on the left of this row as a plain arrow + underlined link — it was a boxed
+              button at the bottom-left. Hidden on the first step (the header arrow leaves the page). */}
+          <div className="flex shrink-0 items-center justify-between gap-2">
+            {stepIndex > 0 ? (
+              <button
+                type="button"
+                onClick={onBack}
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 rounded-sm text-sm font-semibold text-primary underline underline-offset-4 outline-none hover:text-primary/80 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ArrowLeft className="size-4" aria-hidden />
+                Back
+              </button>
+            ) : (
+              <span aria-hidden />
+            )}
+            <div className="flex items-center gap-2">
             <Button
               type="button"
               variant="outline"
@@ -851,6 +867,7 @@ export function ProfileView() {
                 Next
               </Button>
             )}
+            </div>
           </div>
         </div>
 
@@ -1351,21 +1368,7 @@ export function ProfileView() {
           />
         ) : null}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-          <Button
-            type="button"
-            size="xl"
-            variant="outline"
-            className="min-w-[7.5rem]"
-            onClick={onBack}
-            disabled={busy}
-          >
-            Back
-          </Button>
-
-          {/* Update / Next / Submit moved to the header (top-right) — the floating Pro Co-pilot
-              pill covered them here. Back stays bottom-left (previous step). */}
-        </div>
+        {/* Client: the boxed bottom-left Back button moved to the top action row (above). */}
       </div>
 
       {phoneToVerify !== null ? (

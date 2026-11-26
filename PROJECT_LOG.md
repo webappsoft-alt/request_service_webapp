@@ -67,6 +67,62 @@ Newest first. Format: **what** — why · files.
 
 ### 2026-11-26
 
+- **Business Profile columns balance themselves, so the Premium card no longer leaves a gap.**
+  - **Client:** the layout should look the same whether or not there's a Premium card. A big
+    empty space opened under Working hours because the right column (Premium + Wallet +
+    Services + Jobs) ran much longer than the left. Without Premium, the opposite happened.
+  - **Change** (`components/portal/views/business-profile-detail-view.tsx`, new
+    `useBalancedColumns`):
+    - Business Profile + About stay top-left and Premium + Wallet stay top-right.
+    - Coverage, Working hours, Services and Jobs are movable. On desktop (lg+) the page measures
+      them and picks the split, out of 16, where the two columns end closest; order within each
+      column is kept.
+    - The last card in each column then stretches to the bottom, so both columns end on one line.
+    - **Re-runs** only when the page width, the fixed top cards' height (Premium loading or
+      switching on/off) or the data changes. Heights are read with the stretch switched off
+      inside the same frame, so a move can't trigger another move.
+    - Below lg, the order is unchanged.
+  - **Checked** in headless Chrome (Premium Active faked with 9 payments, and the real "not
+    offered" state):
+    - the two column bottoms are equal (gap 0) at 1440, 1280 and 1040, in light and dark;
+    - 820 px is a single column, in the old order;
+    - no horizontal overflow and no console errors;
+    - `tsc` and eslint are clean.
+  - Files: `components/portal/views/business-profile-detail-view.tsx`.
+
+- **Edit-profile Back moved to the top action row; Premium payments now scroll.** Client request.
+  - **Wizard** (`components/portal/views/profile-view.tsx`): the boxed bottom-left `Back`
+    button is gone.
+    - Back now sits on the left of the Update / Next row, under the step bar.
+    - It's a plain ← arrow plus underlined text in the primary navy, with no background or
+      border. In dark mode the `--primary` token makes it light blue.
+    - Hidden on step 1, where the header's arrow already returns to Business Profile.
+  - **Premium card** (`components/portal/premium-profile-card.tsx`):
+    - **Payments list:** shows every payment (was capped at 5) in a `max-h-[210px]
+      overflow-y-auto overscroll-contain pr-1` scroller, with `data-lenis-prevent` so the
+      wheel scrolls the list, not the page. An "N payments" count appears once there are
+      more than 3.
+    - **Width guards:** the card root has `min-w-0`, and summary-row values wrap inside the
+      card (`min-w-0 text-right wrap-break-word`) instead of widening it.
+    - **Card height** with 9 payments: 846 → 672 px at 1040, 684 → 610 px at 1440.
+  - **Horizontal overflow didn't reproduce.**
+    - I faked an Active Premium with 9 payments in the browser and measured at 1024, 1040,
+      1280 and 1440 px, with and without `#premium`, in light and dark. The page never got
+      wider than the viewport, `scrollX` stayed 0, and no container was scrolled sideways.
+    - The client's screenshots also cut off the Windows taskbar and Chrome's bookmarks bar on
+      the left, so the crop is probably the screenshot itself.
+    - The portfolio table is wider than its column at ≤1040 px, but it sits in its own
+      `overflow-x-auto` wrapper.
+  - **Checked** in headless Chrome as the test provider (premium GET faked; nothing written):
+    - **Settings:** list 210 px tall, scrolls, page `scrollX` 0, in light and dark.
+    - **Wizard step 1:** no Back.
+    - **Step 2:** Back has a transparent background, no border, underline, navy `#003f7d`
+      (light blue in dark), on the same row as Update. Clicking it returns to step 1, and no
+      other Back button remains.
+    - **390 px mobile:** no overflow.
+    - No console errors. `tsc` and eslint are clean for both files.
+  - Files: `components/portal/views/profile-view.tsx`, `components/portal/premium-profile-card.tsx`.
+
 - **Crawl-trap rules in robots, slower search debounce, admin "Clear Public Cache" button.**
   Part of the client's bot-traffic and performance pass. See the backend log for 2026-11-26.
   - **`app/robots.ts`:**
